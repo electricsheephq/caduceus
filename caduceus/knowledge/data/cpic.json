@@ -8,14 +8,20 @@
   },
   "watch": {
     "genes": [
+      "ABCG2",
       "APOE",
+      "CACNA1S",
+      "CYP2B6",
       "CYP2C19",
       "CYP2C9",
       "CYP2D6",
       "CYP3A5",
+      "CYP4F2",
       "DPYD",
+      "G6PD",
       "GIPR",
       "GLP1R",
+      "HLA-A",
       "HLA-B",
       "IFNL3",
       "MT-RNR1",
@@ -37,8 +43,11 @@
       "rs1800437",
       "rs1800460",
       "rs1800462",
+      "rs2108622",
+      "rs2231142",
       "rs2395029",
       "rs267606617",
+      "rs3745274",
       "rs3918290",
       "rs4149056",
       "rs4244285",
@@ -2447,23 +2456,23 @@
       "markers": [
         {
           "rsid": "rs776746",
-          "effect": "C",
-          "other": "T",
+          "effect": "T",
+          "other": "C",
           "strand": "+",
-          "allele_name": "*3",
-          "function": "no function",
+          "allele_name": "*1-compatible marker",
+          "function": "CYP3A5 expression marker",
           "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs776746"
         }
       ],
-      "allele_name": "*3",
-      "function": "no function",
+      "allele_name": "*1-compatible marker",
+      "function": "CYP3A5 expression marker",
       "phenotype_rules": {
         "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
         "0": "no listed effect allele detected; other variants unassessed",
         "1": "one or more listed effect alleles detected",
         "2": "two or more listed effect alleles detected"
       },
-      "finding": "The CYP3A5 *3 splice marker was observed; the effect on expression depends on the second allele.",
+      "finding": "The rs776746 T allele is compatible with CYP3A5 expression. CPIC tacrolimus guidance addresses expressers; the prescriber manages any dosing decisions.",
       "evidence": "CPIC A",
       "sources": [
         {
@@ -2481,7 +2490,7 @@
         "pmid": "25801146",
         "url": "https://www.clinpgx.org/guideline/PA166251451"
       },
-      "limits": "Only *3 is assessed; *6 and *7 are not assessed. This is not a complete metabolizer or dosing call.",
+      "limits": "Only the *3 site is assessed. T is compatible with *1 here, but *6, *7 and other alleles are not assessed; a complete phenotype requires dedicated testing.",
       "chip_reliability": "limited",
       "cpic_pair_id": 110139
     },
@@ -2799,7 +2808,8 @@
       },
       "limits": "Not assessed: HLA-B*58:01 needs a dedicated HLA test.",
       "chip_reliability": "unreliable",
-      "cpic_pair_id": 110079
+      "cpic_pair_id": 110079,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
     },
     {
       "id": "cyp2c19-amitriptyline",
@@ -3895,7 +3905,7 @@
         "1": "one or more listed effect alleles detected",
         "2": "two or more listed effect alleles detected"
       },
-      "finding": "The rs2395029 G tagging allele was observed; this is limited evidence and is not a dedicated HLA-B*57:01 result.",
+      "finding": "Not assessed: HLA-B*57:01 screening needs a dedicated HLA test.",
       "evidence": "CPIC A",
       "sources": [
         {
@@ -3913,9 +3923,10 @@
         "pmid": "22378157",
         "url": "https://www.clinpgx.org/guideline/PA166251444"
       },
-      "limits": "rs2395029 tags HLA-B*57:01 imperfectly, especially across ancestries. It cannot establish HLA status or abacavir safety.",
-      "chip_reliability": "limited",
-      "cpic_pair_id": 110078
+      "limits": "rs2395029 is an ancestry-dependent linkage proxy, not HLA-B*57:01 screening. Abacavir requires dedicated HLA-B*57:01 screening; a proxy-negative chip result cannot establish safety.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110078,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
     },
     {
       "id": "cyp2d6-amitriptyline",
@@ -4129,7 +4140,7 @@
         "2": "TT marker pattern"
       },
       "finding": "The rs12979860 T allele has a historical association with lower response to interferon-based hepatitis C regimens.",
-      "evidence": "historical CPIC (retired)",
+      "evidence": "CPIC retired",
       "sources": [
         {
           "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for IFNL3 (IL28B) genotype and PEG interferon-α-based regimens.",
@@ -4149,6 +4160,882 @@
       },
       "limits": "The current CPIC API lists this guideline as Retired under IFNL4. This is not guidance for current direct-acting antiviral regimens.",
       "chip_reliability": "limited"
+    },
+    {
+      "id": "hla-b-carbamazepine",
+      "gene": "HLA-B",
+      "drugs": [
+        "carbamazepine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29392710",
+          "doi": "10.1002/cpt.1004",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29392710"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+        "year": 2018,
+        "pmid": "29392710",
+        "url": "https://www.clinpgx.org/guideline/PA166251448"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110088,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-b-oxcarbazepine",
+      "gene": "HLA-B",
+      "drugs": [
+        "oxcarbazepine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29392710",
+          "doi": "10.1002/cpt.1004",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29392710"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+        "year": 2018,
+        "pmid": "29392710",
+        "url": "https://www.clinpgx.org/guideline/PA166251448"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110120,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-b-phenytoin",
+      "gene": "HLA-B",
+      "drugs": [
+        "phenytoin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32779747",
+          "doi": "10.1002/cpt.2008",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32779747"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, HLA-B and Phenytoin",
+        "year": 2021,
+        "pmid": "32779747",
+        "url": "https://www.clinpgx.org/guideline/PA166251461"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110128,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-b-fosphenytoin",
+      "gene": "HLA-B",
+      "drugs": [
+        "fosphenytoin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32779747",
+          "doi": "10.1002/cpt.2008",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32779747"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, HLA-B and Phenytoin",
+        "year": 2021,
+        "pmid": "32779747",
+        "url": "https://www.clinpgx.org/guideline/PA166251461"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110102,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-a-carbamazepine",
+      "gene": "HLA-A",
+      "drugs": [
+        "carbamazepine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29392710",
+          "doi": "10.1002/cpt.1004",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29392710"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+        "year": 2018,
+        "pmid": "29392710",
+        "url": "https://www.clinpgx.org/guideline/PA166251448"
+      },
+      "limits": "HLA-A*31:01 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110087,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "cacna1s-desflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "desflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110093,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cyp2b6-efavirenz",
+      "gene": "CYP2B6",
+      "drugs": [
+        "efavirenz"
+      ],
+      "markers": [
+        {
+          "rsid": "rs3745274",
+          "effect": "T",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*6/*9 component (c.516G>T)",
+          "function": "decreased CYP2B6 function marker",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs3745274"
+        }
+      ],
+      "allele_name": "*6/*9 component (c.516G>T)",
+      "function": "decreased CYP2B6 function marker",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "A CYP2B6 decreased-function marker was observed; effects on efavirenz or sertraline response depend on the complete diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2B6 and Efavirenz-Containing Antiretroviral Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "31006110",
+          "doi": "10.1002/cpt.1477",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/31006110"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2B6 and efavirenz",
+        "year": 2019,
+        "pmid": "31006110",
+        "url": "https://www.clinpgx.org/guideline/PA166251463"
+      },
+      "limits": "rs3745274 alone does not distinguish *6 from *9 or cover all CYP2B6 alleles. This is not a complete phenotype or dosing call.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110095
+    },
+    {
+      "id": "cacna1s-halothane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "halothane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110103,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cyp4f2-warfarin",
+      "gene": "CYP4F2",
+      "drugs": [
+        "warfarin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs2108622",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*3 (V433M)",
+          "function": "reduced vitamin K oxidation",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs2108622"
+        }
+      ],
+      "allele_name": "*3 (V433M)",
+      "function": "reduced vitamin K oxidation",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "The CYP4F2 *3 marker was observed; it contributes a small part of variation in warfarin response.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Pharmacogenetics-Guided Warfarin Dosing: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "28198005",
+          "doi": "10.1002/cpt.668",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/28198005"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+        "year": 2017,
+        "pmid": "28198005",
+        "url": "https://www.clinpgx.org/guideline/PA166251465"
+      },
+      "limits": "Ancestry and other genes affect the association. This single marker is not a warfarin dose model.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110149
+    },
+    {
+      "id": "cacna1s-methoxyflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "methoxyflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110115,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "g6pd-methylene-blue",
+      "gene": "G6PD",
+      "drugs": [
+        "methylene blue"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110201,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-pegloticase",
+      "gene": "G6PD",
+      "drugs": [
+        "pegloticase"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110207,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-primaquine",
+      "gene": "G6PD",
+      "drugs": [
+        "primaquine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110211,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-rasburicase",
+      "gene": "G6PD",
+      "drugs": [
+        "rasburicase"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110131,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "abcg2-rosuvastatin",
+      "gene": "ABCG2",
+      "drugs": [
+        "rosuvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs2231142",
+          "effect": "T",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "c.421C>A (Q141K)",
+          "function": "decreased ABCG2 function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs2231142"
+        }
+      ],
+      "allele_name": "c.421C>A (Q141K)",
+      "function": "decreased ABCG2 function",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "The rs2231142 T allele is associated with decreased ABCG2 function and altered rosuvastatin exposure.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "This single marker is not a complete ABCG2 test. Other genes and non-genetic factors also affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110215
+    },
+    {
+      "id": "cacna1s-sevoflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "sevoflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110133,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cacna1s-succinylcholine",
+      "gene": "CACNA1S",
+      "drugs": [
+        "succinylcholine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110137,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "g6pd-tafenoquine",
+      "gene": "G6PD",
+      "drugs": [
+        "tafenoquine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110140,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-toluidine-blue",
+      "gene": "G6PD",
+      "drugs": [
+        "toluidine blue"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 2452949,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "cacna1s-enflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "enflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110096,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cacna1s-isoflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "isoflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110107,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "g6pd-nitrofurantoin",
+      "gene": "G6PD",
+      "drugs": [
+        "nitrofurantoin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110205,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "cyp2b6-sertraline",
+      "gene": "CYP2B6",
+      "drugs": [
+        "sertraline"
+      ],
+      "markers": [
+        {
+          "rsid": "rs3745274",
+          "effect": "T",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*6/*9 component (c.516G>T)",
+          "function": "decreased CYP2B6 function marker",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs3745274"
+        }
+      ],
+      "allele_name": "*6/*9 component (c.516G>T)",
+      "function": "decreased CYP2B6 function marker",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "A CYP2B6 decreased-function marker was observed; effects on efavirenz or sertraline response depend on the complete diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "rs3745274 alone does not distinguish *6 from *9 or cover all CYP2B6 alleles. This is not a complete phenotype or dosing call.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 3122076
+    },
+    {
+      "id": "g6pd-dapsone",
+      "gene": "G6PD",
+      "drugs": [
+        "dapsone"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110182,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
     }
   ]
 }

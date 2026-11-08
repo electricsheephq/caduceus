@@ -10,6 +10,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 HOSTS = frozenset({"www.ebi.ac.uk", "eutils.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov", "api.cpicpgx.org"})
 USER_AGENT = "caduceus-hermes-plugin/0.1 (+https://github.com/electricsheephq/caduceus)"
+MAX_RESPONSE_BYTES = 8 << 20
 
 
 class BudgetExceeded(RuntimeError):
@@ -65,7 +66,10 @@ class UrllibHttp:
             self.request_count += 1
             try:
                 with self._opener.open(request, timeout=20) as response:
-                    return json.load(response)
+                    raw = response.read(MAX_RESPONSE_BYTES + 1)
+                    if len(raw) > MAX_RESPONSE_BYTES:
+                        raise ValueError("JSON response exceeds the 8 MB size limit")
+                    return json.loads(raw)
             except (HTTPError, URLError, TimeoutError) as exc:
                 retryable = not isinstance(exc, HTTPError) or exc.code == 429 or 500 <= exc.code < 600
                 if attempt == 2 or not retryable:

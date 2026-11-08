@@ -2,6 +2,7 @@
 import copy
 import io
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
@@ -86,7 +87,7 @@ def test_seed_top_three_none_then_one_new(vault):
     http = FakeHttp()
     first = run_watch(vault, w, http=http, now=NOW)
     assert first["kind"] == "seed" and len(first["new_items"]) == 3
-    assert [r["pmid"] for r in first["new_items"]] == ["90000004", "90000003", "90000002"]
+    assert [r["pmid"] for r in first["new_items"]] == ["90000000", "90000001", "90000002"]
     assert first["since"] == "2025-11-08" and first["errors"] == []
     assert vault.execute("SELECT count(*) FROM research_item").fetchone()[0] == 5
     assert all(len(r["summary"]) <= 600 for r in first["new_items"])
@@ -148,6 +149,7 @@ def test_one_source_failing_does_not_abort_others(vault):
     assert {r["source"] for r in result["new_items"]} <= {"clinvar", "europepmc"}
     assert len(result["errors"]) == 1 and result["errors"][0]["source"] == "litvar"
     assert vault.execute("SELECT count(*) FROM research_item").fetchone()[0] == 7
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
 
 
 def test_clinvar_reclassification_is_new_and_ncbi_is_paced(vault):
@@ -188,6 +190,8 @@ def test_default_watch_medications_topics_and_idempotent_schema(vault, data_dir)
 
 def test_europepmc_pagination_stores_every_fetched_item(vault):
     w = watch(vault)
+    with write_txn(vault):
+        vault.execute("UPDATE watch SET last_since='2026-11-07' WHERE id=?", (w["id"],))
     http = FakeHttp()
     original = http.get_json
 
@@ -204,7 +208,7 @@ def test_europepmc_pagination_stores_every_fetched_item(vault):
     result = run_watch(vault, w, http=http, now=NOW)
     assert len(result["queried"]) == 2
     assert vault.execute("SELECT count(*) FROM research_item").fetchone()[0] == 5
-    assert "FIRST_PDATE:[2025-11-08 TO 2026-11-08]" in http.requests[0][1]["query"]
+    assert "FIRST_PDATE:[2026-11-05 TO 2026-11-08]" in http.requests[0][1]["query"]
     assert "(SRC:MED OR SRC:PPR)" in http.requests[0][1]["query"]
 
 
@@ -267,3 +271,120 @@ def test_transport_404_is_not_retried_and_redirects_are_not_followed():
     assert len(http._opener.requests) == 1
     from caduceus.research.http import _NoRedirect
     assert _NoRedirect().redirect_request(None, None, 302, "redirect", {}, "https://evil.test/") is None
+
+
+class VolumeHttp(FakeHttp):
+    """2,092 date-window seed hits, 1,124 historical LitVar PMIDs per variant."""
+    def __init__(self):
+        super().__init__()
+        template = papers(1)[0]
+        self.seed_rows = [{**template, "id": str(91000000 + i), "pmid": str(91000000 + i),
+                           "doi": f"10.0000/volume.{i}", "title": f"Synthetic volume paper {i}",
+                           "firstPublicationDate": "2026-11-08" if i == 0 else "2026-11-07" if i == 1 else "2026-10-01"}
+                          for i in range(2092)]
+        self.add_new = False
+
+    def get_json(self, url, params):
+        data = super().get_json(url, params)
+        if "ebi.ac.uk" in url:
+            assert "EXT_ID:" not in params["query"]
+            seed = "2025-11-08" in params["query"]
+            rows = self.seed_rows[:100] if seed else self.seed_rows[:2]
+            if self.add_new:
+                rows = rows + [{**self.seed_rows[0], "id": "92000000", "pmid": "92000000",
+                                "doi": "10.0000/volume.new", "firstPublicationDate": "2026-11-10"}]
+            data["hitCount"] = 2092 if seed else len(rows)
+            data["resultList"]["result"] = copy.deepcopy(rows)
+            if seed:
+                data["nextCursorMark"] = "seed-second-page-must-not-be-requested"
+        elif "litvar2-api" in url:
+            data["pmids"] = [91000000] + list(range(93000000, 93001123))
+        return data
+
+
+def test_realistic_watch_volume_seed_none_then_one_new_within_budget(vault):
+    from caduceus.knowledge.pack import load_pack
+    rsids = sorted(set(load_pack().watch["rsids"]) - {"rs2231142", "rs3745274", "rs2108622"})
+    assert len(rsids) == 25 and "rs4244285" in rsids
+    w = watch(vault, ("europepmc", "clinvar", "litvar"), rsids)
+    http = VolumeHttp()
+    seed = run_watch(vault, w, http=http, now=NOW)
+    assert seed["kind"] == "seed" and seed["errors"] == []
+    assert [r["pmid"] for r in seed["new_items"]] == ["91000000", "91000001", "91000002"]
+    assert len(seed["queried"]) == 28  # one primary page, two ClinVar, one per rsid
+    assert http.requests[0][1]["sort"] == ""  # documented default is relevance
+    assert vault.execute("SELECT count(*) FROM research_item").fetchone()[0] == 102
+    second = run_watch(vault, w, http=http, now="2026-11-09")
+    assert second["kind"] == "none" and second["errors"] == []
+    http.add_new = True
+    third = run_watch(vault, w, http=http, now="2026-11-10")
+    assert third["kind"] == "new" and [r["pmid"] for r in third["new_items"]] == ["92000000"]
+    assert all(len(result["queried"]) <= 28 for result in (seed, second, third))
+    assert not any("EXT_ID:" in params.get("query", "") for _, params in http.requests)
+    assert all(r["matched"]["rsids"] for r in seed["new_items"] if r["pmid"] == "91000000")
+
+
+@pytest.mark.parametrize("source", ["clinvar", "litvar"])
+def test_secondary_errors_do_not_freeze_primary_watermark(vault, source):
+    w = watch(vault, ("europepmc", "clinvar", "litvar"))
+    http = FakeHttp(failing=(source,))
+    first = run_watch(vault, w, http=http, now=NOW)
+    assert first["errors"] and any(e["source"] == source for e in first["errors"])
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
+    second = run_watch(vault, w, http=http, now="2026-11-09")
+    assert second["kind"] == "none"
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-09"
+
+
+@pytest.mark.parametrize("budget,page_count,watermark", [(1, 1, "2026-11-03"), (30, 3, "2026-11-07")])
+def test_primary_budget_or_page_limit_keeps_only_fully_processed_dates(vault, budget, page_count, watermark):
+    w = watch(vault)
+    with write_txn(vault):
+        vault.execute("UPDATE watch SET last_since='2026-11-01' WHERE id=?", (w["id"],))
+    http = FakeHttp()
+    original = http.get_json
+
+    def pages(url, params):
+        data = original(url, params)
+        page = 0 if params["cursorMark"] == "*" else int(params["cursorMark"])
+        rows = papers(2)
+        for i, row in enumerate(rows):
+            row.update(id=str(94000000 + page * 2 + i), pmid=str(94000000 + page * 2 + i),
+                       doi=f"10.0000/paged.{page}.{i}",
+                       firstPublicationDate=(date(2026, 11, 3) + timedelta(days=page * 2 + i)).isoformat())
+        data.update(hitCount=2092, nextCursorMark=str(page + 1), resultList={"result": rows})
+        return data
+
+    http.get_json = pages
+    result = run_watch(vault, w, http=http, now="2026-11-10", budget=budget)
+    assert len(result["queried"]) == page_count
+    assert all(p["sort"] == "P_PDATE_D asc" for _, p in http.requests)
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == watermark
+    assert result["errors"][0]["error"] == ("BudgetExceeded" if budget == 1 else "PageLimit")
+
+
+def test_litvar_budget_omissions_do_not_freeze_seed_or_exceed_budget(vault):
+    from caduceus.knowledge.pack import load_pack
+    w = watch(vault, ("europepmc", "clinvar", "litvar"), load_pack().watch["rsids"])
+    result = run_watch(vault, w, http=FakeHttp(), now=NOW)
+    assert len(result["queried"]) <= 28
+    assert any(e.get("skipped_rsids", 0) > 0 for e in result["errors"])
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
+
+
+@pytest.mark.parametrize("extra", [0, 1])
+def test_transport_response_size_cap(extra):
+    from caduceus.research.http import MAX_RESPONSE_BYTES
+    response = io.BytesIO(b"{}" + b" " * (MAX_RESPONSE_BYTES - 2 + extra))
+
+    class ResponseOpener:
+        def open(self, req, timeout):
+            return response
+
+    http = UrllibHttp()
+    http._opener = ResponseOpener()
+    if extra:
+        with pytest.raises(ValueError, match="8 MB size limit"):
+            http.get_json("https://www.ebi.ac.uk/test", {})
+    else:
+        assert http.get_json("https://www.ebi.ac.uk/test", {}) == {}

@@ -145,7 +145,7 @@ def _store(conn, item, watch_id, stamp):
 
 
 def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
-    """Run with public terms only. Errors/budget truncation retain the previous watermark for retry."""
+    """Run a bounded primary digest; secondary enrichment errors never freeze its watermark."""
     watch = dict(watch)
     stored = conn.execute("SELECT * FROM watch WHERE id=?", (watch["id"],)).fetchone()
     if stored is None:
@@ -163,13 +163,19 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
              date.fromisoformat(until) - timedelta(days=365)).isoformat()
     budget = max(0, int(budget))
     queried, errors, fetched = [], [], []
+    primary_items, primary_complete = [], False
+    request_start = getattr(http, "request_count", 0)
     ncbi_last = None
     sleep = getattr(http, "sleep", time.sleep)
     clock = getattr(http, "monotonic", time.monotonic)
 
+    def remaining():
+        used = http.request_count - request_start if isinstance(http, UrllibHttp) else len(queried)
+        return budget - used
+
     def request(source, url, params):
         nonlocal ncbi_last
-        if len(queried) >= budget:
+        if remaining() <= 0:
             raise BudgetExceeded("request budget exhausted")
         # The real transport paces every physical retry. Fake clients are paced here.
         if "ncbi.nlm.nih.gov" in url and not isinstance(http, UrllibHttp):
@@ -182,18 +188,28 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
             raise ValueError("source returned an API error")
         return result
 
-    def epmc(query, source="europepmc", matches=None):
+    def epmc(query):
+        nonlocal primary_complete
         cursor = "*"
-        while True:
-            data = request(source, EPMC, {"query": query, "format": "json", "resultType": "core",
-                                           "pageSize": 100, "cursorMark": cursor})
-            rows = data.get("resultList", {}).get("result", [])
-            for row in rows:
-                rsids = (matches or {}).get(str(row.get("pmid") or row.get("id")), [])
-                fetched.append(_publication(row, source, rsids))
+        max_pages = 1 if seed else 3
+        for page in range(max_pages):
+            data = request("europepmc", EPMC, {
+                "query": query, "format": "json", "resultType": "core", "pageSize": 100,
+                "cursorMark": cursor, "sort": "" if seed else "P_PDATE_D asc"})
+            rows = data["resultList"]["result"]
+            items = [_publication(row) for row in rows]
+            fetched.extend(items)
+            primary_items.extend(items)
             next_cursor = data.get("nextCursorMark")
-            if not rows or not next_cursor or next_cursor == cursor:
-                break
+            more = bool(rows) and int(data.get("hitCount", len(primary_items))) > len(primary_items)
+            if seed or not more:
+                primary_complete = True
+                return
+            if not next_cursor or next_cursor == cursor:
+                raise ValueError("Europe PMC pagination cursor unavailable")
+            if page + 1 == max_pages:
+                errors.append({"source": "europepmc", "error": "PageLimit", "pages": max_pages})
+                return
             cursor = next_cursor
 
     pack = load_pack()
@@ -202,7 +218,9 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
     rsids = sorted({r for r in terms.get("rsids", []) if re.fullmatch(r"rs\d+", str(r))})
     window = f"FIRST_PDATE:[{since} TO {until}] AND (SRC:MED OR SRC:PPR)"
     with http.limited(budget) if isinstance(http, UrllibHttp) else nullcontext():
-        for source in sources:
+        # The primary source must run first, regardless of configured source order.
+        ordered = (["europepmc"] if "europepmc" in sources else []) + [s for s in sources if s != "europepmc"]
+        for source in ordered:
             try:
                 if source == "europepmc":
                     genes = _quoted(terms.get("genes", []))
@@ -228,30 +246,50 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
                         start += len(ids)
                         if start >= int(search.get("count", start)):
                             break
-                elif source == "litvar":
-                    matches = {}
-                    for rsid in rsids:
+                elif source == "litvar" and primary_items:
+                    # Annotate date-filtered primary hits only. No EXT_ID metadata fan-out.
+                    by_pmid = {}
+                    for item in primary_items:
+                        if item["pmid"]:
+                            by_pmid.setdefault(item["pmid"], []).append(item)
+                    cache = {}
+                    for index, rsid in enumerate(rsids):
+                        # Leave two requests spare; enrichment is optional and its omissions are visible.
+                        if remaining() <= 2:
+                            errors.append({"source": source, "error": "BudgetExceeded",
+                                           "skipped_rsids": len(rsids) - index})
+                            break
                         try:
-                            variant = quote("litvar@" + rsid + "##", safe="")
-                            data = request(source, LITVAR + variant + "/publications", {})
-                            for pmid in data.get("pmids", []):
-                                if str(pmid).isdigit():
-                                    matches.setdefault(str(pmid), []).append(rsid)
+                            if rsid not in cache:
+                                variant = quote("litvar@" + rsid + "##", safe="")
+                                data = request(source, LITVAR + variant + "/publications", {})
+                                cache[rsid] = {str(pmid) for pmid in data["pmids"]}
+                            for pmid in cache[rsid].intersection(by_pmid):
+                                for item in by_pmid[pmid]:
+                                    item["matched_rsids"].append(rsid)
                         except BudgetExceeded:
                             raise
                         except Exception as exc:
                             errors.append({"source": source, "rsid": rsid, "error": type(exc).__name__})
-                    pmids = sorted(matches, key=int, reverse=True)
-                    for offset in range(0, len(pmids), 100):
-                        query = "(" + " OR ".join("EXT_ID:" + p for p in pmids[offset:offset + 100]) + ") AND " + window
-                        epmc(query, source, matches)
                 elif source not in SOURCES:
                     errors.append({"source": source, "error": "unknown source"})
             except Exception as exc:
                 errors.append({"source": source, "error": type(exc).__name__})
 
+    watermark = watch["last_since"]
+    if primary_complete or ("europepmc" not in sources and not errors):
+        watermark = max(watermark or since, until)
+    elif primary_items and not seed:
+        # Ascending date order proves dates before the last encountered date complete;
+        # the boundary date may be split across pages, so leave it for the overlapping retry.
+        dates = sorted({item["pub_date"] for item in primary_items
+                        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", item["pub_date"] or "")})
+        if len(dates) > 1:
+            watermark = max(watermark or since, dates[-2])
+
     # Persist metadata and the delivery atomically. No DB write spans a network request.
     all_ids, new_ids, seen_ids = set(), set(), set()
+    primary_ids = []
     with write_txn(conn):
         for item in fetched:
             if not item["external_id"]:
@@ -261,15 +299,22 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
             if item_id not in all_ids:
                 (seen_ids if existed else new_ids).add(item_id)
             all_ids.add(item_id)
+            if item["source"] == "europepmc" and item_id not in primary_ids:
+                primary_ids.append(item_id)
         candidates = all_ids if seed else new_ids
         rows = [dict(conn.execute("SELECT * FROM research_item WHERE id=?", (i,)).fetchone()) for i in candidates]
-        rows.sort(key=lambda r: (r["pub_date"] or "", r["year"] or 0, r["id"]), reverse=True)
+        if seed:
+            # Europe PMC supplied relevance order; secondary metadata cannot displace it.
+            ranks = {item_id: rank for rank, item_id in enumerate(primary_ids)}
+            rows.sort(key=lambda r: (ranks.get(r["id"], len(primary_ids)), r["id"]))
+        else:
+            rows.sort(key=lambda r: (r["pub_date"] or "", r["year"] or 0, r["id"]), reverse=True)
         selected = rows[:3] if seed else rows
         kind = "seed" if seed else "new" if selected else "none"
         conn.execute("INSERT INTO delivery(watch_id,run_at,kind,item_ids_json,errors_json) VALUES (?,?,?,?,?)",
                      (watch["id"], stamp, kind, json.dumps([r["id"] for r in selected]), json.dumps(errors)))
         conn.execute("UPDATE watch SET last_run_at=?,last_since=? WHERE id=?",
-                     (stamp, watch["last_since"] if errors else until, watch["id"]))
+                     (stamp, watermark, watch["id"]))
     for row in selected:
         row["matched"] = json.loads(row.pop("matched_json"))
     return {"kind": kind, "new_items": selected, "seen_before": len(seen_ids), "queried": queried,

@@ -1,7 +1,9 @@
 """Versioned public evidence, deliberately limited chip calls, and local derivations."""
 from __future__ import annotations
 
+import copy
 import json
+import re
 from dataclasses import dataclass
 from itertools import combinations_with_replacement
 from pathlib import Path
@@ -48,6 +50,8 @@ def load_pack() -> Pack:
         seen.add(entry["id"])
         if entry["chip_reliability"] not in {"reliable", "limited", "unreliable"}:
             raise ValueError("unknown chip reliability")
+        if entry["evidence"] not in {"CPIC A", "CPIC B", "CPIC retired", "research"}:
+            raise ValueError("unknown evidence level")
         for source in entry["sources"]:
             if not source.get("title") or not source.get("url"):
                 raise ValueError("source needs title and URL")
@@ -62,7 +66,15 @@ def load_pack() -> Pack:
 def normalize_drug(name) -> str | None:
     key = " ".join(str(name or "").strip().casefold().split())
     aliases = json.loads((DATA / "drugs.json").read_text(encoding="utf-8"))
-    return aliases.get(key)
+    if key in aliases:
+        return aliases[key]
+    key = re.sub(r"\b\d+(?:\.\d+)?\s*(?:mg|mcg|μg|ug|ml|g|units?|iu)\b", " ", key)
+    ignored = {"mg", "mcg", "μg", "ug", "ml", "g", "unit", "units", "iu", "weekly", "daily",
+               "once", "twice", "tablet", "tablets", "capsule", "capsules", "injection", "oral"}
+    words = [w for w in re.findall(r"5-fu|[a-z]+(?:-[a-z0-9]+)*", key) if w not in ignored]
+    candidates = words + [" ".join(words[i:i + 2]) for i in range(len(words) - 1)]
+    matches = {aliases[c] for c in candidates if c in aliases}
+    return matches.pop() if len(matches) == 1 else None
 
 
 def _genotype(calls, marker, effect, other, *, haploid=False):
@@ -83,12 +95,12 @@ def pgx_check(pack, drug, calls) -> dict:
     for entry in pack.entries:
         if normalized is None or normalized not in entry["drugs"]:
             continue
-        result = dict(entry)
+        result = copy.deepcopy(entry)
         result["category"] = categorize(genes=[entry["gene"]], default=Category.PGX).value
         result["disclaimer"] = DISCLAIMER
         counts, reasons = {}, []
         if entry["chip_reliability"] == "unreliable":
-            reasons.append("not assessed: needs a dedicated test")
+            reasons.append(entry.get("not_assessed_reason", "not assessed: needs a dedicated test"))
         for marker in entry["markers"]:
             genotype, reason = _genotype(calls, marker["rsid"], marker["effect"], marker["other"],
                                          haploid=entry["gene"] == "MT-RNR1")
@@ -161,25 +173,35 @@ def derive(pack, calls) -> list[dict]:
             row["value"] = row["possibilities"][0] if len(possible) == 1 else " or ".join(row["possibilities"])
             row["limits"] = "Unphased two-marker inference, not a diagnosis. ε3/ε3 does not exclude Alzheimer's risk."
         elif name in {"CYP2C19", "CYP2C9"}:
-            haplotypes = ({"*1": "GGC", "*2": "AGC", "*3": "GAC", "*17": "GGT"}
-                          if name == "CYP2C19" else {"*1": "CA", "*2": "TA", "*3": "CC"})
+            # '+' describes markers in cis, not an independently validated star-allele name.
+            haplotypes = ({"*1": "GGC", "*2": "AGC", "*3": "GAC", "*17": "GGT",
+                           "*2+*17": "AGT", "*3+*17": "GAT", "*2+*3": "AAC", "*2+*3+*17": "AAT"}
+                          if name == "CYP2C19" else {"*1": "CA", "*2": "TA", "*3": "CC", "*2+*3": "TC"})
             possible = _haplotypes(basis, markers, haplotypes)
             row["possibilities"] = ["/".join(p) for p in possible]
-            phased = len(possible) == 1 and sum(len(set(g)) > 1 for g in basis.values()) <= 1
-            row["confidence"] = "called" if phased else "ambiguous"
             row["value"] = " or ".join(row["possibilities"]) or "unresolved haplotype"
-            if not phased:
-                row["reason"] = "Multiple variant sites require phase or a dedicated haplotype test."
-            if phased:
-                pair = possible[0]
+            phenotypes, scores = set(), set()
+            for pair in possible:
                 if name == "CYP2C19":
-                    inactive = sum(a in {"*2", "*3"} for a in pair)
-                    row["phenotype"] = ("PM" if inactive == 2 else "IM" if inactive else
-                                        "UM" if pair.count("*17") == 2 else "RM" if "*17" in pair else "NM")
+                    inactive = sum("*2" in a or "*3" in a for a in pair)
+                    phenotypes.add("PM" if inactive == 2 else "IM" if inactive else
+                                   "UM" if pair.count("*17") == 2 else "RM" if "*17" in pair else "NM")
                 else:
-                    score = sum({"*1": 1, "*2": 0.5, "*3": 0}[a] for a in pair)
-                    row["activity_score"] = score
-                    row["phenotype"] = "NM" if score == 2 else "IM" if score >= 1 else "PM"
+                    score = sum(0 if "*3" in a else 0.5 if "*2" in a else 1 for a in pair)
+                    scores.add(score)
+                    phenotypes.add("NM" if score == 2 else "IM" if score >= 1 else "PM")
+            row["phenotypes"] = sorted(phenotypes)
+            row["confidence"] = "called" if len(phenotypes) == 1 else "ambiguous"
+            if len(phenotypes) == 1:
+                row["phenotype"] = next(iter(phenotypes))
+            if len(scores) == 1:
+                row["activity_score"] = next(iter(scores))
+            elif scores:
+                row["activity_scores"] = sorted(scores)
+            if len(possible) > 1:
+                row["reason"] = "Phase unresolved; compatible diplotypes " + (
+                    "agree on the phenotype." if len(phenotypes) == 1 else "have different phenotypes.")
+                row["limits"] += " '+' labels a cis marker combination, not a validated star-allele assignment."
         else:
             count = basis[markers[0][0]].count(markers[0][1])
             row["confidence"] = "called"

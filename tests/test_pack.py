@@ -21,9 +21,11 @@ def test_pack_loads_validates_sources_and_plus_strand():
     assert {e["gene"] for e in pack.cpic} >= {
         "CYP2C19", "CYP2C9", "VKORC1", "SLCO1B1", "TPMT", "NUDT15", "DPYD", "CYP3A5", "IFNL3",
         "UGT1A1", "MT-RNR1", "CYP2D6", "RYR1", "HLA-B"}
-    dbsnp = {r["rsid"]: r for r in json.loads((FIXTURES / "dbsnp_markers.json").read_text())}
+    dbsnp = {r["rsid"]: r for r in (json.loads((FIXTURES / "dbsnp_markers.json").read_text()) +
+                                       json.loads((FIXTURES / "dbsnp_additional_markers.json").read_text()))}
     cpic_locations = json.loads((FIXTURES / "cpic_locations.json").read_text())
-    locations = {r["dbsnpid"]: r for r in cpic_locations["locations"]}
+    locations = {r["dbsnpid"]: r for r in (cpic_locations["locations"] +
+                                          json.loads((FIXTURES / "cpic_additional_locations.json").read_text()))}
     for entry in pack.entries:
         assert entry["limits"] and entry["sources"] and entry["phenotype_rules"]
         assert all(s["title"] and s["url"] and s["pmid"] and s["year"] for s in entry["sources"])
@@ -32,7 +34,8 @@ def test_pack_loads_validates_sources_and_plus_strand():
             assert marker["effect"] in alleles and marker["other"] in alleles
             if marker["rsid"] in locations:
                 chrom = locations[marker["rsid"]]["chromosomelocation"]
-                assert marker["other"] + ">" + marker["effect"] in chrom
+                assert (marker["other"] + ">" + marker["effect"] in chrom or
+                        marker["effect"] + ">" + marker["other"] in chrom)
     historical = next(e for e in pack.entries if e["gene"] == "IFNL3")
     assert historical["guideline"]["status"] == "retired"
     assert "retired" in historical["evidence"]
@@ -93,7 +96,7 @@ def test_missing_one_required_marker_and_unreliable_panels():
         assert all(e["status"] == "not_assessed" and e["chip_reliability"] == "unreliable"
                    for e in pgx_check(pack, drug, {})["entries"])
     hla = pgx_check(pack, "abacavir", calls(rs2395029="TG"))["entries"][0]
-    assert hla["status"] == "flag" and hla["chip_reliability"] == "limited"
+    assert hla["status"] == "not_assessed" and hla["chip_reliability"] == "unreliable"
     mt = pgx_check(pack, "gentamicin", calls(rs267606617="G"))["entries"][0]
     assert mt["status"] == "flag"
 
@@ -120,5 +123,89 @@ def test_derived_cyp2c19_and_cyp2c9_vkorc1_slco1b1():
     assert result["VKORC1"]["value"] == "1 copies of −1639A (plus-strand T)"
     assert all(r["sources"] and r["limits"] for r in result.values())
     ambiguous = {r["name"]: r for r in derive(load_pack(), calls(rs4244285="GA", rs4986893="GG", rs12248560="CT"))}
-    assert ambiguous["CYP2C19"]["confidence"] == "ambiguous"
+    assert ambiguous["CYP2C19"]["confidence"] == "called"
+    assert ambiguous["CYP2C19"]["phenotype"] == "IM"
     assert all(r["confidence"] == "not_assessed" for r in derive(load_pack(), {}))
+
+
+@pytest.mark.parametrize("name,generic", [
+    ("Ozempic 0.5 mg", "semaglutide"), ("semaglutide 1 MG/0.75 ML", "semaglutide"),
+    ("Ozempic 0.5mg weekly injection", "semaglutide"), ("Plavix 75 mg tablet daily", "clopidogrel"),
+    ("5-FU 500 mg", "fluorouracil"), ("peginterferon alfa-2a 180 mcg weekly", "peginterferon alfa-2a"),
+    ("methylene blue 1 mg/ml", "methylene blue"), ("unknown 5 mg weekly", None),
+])
+def test_drug_strength_and_schedule_normalization(name, generic):
+    assert normalize_drug(name) == generic
+
+
+def test_pgx_result_is_deeply_independent_of_pack():
+    pack = load_pack()
+    before = json.dumps(pack.entries, sort_keys=True)
+    row = pgx_check(pack, "Ozempic", calls(rs6923761="AA", rs10305420="CT"))["entries"][0]
+    row["markers"][0]["effect"] = "INVALID"
+    row["sources"][0]["title"] = "CHANGED"
+    row["drugs"].append("other")
+    row["phenotype_rules"].clear()
+    assert json.dumps(pack.entries, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("genotype,status", [("CC", "no_flag"), ("CT", "flag"), ("TT", "flag")])
+def test_tacrolimus_flags_cyp3a5_expressers(genotype, status):
+    row = pgx_check(load_pack(), "tacrolimus", calls(rs776746=genotype))["entries"][0]
+    assert row["status"] == status
+    assert row["effect_counts"]["rs776746"] == genotype.count("T")
+    assert row["markers"][0]["effect"] == "T"
+    if status == "flag":
+        assert "prescriber" in row["finding"] and "expression" in row["finding"]
+
+
+@pytest.mark.parametrize("genotype", ["TT", "TG", "GG"])
+def test_abacavir_requires_dedicated_hla_screening(genotype):
+    row = pgx_check(load_pack(), "abacavir", calls(rs2395029=genotype))["entries"][0]
+    assert row["status"] == "not_assessed" and row["chip_reliability"] == "unreliable"
+    assert "dedicated test" in row["reason"] and "HLA" in row["finding"]
+
+
+def test_cpic_missing_pairs_are_present_and_unreliable_panels_are_not_assessed():
+    pack = load_pack()
+    pairs = json.loads((FIXTURES / "cpic_pairs.json").read_text()) + fixture_additional_pairs()
+    # CPIC pairs without a guideline/PMID are explicitly skipped, not invented evidence.
+    expected = {(r["genesymbol"], r["drugname"]) for r in pairs if r["pmids"]}
+    present = {(e["gene"], drug) for e in pack.cpic for drug in e["drugs"]}
+    assert expected <= present
+    panel = calls(rs1799853="CC", rs1057910="AA", rs2395029="TT")
+    for gene, drug in expected:
+        if gene not in {"HLA-A", "HLA-B", "RYR1", "CACNA1S", "G6PD"}:
+            continue
+        rows = [r for r in pgx_check(pack, drug, panel)["entries"] if r["gene"] == gene]
+        assert rows and all(r["status"] == "not_assessed" and r["chip_reliability"] == "unreliable" for r in rows)
+        if gene.startswith("HLA"):
+            assert all("HLA typing needs a dedicated test" in r["reason"] for r in rows)
+    for gene, drug, rsid, genotype in [("ABCG2", "rosuvastatin", "rs2231142", "GT"),
+                                       ("CYP2B6", "efavirenz", "rs3745274", "GT"),
+                                       ("CYP4F2", "warfarin", "rs2108622", "CT")]:
+        row = next(r for r in pgx_check(pack, drug, calls(**{rsid: genotype}))["entries"] if r["gene"] == gene)
+        assert row["status"] == "flag" and row["evidence"] == "CPIC A"
+
+
+def fixture_additional_pairs():
+    return json.loads((FIXTURES / "cpic_additional_pairs.json").read_text())
+
+
+def test_cyp2c19_phase_consensus_and_disagreement():
+    common = calls(rs4244285="GA", rs4986893="GG", rs12248560="CT")
+    row = next(r for r in derive(load_pack(), common) if r["name"] == "CYP2C19")
+    assert row["confidence"] == "called" and row["phenotype"] == "IM"
+    assert set(row["possibilities"]) == {"*1/*2+*17", "*2/*17"}
+    different = calls(rs4244285="GA", rs4986893="GA", rs12248560="CC")
+    row = next(r for r in derive(load_pack(), different) if r["name"] == "CYP2C19")
+    assert row["confidence"] == "ambiguous" and "phenotype" not in row
+    assert set(row["phenotypes"]) == {"IM", "PM"}
+    assert len(row["possibilities"]) == 2
+
+
+def test_retired_cpic_evidence_uses_exact_level():
+    pack = load_pack()
+    retired = next(e for e in pack.entries if e["gene"] == "IFNL3")
+    assert retired["evidence"] == "CPIC retired" and "Retired" in retired["limits"]
+    assert {e["evidence"] for e in pack.entries} <= {"CPIC A", "CPIC B", "CPIC retired", "research"}

@@ -1,0 +1,58 @@
+[
+  {
+    "genesymbol": "CYP4F2",
+    "name": "*1",
+    "clinicalfunctionalstatus": null,
+    "activityvalue": null,
+    "definitionid": 778238
+  },
+  {
+    "genesymbol": "CYP4F2",
+    "name": "*9",
+    "clinicalfunctionalstatus": null,
+    "activityvalue": null,
+    "definitionid": 3318587
+  },
+  {
+    "genesymbol": "CYP2B6",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 777422
+  },
+  {
+    "genesymbol": "CYP4F2",
+    "name": "*6",
+    "clinicalfunctionalstatus": null,
+    "activityvalue": null,
+    "definitionid": 2784576
+  },
+  {
+    "genesymbol": "CYP4F2",
+    "name": "*3",
+    "clinicalfunctionalstatus": null,
+    "activityvalue": null,
+    "definitionid": 778242
+  },
+  {
+    "genesymbol": "CYP2B6",
+    "name": "*9",
+    "clinicalfunctionalstatus": "Decreased function",
+    "activityvalue": null,
+    "definitionid": 777438
+  },
+  {
+    "genesymbol": "CYP2B6",
+    "name": "*3",
+    "clinicalfunctionalstatus": "Uncertain function",
+    "activityvalue": null,
+    "definitionid": 777426
+  },
+  {
+    "genesymbol": "CYP2B6",
+    "name": "*6",
+    "clinicalfunctionalstatus": "Decreased function",
+    "activityvalue": null,
+    "definitionid": 777432
+  }
+]
