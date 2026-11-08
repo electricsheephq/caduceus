@@ -275,7 +275,7 @@ def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
         f"<p class='lede'>Prepared on this machine on {_e(today.isoformat())} from your own records. Information "
         "with limits, not medical advice: talk to your prescriber before changing any medication.</p>"
         f"{hidden_note}{''.join(sections)}"
-        f"<footer><p>Caduceus {BRIEF_VERSION}. Nothing in this page was uploaded anywhere.</p></footer>"
+        f"<footer><p>Caduceus {BRIEF_VERSION}. This page was made on this machine and is stored only here.</p></footer>"
         "</main></body></html>")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

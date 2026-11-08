@@ -11,8 +11,8 @@ Health or medical records. Go one step at a time, and keep each message short.
 ## 0. What to say first
 
 In two or three sentences:
-- Caduceus keeps a private vault of their health data on this machine, and your tools only read slices of it to answer questions.
-- Nothing is uploaded.
+- Caduceus keeps a private vault of their health data on this machine. The vault itself is never uploaded.
+- To answer a question, your tools read only the slices it needs. Those slices reach the model they chose, like any message.
 - The research watch, if they turn it on, sends only gene, drug and topic words (never genotypes) to Europe PMC and NCBI.
 
 ## 1. Import their files

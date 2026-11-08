@@ -39,7 +39,7 @@ def callsets(conn) -> list[dict]
   - `skipped_lines`, `chromosomes`.
 
 **`get_calls`:**
-- **Callset:** uses the newest callset when `callset_id` is None.
+- **Callset:** uses the newest *complete* callset when `callset_id` is None: its source has a succeeded `dtc` import and at least one row. Rows from a running, cancelled or failed import stay stored, so the next run can resume them, but they are never looked up. When only incomplete callsets exist, `NoCallset` says the import has not finished. An explicit `callset_id` is used as given (diagnostics). `callsets()` rows carry `complete` (0 or 1).
 - **States:** a marker that is not in the callset is `NOT_ON_CHIP`, and `--` is `NO_CALL`.
 - **Aliases:** names are resolved through `marker_alias`. An alias that maps to several markers is `UNRESOLVED`.
 
@@ -47,7 +47,7 @@ def callsets(conn) -> list[dict]
 
 ```python
 PARSER = "promethease"; PARSER_VERSION = "1"
-def decode_report(path, *, max_inflate=64 << 20, max_total=1 << 30) -> DecodedReport
+def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedReport
 def import_promethease(conn, src, *, cancel=None) -> ImportResult
 def build_report(conn, out_dir, *, policy, source_id=None) -> Path
 def parity(conn, source_id, *, report_path=None) -> dict
@@ -65,10 +65,13 @@ def parity(conn, source_id, *, report_path=None) -> dict
 - **Search:** the records are indexed (kind `annotation`).
 - **Categories:** each record gets a `policy.categorize` category.
 
+**Decode limits:** per-chunk and total inflated bytes, items per chunk, keys per dict chunk, nodes per record and nodes in total. Real reports are far below every limit: about 3.4k chunks, under 20 KB each, 21 MB in total. Exceeding a total raises `ReportTooLarge`; an oversized record is dropped with a warning.
+
 **`build_report`:**
 - **Output:** writes one self-contained HTML **variant report**, in its own design, with no external resources.
 - **Data block:** embeds its data in `<script type="application/json" id="caduceus-data">`, so `parity` can re-read it.
 - **Privacy:** honours the policy, and states how many items were withheld.
+- **Source:** when `source_id` is None, the newest source with a succeeded Promethease import; `NoSuccessfulReport` (a `ValueError`) when there is none.
 
 **`parity`:** compares the decoded, stored and rebuilt sets.
 - **What it compares:** counts, the magnitude and repute histograms, the set of (`rsnum`, `geno`) pairs, and the SNP/genoset split.
@@ -84,7 +87,7 @@ def metrics(samples) -> list[dict]
 def trend(samples, metric, *, start=None, end=None, bucket="week") -> dict
 def compare_windows(samples, metric, *, pivot, before_days=28, after_days=28) -> dict
 def daily_check(samples, *, thresholds=None, today=None) -> dict
-def observation_series(vault, name_or_code, *, start=None, end=None) -> dict
+def observation_series(vault, name_or_code, *, start=None, end=None) -> dict   # in health/fhir.py
 def trend_svg(points, *, unit, title, markers=()) -> str
 ```
 
@@ -96,6 +99,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 **Trend results:**
 - **Every result carries** `unit`, `source_policy`, `coverage` (with gaps), and `calc_version`.
 - **Metric names** are friendly (`weight`, `steps`, `resting_heart_rate`, `sleep_hours`, …) and map to HealthKit identifiers.
+- **`observation_series` points** carry `date`, `value`, `unit`, `reference_range`, `interpretation`, `source` and `category`; callers filter points by `category`. HbA1c is converted to % (NGSP); other mixed units are never pooled in `points`.
 
 ## Lane C: knowledge pack and research watch (`caduceus/knowledge/`, `caduceus/research/`, `core/schema/vault/30_research.sql`)
 
@@ -105,14 +109,14 @@ def load_pack() -> Pack
 def normalize_drug(name) -> str | None
 def pgx_check(pack, drug, calls) -> dict
 def derive(pack, calls) -> list[dict]
-def run_watch(conn, watch, *, http, now, budget=30) -> dict
+def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict
 def default_watch(conn, *, topics=()) -> dict
 class UrllibHttp: get_json(url, params) -> dict
 ```
 
 **`pgx_check`:**
 - **Status per entry:** `flag` (the user carries the effect allele), `no_flag` (tested and lacks it) or `not_assessed` (absent, no-call, unresolved). `no_flag` and `not_assessed` are never merged.
-- **Each entry carries** the evidence level (`CPIC A`, `CPIC B`, `research`), sources (title, journal, year, PMID, DOI) and limits.
+- **Each entry carries** the evidence level (`CPIC A`, `CPIC B`, `research`, or `CPIC retired` for withdrawn guidance), sources (title, journal, year, PMID, DOI), limits, `chip_reliability`, `category` and `effect_counts`. Markers a chip cannot type (HLA, CYP2D6) are `unreliable` entries that always come back `not_assessed`.
 
 **`derive`:** APOE, CYP2C19, CYP2C9, SLCO1B1, VKORC1 and others, each with a confidence of `called`, `ambiguous` or `not_assessed`.
 

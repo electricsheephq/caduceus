@@ -54,3 +54,17 @@ research about their genes. Answer from the tools, never from memory, and cite w
 6. End with the advice line from rule 6.
 
 A comparison such as "Would Mounjaro be different?" works the same way: call `op=pgx` for each drug. Report only the differences the entries show.
+
+## Answer layout for medication questions
+
+Keep the key lines short enough to fit on one phone screen, then add detail below only if the user asks:
+
+```
+Your data: <one line from their own trend or labs, with numbers, units and dates>
+GENE rsID <genotype>: <effect direction, size and unit> (<first author> <year>, <journal>)
+GENE rsID <genotype>: … one line per relevant marker; say "not assessed" plainly
+Most of the variation is non-genetic: dose, time on the drug, diet and adherence matter more.
+This is information, not medical advice. Talk to your prescriber before changing anything.
+```
+
+Never drop the last two lines to save space.
