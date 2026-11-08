@@ -51,3 +51,17 @@ def test_medication_table_has_no_empty_columns(call):
     call("caduceus_capture", op="medication", drug="metformin", date="2023-09-20", confirm=True)
     page = _brief(call)
     assert "<th>Brand</th>" not in page and "<th>Dose</th>" not in page and "<td>You</td>" in page
+
+
+def test_a_medication_the_records_say_was_stopped_is_not_current(call, tmp_path):
+    import json as _json
+
+    bundle = {"resourceType": "Bundle", "type": "collection", "entry": [{"resource": {
+        "resourceType": "MedicationStatement", "id": "s1", "status": "stopped",
+        "medicationCodeableConcept": {"text": "Simvastatin 20 mg tablet"}, "effectivePeriod": {"start": "2024-02-01"}}}]}
+    path = tmp_path / "records.json"
+    path.write_text(_json.dumps(bundle))
+    assert call("caduceus_capture", op="import", path=str(path))["status"] == "succeeded"
+    page = _brief(call)
+    assert "no longer taken; stop date unknown" in page
+    assert "Genes and your medications" not in page  # nothing current to check

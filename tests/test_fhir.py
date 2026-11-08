@@ -430,11 +430,12 @@ def test_round2_correction_preserves_deduplicated_resource_identity(vault, tmp_p
     assert [p["value"] for p in observation_series(vault, "HbA1c")["points"]] == [6]
 
 
-def test_round2_undated_stop_fails_closed_under_frozen_schema(vault, tmp_path):
-    assert next(r for r in vault.execute('PRAGMA table_info(medication_event)') if r['name']=='occurred_on')['notnull'] == 1
+def test_undated_stop_keeps_its_start_marked_not_current(vault, tmp_path):
     resource = {"resourceType": "MedicationStatement", "status": "stopped",
                 "medicationCodeableConcept": {"text": "Synthetic drug"}, "effectivePeriod": {"start": "2024-02-01"}}
     result = import_fhir(vault, _source(vault, tmp_path / "undated-stop.json", resource))
-    assert result.status == "failed"  # Owner gate, not proof of C's requested NULL row.
-    assert vault.execute("SELECT count(*) FROM medication_event").fetchone()[0] == 0
-    assert "nullable medication_event.occurred_on" in result.warnings[0]
+    assert result.status == "succeeded"
+    rows = [dict(r) for r in vault.execute("SELECT event, occurred_on, note FROM medication_event")]
+    assert [(r["event"], r["occurred_on"]) for r in rows] == [("start", "2024-02-01")]
+    note = json.loads(rows[0]["note"])
+    assert note["status"] == "stopped" and note["current"] is False

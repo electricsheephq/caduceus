@@ -7,6 +7,7 @@ hidden sections say only how many items were left out. No external resources; al
 from __future__ import annotations
 
 import html
+import json
 import math
 import os
 from datetime import date, timedelta
@@ -77,14 +78,23 @@ def _value(value) -> str:
 
 def _medications(vault) -> list[dict]:
     return [dict(r) for r in vault.execute(
-        "SELECT drug, brand, event, dose, occurred_on, source FROM medication_event ORDER BY occurred_on, id")]
+        "SELECT drug, brand, event, dose, occurred_on, source, note FROM medication_event ORDER BY occurred_on, id")]
+
+
+def _not_current(m) -> bool:
+    """A record that said the medication is not current (stopped or completed with no stop date)."""
+    try:
+        note = json.loads(m.get("note") or "{}")
+    except ValueError:  # a note the user typed
+        return False
+    return isinstance(note, dict) and note.get("current") is False and m["event"] == "start"
 
 
 def _current(meds) -> list[str]:
     last = {}
     for m in meds:
-        last[m["drug"]] = m["event"]
-    return [drug for drug, event in last.items() if event != "stop"]
+        last[m["drug"]] = m
+    return [drug for drug, m in last.items() if m["event"] != "stop" and not _not_current(m)]
 
 
 def _markers(meds):
@@ -114,7 +124,8 @@ def _meds_section(meds, policy) -> tuple[str, int]:
     brand, dose = any(m["brand"] for m in meds), any(m["dose"] for m in meds)  # no empty columns
 
     def row(m):
-        cells = [display_drug(m["drug"])] + ([m["brand"] or ""] if brand else []) + [_EVENT.get(m["event"], m["event"])]
+        event = _EVENT.get(m["event"], m["event"]) + (" (no longer taken; stop date unknown)" if _not_current(m) else "")
+        cells = [display_drug(m["drug"])] + ([m["brand"] or ""] if brand else []) + [event]
         cells += ([m["dose"] or ""] if dose else []) + [(m["occurred_on"] or "")[:10] or "date unknown",
                                                         _SOURCE.get(m["source"], m["source"])]
         return "<tr>" + "".join(f"<td>{_e(c)}</td>" for c in cells) + "</tr>"

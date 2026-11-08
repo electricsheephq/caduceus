@@ -218,8 +218,6 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
             if sleep_warnings:
                 warnings.extend(sleep_warnings)
                 counts["sleep_nights_clipped"] = len(sleep_warnings)
-    except fhir.UndatedMedicationStop:
-        status, errors = "failed", [fhir.UNDATED_STOP_MESSAGE]
     except Exception as exc:
         status = "failed"
         # Input values may be personal: report the error class, not parser excerpts.

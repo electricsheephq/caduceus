@@ -32,11 +32,6 @@ MENTAL_SNOMED = frozenset({"35489007", "370143000", "197480006", "21897009", "37
                           "7200002", "66590003", "11061003", "75544000", "6471006", "248062006"})
 REPRODUCTIVE_SNOMED = frozenset({"77386006", "17369002", "34801009", "129103003", "237055002", "8619003",
                                "860914002", "397803000"})
-UNDATED_STOP_MESSAGE = "Undated medication stop requires a nullable medication_event.occurred_on; frozen vault schema unchanged"
-
-
-class UndatedMedicationStop(ValueError):
-    """The frozen vault cannot represent a requested stop without a date."""
 
 
 def _display(concept):
@@ -134,8 +129,7 @@ def _medications(vault, resource, source_id, name):
     period = resource.get("effectivePeriod") or {}
     start, precision = _date_value(period.get("start") or resource.get("effectiveDateTime") or resource.get("authoredOn"))
     end, end_precision = _date_value(period.get("end"))
-    if status == "stopped" and end is None:
-        raise UndatedMedicationStop(UNDATED_STOP_MESSAGE)
+    # A stop with no date keeps only its start, marked not current in the note: no date is ever invented.
     events = [("start", start, precision)] if start else []
     if status in ("completed", "stopped") and end:
         events.append(("stop", end, end_precision))
@@ -328,8 +322,6 @@ def import_fhir(vault, src, *, cancel=None) -> ImportResult:
             counts = ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
             if cancel is not None and cancel.is_set():
                 status = "cancelled"
-    except UndatedMedicationStop:
-        status, errors = "failed", [UNDATED_STOP_MESSAGE]
     except Exception as exc:
         status, errors = "failed", [f"{type(exc).__name__}: FHIR import failed"]
     errors += warning_messages(counts)
