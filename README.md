@@ -18,6 +18,12 @@ newest research. Answers are cited, with honest limits.
 
 > Information with limits, not medical advice. Caduceus never tells you to start, stop or change a medication.
 
+| Your variant report, rebuilt offline | A one-page brief for your doctor |
+|---|---|
+| ![The rebuilt variant report: record counts, then summaries by magnitude, drug response, good news and what is worth a closer look](docs/media/screenshot-variant-report.png) | ![The health brief: medications, then the weekly weight average with the Ozempic start marked and the plateau after it](docs/media/screenshot-health-brief.png) |
+
+*The screenshots use the synthetic demo persona, not a real person's data.*
+
 ## Install
 
 Requires Hermes Agent 0.23.0 or newer. There are no extra dependencies.
