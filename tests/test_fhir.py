@@ -439,3 +439,56 @@ def test_undated_stop_keeps_its_start_marked_not_current(vault, tmp_path):
     assert [(r["event"], r["occurred_on"]) for r in rows] == [("start", "2024-02-01")]
     note = json.loads(rows[0]["note"])
     assert note["status"] == "stopped" and note["current"] is False
+
+def _glucose(rid, value, status="final", when="2024-03-01T08:00:00Z"):
+    return {"resourceType": "Observation", "id": rid, "status": status, "effectiveDateTime": when,
+            "code": {"coding": [{"system": "http://loinc.org", "code": "2345-7", "display": "Glucose"}]},
+            "valueQuantity": {"value": value, "unit": "mg/dL"}}
+
+
+def _condition(code, system=None, verification="confirmed", rid="c1", text=None):
+    coding = {"code": code, **({"system": system} if system else {})}
+    return {"resourceType": "Condition", "id": rid, "onsetDateTime": "2024-01-01",
+            "verificationStatus": {"coding": [{"code": verification}]},
+            "code": {"coding": [coding], **({"text": text} if text else {})}}
+
+
+def test_a_later_retraction_removes_what_was_stored(vault, tmp_path):
+    assert import_fhir(vault, _source(vault, tmp_path / "a.json", _bundle(
+        _glucose("1", 400), _condition("F32.9", "http://hl7.org/fhir/sid/icd-10-cm")))).status == "succeeded"
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [400]
+    result = import_fhir(vault, _source(vault, tmp_path / "b.json", _bundle(
+        _glucose("1", 400, status="entered-in-error"),
+        _condition("F32.9", "http://hl7.org/fhir/sid/icd-10-cm", verification="refuted"))))
+    assert result.status == "succeeded"
+    assert observation_series(vault, "glucose")["points"] == []
+    assert vault.execute("SELECT count(*) FROM condition").fetchone()[0] == 0
+    assert search.search(vault, "Glucose", policy=Policy())["results"] == []
+
+
+def test_a_retraction_spares_other_resources(vault, tmp_path):
+    import_fhir(vault, _source(vault, tmp_path / "a.json", _bundle(_glucose("1", 400), _glucose("2", 120))))
+    import_fhir(vault, _source(vault, tmp_path / "b.json", _bundle(_glucose("1", 400, status="cancelled"))))
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [120]
+
+
+@pytest.mark.parametrize("resource,expected", [
+    (_condition("296.20", "http://hl7.org/fhir/sid/icd-9-cm"), "mental_health"),
+    (_condition("35489007"), "mental_health"),                      # SNOMED with no system
+    (_condition("F329"), "mental_health"),                          # ICD-10 with no system and no dot
+    (_condition("V22.0", "http://hl7.org/fhir/sid/icd-9-cm"), "reproductive"),
+    (_condition("E11.9"), "records"),                               # a control that must stay visible
+    (_condition("44054006", "http://snomed.info/sct"), "records"),  # type 2 diabetes: not sensitive
+])
+def test_sensitive_codes_without_text(vault, tmp_path, resource, expected):
+    import_fhir(vault, _source(vault, tmp_path / "c.json", resource))
+    assert vault.execute("SELECT category FROM condition").fetchone()[0] == expected
+
+
+def test_a_diagnosis_carried_in_the_value_counts(vault, tmp_path):
+    symptom = {"resourceType": "Observation", "id": "o1", "status": "final", "effectiveDateTime": "2024-03-01",
+               "code": {"coding": [{"system": "http://loinc.org", "code": "75325-1"}]},
+               "valueCodeableConcept": {"coding": [{"system": "http://snomed.info/sct", "code": "35489007"}]}}
+    import_fhir(vault, _source(vault, tmp_path / "v.json", symptom))
+    assert vault.execute("SELECT category FROM observation").fetchone()[0] == "mental_health"
+    assert search.search(vault, "75325-1", policy=Policy(level="standard"))["results"] == []

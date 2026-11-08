@@ -22,6 +22,8 @@ ALIASES = {"hba1c": ("4548-4", "17856-6", "59261-8"),
            "ldl": ("13457-7", "18262-6", "2089-1")}
 ICD_SYSTEMS = {"http://hl7.org/fhir/sid/icd-10-cm", "http://hl7.org/fhir/sid/icd-10",
                "urn:oid:2.16.840.1.113883.6.90", "urn:oid:2.16.840.1.113883.6.3"}
+ICD9_SYSTEMS = {"http://hl7.org/fhir/sid/icd-9-cm", "urn:oid:2.16.840.1.113883.6.103", "urn:oid:2.16.840.1.113883.6.2"}
+SNOMED = "http://snomed.info/sct"
 # Public code-list receipts and lookup sources are recorded in LANE_REPORT.md.
 MENTAL_LOINC = frozenset({"69737-5", "70274-6", "44249-1", "44261-6", "44260-8", "55757-9", "55758-7",
                          "71354-5", "99046-5", "72109-2", "75626-2"})
@@ -54,21 +56,40 @@ def _category(concepts, default):
         return category
     for concept in concepts:
         for coding in concept.get("coding", []):
-            system, code = coding.get("system"), str(coding.get("code", "")).upper()
-            if system in (LOINC, "http://snomed.info/sct"):
-                mental = MENTAL_LOINC if system == LOINC else MENTAL_SNOMED
-                reproductive = REPRODUCTIVE_LOINC if system == LOINC else REPRODUCTIVE_SNOMED
-                if code in mental:
-                    return Category.MENTAL_HEALTH
-                if code in reproductive:
-                    return Category.REPRODUCTIVE
-            if system in ICD_SYSTEMS or (not system and re.fullmatch(r"[A-Z][0-9][0-9A-Z](?:\.[0-9A-Z]+)?", code)):
-                if re.match(r"F(?:0[1-9]|[1-9][0-9])", code):
-                    return Category.MENTAL_HEALTH
-                if (re.match(r"O(?:[0-8][0-9]|9[0-9A])|Z3[0-9]|N9[6-8]|N80|N52", code)
-                        or code == "E28.2"):
-                    return Category.REPRODUCTIVE
+            found = _code_category(coding.get("system"), str(coding.get("code", "")).strip().upper())
+            if found is not None:
+                return found
     return category
+
+
+def _code_category(system, code):
+    """Sensitive categories from codes alone. A code with no system is matched by its shape: privacy fails closed."""
+    if system == LOINC or (not system and re.fullmatch(r"\d{1,7}-\d", code)):
+        if code in MENTAL_LOINC:
+            return Category.MENTAL_HEALTH
+        if code in REPRODUCTIVE_LOINC:
+            return Category.REPRODUCTIVE
+    if system == SNOMED or (not system and re.fullmatch(r"\d{6,18}", code)):
+        if code in MENTAL_SNOMED:
+            return Category.MENTAL_HEALTH
+        if code in REPRODUCTIVE_SNOMED:
+            return Category.REPRODUCTIVE
+    if system in ICD_SYSTEMS or (not system and re.fullmatch(r"[A-Z][0-9][0-9A-Z](?:\.?[0-9A-Z]{1,4})?", code)):
+        if re.match(r"F(?:0[1-9]|[1-9][0-9])", code):
+            return Category.MENTAL_HEALTH
+        if re.match(r"O(?:[0-8][0-9]|9[0-9A])|Z3[0-9]|N9[6-8]|N80|N52", code) or code.replace(".", "") == "E282":
+            return Category.REPRODUCTIVE
+    if system in ICD9_SYSTEMS or (not system and re.fullmatch(r"(?:\d{3}|V\d{2})(?:\.\d{1,2})?", code)):
+        head = code[:3]
+        if head.isdigit():
+            number = int(head)
+            if 290 <= number <= 319:  # ICD-9-CM mental disorders
+                return Category.MENTAL_HEALTH
+            if 630 <= number <= 679 or 614 <= number <= 629 or number == 606 or code.startswith("607.84"):
+                return Category.REPRODUCTIVE
+        elif head in ("V22", "V23", "V24", "V25", "V26", "V27", "V28"):  # pregnancy, contraception, procreation
+            return Category.REPRODUCTIVE
+    return None
 
 
 def _number(value):
@@ -175,7 +196,9 @@ def _observations(vault, resource, source_id, when, precision, counts):
         unit = quantity.get("unit") or quantity.get("code")
         rr = (part.get("referenceRange") or [{}])[0]
         interpretations = [_concept(c)[2] for c in part.get("interpretation", [])]
-        category = _category([resource.get("code") or {}, concept], Category.RECORDS)
+        # The value can carry the diagnosis too ("Symptom" = depression), so it counts toward the category.
+        category = _category([resource.get("code") or {}, concept, part.get("valueCodeableConcept") or {}],
+                             Category.RECORDS)
         key = _key(["Observation", system, code, when, [num, text], unit, code if component is not None else None])
         identities = _resource_ids({"id": resource.get("id")})
         corrected = resource.get("status") in ("corrected", "amended")
@@ -222,6 +245,31 @@ def _observations(vault, resource, source_id, when, precision, counts):
     return inserted
 
 
+def _retract(vault, resource, kind, counts):
+    """A resource re-sent as entered-in-error, cancelled or refuted removes what an earlier import stored for it."""
+    rid = resource.get("id")
+    if not isinstance(rid, str) or not rid:
+        return
+    if kind == "Observation":
+        when, _ = _date_value(resource.get("effectiveDateTime") or (resource.get("effectivePeriod") or {}).get("start")
+                              or resource.get("issued"))
+        rows = vault.execute(
+            "SELECT id FROM observation WHERE source='fhir' AND (json_extract(raw_json,'$.id')=? OR EXISTS "
+            "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?))"
+            + (" AND effective_at=?" if when else ""), (rid, rid) + ((when,) if when else ())).fetchall()
+        table = "observation"
+    else:
+        _, code, _ = _concept(resource.get("code") or {})
+        rows = vault.execute("SELECT id FROM condition WHERE source='fhir' AND json_extract(raw_json,'$.id')=? "
+                             "AND code IS ?", (rid, code)).fetchall()
+        table = "condition"
+    for row in rows:
+        search.remove_doc(vault, kind=table, ref=str(row["id"]))
+        vault.execute(f"DELETE FROM {table} WHERE id=?", (row["id"],))
+    if rows:
+        counts[f"{table}_retracted"] = counts.get(f"{table}_retracted", 0) + len(rows)
+
+
 def ingest(vault, document, source_id, *, cancel=None, run_id=None):
     """Shared local ingestion; each resource and its index rows commit together."""
     counts = {"observation": 0, "condition": 0, "medication": 0, "ignored": 0}
@@ -243,6 +291,8 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
         if (kind == "Observation" and resource.get("status") in ("entered-in-error", "cancelled")) or (
                 kind == "Condition" and _status(resource.get("verificationStatus")) in ("entered-in-error", "refuted")):
             _skip(counts, kind, "status")
+            with write_txn(vault):
+                _retract(vault, resource, kind, counts)
             continue
         if kind.startswith("Medication"):
             status = resource.get("status")
