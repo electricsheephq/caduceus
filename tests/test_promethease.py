@@ -1,4 +1,5 @@
 import base64
+import inspect
 import json
 import threading
 import zipfile
@@ -334,6 +335,136 @@ def test_all_annotation_text_reaches_classifier(field, monkeypatch):
 def test_pgx_genes_default_to_pgx_but_sensitive_matches_win(gene):
     assert pm._category({"genes": [gene.lower()]}) == "pgx"
     assert pm._category({"genes": [gene], "clinvar_diseases": ["Alzheimer disease"]}) == "alzheimers"
+
+
+def test_nested_limit_defaults_and_node_accounting():
+    signature = inspect.signature(pm.decode_report)
+    assert signature.parameters["max_inflate"].default == 1 << 20
+    assert signature.parameters["max_total"].default == 128 << 20
+    assert (pm.MAX_NODES_PER_RECORD, pm.MAX_NODES_TOTAL) == (5000, 5000000)
+    value = {"rsnum": "rs1", "popfreq": [{}, None, 1, "x", False, [{}]]}
+    assert pm._node_stats(value) == (10, 3)
+
+
+@pytest.mark.parametrize("mapping", [False, True])
+def test_nested_bombs_hit_default_byte_cap_before_json_allocation(vault, tmp_path, monkeypatch, mapping):
+    # Construct the reviewer's two-million-dict shape as bytes, never Python dicts.
+    nested = b"{}," * 1999999 + b"{}"
+    raw = b'{"rs1":[' + nested + b"]}" if mapping else b'[{"rsnum":"rs1","popfreq":[' + nested + b"]}]"
+    payload = base64.b64encode(zlib.compress(raw)).decode()
+    expression = f"JSON.parse(decompressString('{payload}'))"
+    html = f"var rsinfo=$.extend({{}},{expression});" if mapping else f"mygenos.push.apply(mygenos,{expression});"
+    path = tmp_path / "nested-bomb.html"
+    path.write_text(html)
+
+    class RefuseAllocation:
+        def __init__(self):
+            pytest.fail("oversized chunk reached JSON allocation")
+
+    monkeypatch.setattr(pm.json, "JSONDecoder", RefuseAllocation)
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and result.warnings == ["import failed: ReportTooLarge"]
+
+
+def test_per_record_node_limit_drops_only_excess_item_and_warns(vault, tmp_path):
+    dropped = {"rsnum": "rs99999111", "popfreq": [{}] * 4998}  # 5,001 nodes
+    boundary = {"rsnum": "rs99999222", "popfreq": [None] * 4997}  # 5,000 nodes
+    src = _source(vault, tmp_path, rows=[dropped, boundary], maps=({}, {}))
+    decoded = pm.decode_report(sources.source_file(vault, src))
+    assert decoded.records == [boundary]
+    assert decoded.warnings == ["record 0: node limit exceeded"]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.counts["records"] == 1
+    assert result.warnings == decoded.warnings
+    assert vault.execute("SELECT marker FROM annotation_snapshot").fetchone()[0] == "rs99999222"
+
+
+def test_nested_genotype_item_is_dropped_and_node_limits_are_read_at_call_time(tmp_path, monkeypatch):
+    path = tmp_path / "nested-map.html"
+    path.write_text(chunk_page(rsinfo_chunks=[{"rs1": [{}] * 5000, "rs2": {"(A;A)": {"mag": 1}}}]))
+    decoded = pm.decode_report(path)
+    assert set(decoded.genotype_info) == {"rsinfo:rs2"}
+    assert decoded.warnings == ["genotype-info record 0: node limit exceeded"]
+    monkeypatch.setattr(pm, "MAX_NODES_PER_RECORD", 2)
+    # The second item has three nodes; it is now over the changed limit too.
+    decoded = pm.decode_report(path)
+    assert decoded.genotype_info == {}
+    assert decoded.warnings[-1] == "genotype-info record 1: node limit exceeded"
+
+
+def test_total_node_limit_includes_records_and_both_genotype_maps(vault, tmp_path, monkeypatch):
+    path = tmp_path / "total-nodes.html"
+    path.write_text(chunk_page(record_chunks=[[{"popfreq": [{}, None, True, 1, "x"]}]],
+                               rsinfo_chunks=[{"rs1": [{}, None, True, 1, "x"]}], othersinfo_chunks=[{"gs1": 0}]))
+    # Eight record nodes, seven rsinfo nodes, two othersinfo nodes, including roots.
+    monkeypatch.setattr(pm, "MAX_NODES_TOTAL", 17)
+    assert not pm.decode_report(path).warnings
+    monkeypatch.setattr(pm, "MAX_NODES_TOTAL", 16)
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    assert pm.import_promethease(vault, src).status == "failed"
+
+
+def test_dropped_items_still_count_toward_total_node_limit(tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_NODES_PER_RECORD", 2)
+    monkeypatch.setattr(pm, "MAX_NODES_TOTAL", 5)
+    path = tmp_path / "dropped-nodes.html"
+    path.write_text(chunk_page(record_chunks=[[{"popfreq": [{}, {}]}, {}]]))
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+
+
+def test_500_deep_text_import_succeeds_and_warns(vault, tmp_path):
+    topic = "NEVER_ECHO_DEEP_CONTENT"
+    for _ in range(500):
+        topic = [topic]
+    src = _source(vault, tmp_path, rows=[{"rsnum": "rs99999111", "topic": topic,
+                                        "genosummary": "Visible invented lanterns"}], maps=({}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.warnings == ["record 0: text depth limit exceeded"]
+    indexed = search.fetch(vault, f"annotation:{src.id}:0", policy=Policy())
+    assert "Visible invented lanterns" in indexed["body"] and "NEVER_ECHO_DEEP_CONTENT" not in indexed["body"]
+
+
+def test_iterative_text_walk_depth_boundary_and_order():
+    value = "visible"
+    for _ in range(32):
+        value = [value]
+    assert pm._string(value) == "visible"
+    assert pm._string([value]) == ""
+    assert pm._string({"a": ["one", None, 0], "b": {"c": "two"}}) == "one 0 two"
+
+
+@pytest.mark.parametrize("marker", ["RS99999111", "Rs99999111", "I99999111"])
+def test_mixed_case_markers_are_stored_lowercase(vault, tmp_path, marker):
+    from caduceus.genome.report import parity
+
+    record = {"rsnum": marker, "geno": "(A;A)", "redirect_from": "RS99999222"}
+    src = _source(vault, tmp_path, rows=[record], maps=({marker: {"(A;A)": {"mag": 1}}}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and not result.warnings
+    rows = vault.execute("SELECT marker FROM annotation_snapshot ORDER BY ordinal").fetchall()
+    assert [r[0] for r in rows] == [marker.lower(), marker.lower()]
+    assert tuple(vault.execute("SELECT alias, marker FROM marker_alias").fetchone()) == ("rs99999222", marker.lower())
+    assert parity(vault, src.id)["ok"]
+
+
+@pytest.mark.parametrize("raw,mapping", [(b"[{}]x", False), (b'{"a":1}x', True), (b"[{}],", False)])
+def test_trailing_json_garbage_is_refused(tmp_path, raw, mapping):
+    with pytest.raises(ValueError, match="trailing JSON data"):
+        list(pm._chunk_items(raw, mapping=mapping, limit=10))
+    payload = base64.b64encode(zlib.compress(raw)).decode()
+    expression = f"JSON.parse(decompressString('{payload}'))"
+    path = tmp_path / "trailing.html"
+    path.write_text(f"var rsinfo=$.extend({{}},{expression});" if mapping else
+                    f"mygenos.push.apply(mygenos,{expression});")
+    decoded = pm.decode_report(path)
+    assert not decoded.records and not decoded.genotype_info
+    assert decoded.warnings == ["chunk 1: ValueError"]
 
 
 @pytest.mark.private

@@ -23,6 +23,9 @@ MAX_RECORDS_PER_CHUNK = 1000
 MAX_KEYS_PER_CHUNK = 10000
 MAX_RECORDS_TOTAL = 500000
 MAX_GENOTYPE_INFO_TOTAL = 500000
+MAX_NODES_PER_RECORD = 5000
+MAX_NODES_TOTAL = 5000000
+MAX_TEXT_DEPTH = 32
 _CHUNK = re.compile(r"decompressString\('([A-Za-z0-9+/=]+)'\)")
 _CONTEXT = re.compile(r"mygenos\.push\.apply\s*\(|var\s+(rsinfo|othersinfo)\s*=\s*\$\.extend\s*\(")
 _SCALAR = re.compile(
@@ -147,7 +150,25 @@ def _metadata(html):
     return result
 
 
-def decode_report(path, *, max_inflate=64 << 20, max_total=1 << 30) -> DecodedReport:
+def _node_stats(value):
+    """Count JSON values (containers included) without recursion or a wide stack."""
+    count = max_depth = 0
+    stack = [(iter((value,)), 0)]
+    while stack:
+        children, depth = stack[-1]
+        try:
+            node = next(children)
+        except StopIteration:
+            stack.pop()
+            continue
+        count += 1
+        max_depth = max(max_depth, depth)
+        if isinstance(node, (dict, list)):
+            stack.append((iter(node.values() if isinstance(node, dict) else node), depth + 1))
+    return count, max_depth
+
+
+def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedReport:
     """Read list and map chunks by offset; malformed chunks warn and are skipped.
 
     HTML/zip members have a 64 MiB cap, also bounded by max_total. max_inflate
@@ -165,6 +186,22 @@ def decode_report(path, *, max_inflate=64 << 20, max_total=1 << 30) -> DecodedRe
     decoded = DecodedReport(metadata=_metadata(html), warnings=warnings)
     contexts = list(_CONTEXT.finditer(html))
     context_index, total = -1, 0
+    total_nodes = record_ordinal = info_ordinal = 0
+
+    def accept_item(value, ordinal, label):
+        nonlocal total_nodes
+        nodes, depth = _node_stats(value)
+        total_nodes += nodes
+        if total_nodes > MAX_NODES_TOTAL:
+            raise ReportTooLarge("report node count exceeds size limit")
+        if nodes > MAX_NODES_PER_RECORD:
+            warnings.add(f"{label} {ordinal}: node limit exceeded")
+            return False
+        # A record's fields are roots of the text walk, one level below the record.
+        if label == "record" and depth > MAX_TEXT_DEPTH + 1:
+            warnings.add(f"record {ordinal}: text depth limit exceeded")
+        return True
+
     for chunk in _CHUNK.finditer(html):
         decoded.chunks += 1
         while context_index + 1 < len(contexts) and contexts[context_index + 1].start() < chunk.start():
@@ -184,18 +221,30 @@ def decode_report(path, *, max_inflate=64 << 20, max_total=1 << 30) -> DecodedRe
             total += len(raw)
             if not inflater.eof or inflater.unused_data:
                 raise ValueError("incomplete or trailing compressed data")
+            total_nodes += 1  # The outer list/dict is also a node, even if empty.
+            if total_nodes > MAX_NODES_TOTAL:
+                raise ReportTooLarge("report node count exceeds size limit")
             set_name = context[1]
             if set_name is None:
-                limit = min(MAX_RECORDS_PER_CHUNK, MAX_RECORDS_TOTAL - len(decoded.records))
-                value = [row for _, row in _chunk_items(raw, mapping=False, limit=limit)]
-                if not all(isinstance(row, dict) for row in value):
-                    raise ValueError("record chunk must be a list of objects")
-                for ordinal, record in enumerate(value, len(decoded.records)):
-                    _record_warnings(record, ordinal, warnings)
+                limit = min(MAX_RECORDS_PER_CHUNK, MAX_RECORDS_TOTAL - record_ordinal)
+                value = []
+                for _, record in _chunk_items(raw, mapping=False, limit=limit):
+                    if not isinstance(record, dict):
+                        raise ValueError("record chunk must be a list of objects")
+                    ordinal = record_ordinal
+                    record_ordinal += 1
+                    if accept_item(record, ordinal, "record"):
+                        _record_warnings(record, ordinal, warnings)
+                        value.append(record)
                 decoded.records.extend(value)
             else:
                 value, new_keys = {}, set()
                 for marker, genotypes in _chunk_items(raw, mapping=True, limit=MAX_KEYS_PER_CHUNK):
+                    ordinal = info_ordinal
+                    info_ordinal += 1
+                    if not accept_item(genotypes, ordinal, "genotype-info record"):
+                        continue
+                    marker = _marker({"rsnum": marker}) or marker
                     key = f"{set_name}:{marker}"
                     if key not in decoded.genotype_info:
                         new_keys.add(key)
@@ -237,20 +286,32 @@ def _genes(record):
 def _string(value):
     if value is None:
         return None
-    if isinstance(value, (list, dict)):
-        values = value.values() if isinstance(value, dict) else value
-        return " ".join(part for item in values if (part := _string(item)))
-    return str(value)
+    parts = []
+    stack = [(iter((value,)), 0)]
+    while stack:
+        children, depth = stack[-1]
+        try:
+            node = next(children)
+        except StopIteration:
+            stack.pop()
+            continue
+        if isinstance(node, (dict, list)):
+            if depth < MAX_TEXT_DEPTH:
+                stack.append((iter(node.values() if isinstance(node, dict) else node), depth + 1))
+        elif node is not None:
+            parts.append(str(node))
+    return " ".join(parts)
 
 
 def _marker(record):
     value = record.get("rsnum")
-    return value if isinstance(value, str) and re.fullmatch(r"(?:rs|i)\d+", value, re.ASCII) else None
+    return value.lower() if isinstance(value, str) and re.fullmatch(r"(?:rs|i)\d+", value, re.ASCII | re.I) else None
 
 
 def _alias(record):
     value = record.get("redirect_from")
-    return _string(value) if not isinstance(value, (list, dict)) else None
+    text = _string(value) if not isinstance(value, (list, dict)) else None
+    return _marker({"rsnum": text}) or text
 
 
 def _record_warnings(record, ordinal, warnings):
