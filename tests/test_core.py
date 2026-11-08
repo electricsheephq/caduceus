@@ -182,3 +182,17 @@ def test_check_user_path(tmp_path):
     for bad in ("", None, "relative/path.zip", str(tmp_path / "missing.zip"), str(tmp_path)):
         with pytest.raises(ValueError):
             check_user_path(bad)
+
+
+@pytest.mark.parametrize("name,blocked", [(".env", True), ("prod.env", True), ("auth.json", True), ("id_ed25519", True),
+                                          ("server.pem", True), ("export.zip", False), ("genome.txt", False)])
+def test_without_hermes_obvious_credential_files_are_still_refused(tmp_path, name, blocked):
+    from caduceus.core.paths import check_user_path
+
+    target = tmp_path / name
+    target.write_text("x")
+    if blocked:
+        with pytest.raises(ValueError, match="credentials"):
+            check_user_path(str(target))
+    else:
+        assert check_user_path(str(target)) == target.resolve()

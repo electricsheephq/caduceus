@@ -195,5 +195,5 @@ def sniff_kind(path: Path) -> str:
 
 def _looks_dtc(head: str) -> bool:
     lowered = head.lower()
-    return ("23andme" in lowered or "ancestrydna" in lowered or lowered.lstrip("# ﻿").startswith("rsid")
+    return ("23andme" in lowered or "ancestrydna" in lowered or lowered.lstrip("# \ufeff").startswith("rsid")
             or "\nrsid\t" in lowered or "# rsid" in lowered)

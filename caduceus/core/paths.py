@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 PLUGIN = "caduceus"
@@ -34,12 +35,26 @@ def reports_dir() -> Path:
     return path
 
 
+_SECRET_DIRS = {".ssh", ".aws", ".gnupg", ".kube", ".docker", "gcloud", "1Password", "Keychains"}
+_SECRET_NAME = re.compile(r"^\.env(\..*)?$|\.env$|^\.netrc$|^auth\.json$|^credentials|\.(pem|key|p12|pfx|kdbx)$"
+                          r"|^id_(rsa|dsa|ecdsa|ed25519)", re.I)
+
+
+def _own_block_error(path: Path) -> str | None:
+    """A minimal stand-in when Hermes's guard is unavailable: obvious credential files are never read."""
+    if _SECRET_NAME.search(path.name) or _SECRET_DIRS.intersection(path.parts):
+        return "it looks like a credentials file"
+    return None
+
+
 def read_block_error(path: Path) -> str | None:
-    """Hermes's own read guard (credential stores, other profiles' secrets, ``.env`` files)."""
+    """Hermes's own read guard (credential stores, other profiles' secrets, ``.env`` files).
+
+    Hermes does not yet expose it through ``ctx``; if a release moves it, a minimal guard of our own still applies."""
     try:
         from agent.file_safety import get_read_block_error
-    except Exception:  # outside Hermes (unit tests, local tooling) there is no guard to apply
-        return None
+    except Exception:
+        return _own_block_error(path)
     try:
         return get_read_block_error(str(path))
     except Exception as exc:  # a guard that cannot decide refuses
