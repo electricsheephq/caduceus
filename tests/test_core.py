@@ -308,8 +308,9 @@ def test_cardiology_words_stay_ordinary_records(text):
     assert categorize(text=text, default=Category.RECORDS) is Category.RECORDS
 
 
-@pytest.mark.parametrize("drug", ["alprazolam 0.5 mg", "Xanax", "lorazepam", "buspirone 10 mg"])
-def test_anxiety_medications_are_mental_health(drug):
+@pytest.mark.parametrize("drug", ["alprazolam 0.5 mg", "Xanax", "lorazepam", "buspirone 10 mg", "methadone 10 mg",
+                                  "naltrexone 50 mg", "Vivitrol"])
+def test_anxiety_and_addiction_medications_are_mental_health(drug):
     from caduceus.core.policy import medication_category
 
     assert medication_category(drug) is Category.MENTAL_HEALTH
