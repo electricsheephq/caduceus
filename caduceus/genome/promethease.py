@@ -197,9 +197,11 @@ def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedR
         if nodes > MAX_NODES_PER_RECORD:
             warnings.add(f"{label} {ordinal}: node limit exceeded")
             return False
-        # A record's fields are roots of the text walk, one level below the record.
-        if label == "record" and depth > MAX_TEXT_DEPTH + 1:
-            warnings.add(f"record {ordinal}: text depth limit exceeded")
+        # Fields are roots of the text walk, one level below the item. Text the classifier
+        # cannot reach must not be published, so a too-deep item is dropped, never kept.
+        if depth > MAX_TEXT_DEPTH + 1:
+            warnings.add(f"{label} {ordinal}: text depth limit exceeded")
+            return False
         return True
 
     for chunk in _CHUNK.finditer(html):
@@ -381,8 +383,9 @@ def _snapshot_rows(decoded):
     )), len(decoded.records)):
         marker = key.split(":", 1)[1]
         related = by_marker.get(marker, [])
+        # Its own text counts too: unknown content in a map must fail closed, not open.
         category = categorize(genes=[g for r, _, _ in related for g in _genes(r)],
-                              text=" ".join(text for _, text, _ in related),
+                              text=" ".join([text for _, text, _ in related] + [_string(info["genotypes"]) or ""]),
                               default=Category.PGX if any(cat == Category.PGX for _, _, cat in related) else Category.GENERAL)
         yield (ordinal, "genotype_info", marker, None, None, None, None, None, "[]", category.value, _json(info), None, "")
 

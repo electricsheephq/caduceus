@@ -418,16 +418,50 @@ def test_dropped_items_still_count_toward_total_node_limit(tmp_path, monkeypatch
         pm.decode_report(path)
 
 
-def test_500_deep_text_import_succeeds_and_warns(vault, tmp_path):
-    topic = "NEVER_ECHO_DEEP_CONTENT"
-    for _ in range(500):
-        topic = [topic]
-    src = _source(vault, tmp_path, rows=[{"rsnum": "rs99999111", "topic": topic,
-                                        "genosummary": "Visible invented lanterns"}], maps=({}, {}))
+def _nest(value, levels):
+    for _ in range(levels):
+        value = [value]
+    return value
+
+
+def test_500_deep_text_is_dropped_with_a_warning(vault, tmp_path):
+    rows = [{"rsnum": "rs99999111", "topic": _nest("NEVER_ECHO_DEEP_CONTENT", 500),
+             "genosummary": "Invisible invented lanterns"},
+            {"rsnum": "rs99999112", "genosummary": "Visible invented lanterns"}]
+    src = _source(vault, tmp_path, rows=rows, maps=({}, {}))
     result = pm.import_promethease(vault, src)
     assert result.status == "succeeded" and result.warnings == ["record 0: text depth limit exceeded"]
-    indexed = search.fetch(vault, f"annotation:{src.id}:0", policy=Policy())
-    assert "Visible invented lanterns" in indexed["body"] and "NEVER_ECHO_DEEP_CONTENT" not in indexed["body"]
+    stored = vault.execute("SELECT group_concat(record_json, ' ') FROM annotation_snapshot").fetchone()[0]
+    assert "Visible invented lanterns" in stored and "NEVER_ECHO_DEEP_CONTENT" not in stored
+
+
+@pytest.mark.parametrize("levels,kept", [(31, True), (32, True), (33, False)])
+def test_text_the_classifier_cannot_reach_is_never_published(vault, tmp_path, levels, kept):
+    from caduceus.genome.report import build_report
+
+    rows = [{"rsnum": "rs99999555", "geno": "(A;G)", "genes": ["FAKEZ"],
+             "cond": _nest("Alzheimer disease", levels)},
+            {"rsnum": "rs99999556", "geno": "(C;C)", "genosummary": "Invented harmless note"}]
+    src = _source(vault, tmp_path, rows=rows, maps=({}, {}))
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    page = build_report(vault, tmp_path / "out", policy=Policy(level="standard")).read_text(encoding="utf-8")
+    assert "Alzheimer" not in page and "Invented harmless note" in page
+    stored = {r[0]: r[1] for r in vault.execute("SELECT marker, category FROM annotation_snapshot")}
+    assert ("rs99999555" in stored) is kept
+    if kept:
+        assert stored["rs99999555"] == "alzheimers"
+
+
+def test_genotype_info_text_counts_toward_its_category(vault, tmp_path):
+    from caduceus.genome.report import build_report
+
+    maps = ({"rs99999777": {"(A;G)": {"mag": 2, "note": "Invented Alzheimer disease remark"}}}, {})
+    src = _source(vault, tmp_path, rows=[{"rsnum": "rs99999778", "genosummary": "Invented harmless note"}], maps=maps)
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    category = vault.execute("SELECT category FROM annotation_snapshot WHERE kind='genotype_info' AND marker='rs99999777'").fetchone()[0]
+    assert category == "alzheimers"
+    page = build_report(vault, tmp_path / "out", policy=Policy(level="standard")).read_text(encoding="utf-8")
+    assert "Alzheimer" not in page
 
 
 def test_iterative_text_walk_depth_boundary_and_order():
