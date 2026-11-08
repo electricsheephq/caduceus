@@ -4,9 +4,8 @@ from __future__ import annotations
 import json
 import math
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from html import escape
-from itertools import groupby
 from statistics import mean, median
 
 from ..core.db import write_txn
@@ -59,15 +58,25 @@ def recompute_rollups(samples):
                   "HKCategoryValueSleepAnalysisAsleepUnspecified", "HKCategoryValueSleepAnalysisAsleepCore",
                   "HKCategoryValueSleepAnalysisAsleepDeep", "HKCategoryValueSleepAnalysisAsleepREM")
         rows = samples.execute(
-            "SELECT local_day,source_name,start_utc,end_utc FROM sample "
+            "SELECT tz_offset_min,source_name,start_utc,end_utc FROM sample "
             "WHERE type='HKCategoryTypeIdentifierSleepAnalysis' AND value_text IN ("+
-            ",".join("?" for _ in stages)+") ORDER BY local_day,source_name,start_utc,end_utc", stages)
+            ",".join("?" for _ in stages)+")", stages)
+        grouped = {}
+        for row in rows:
+            offset = timezone(timedelta(minutes=row[0]))
+            start = datetime.fromisoformat(row[2]).astimezone(offset)
+            end = datetime.fromisoformat(row[3]).astimezone(offset)
+            while start < end:
+                morning = start.date() + timedelta(days=1 if start.hour >= 12 else 0)
+                noon = datetime.combine(morning, time(12), tzinfo=offset)
+                stop = min(end, noon)
+                grouped.setdefault((morning.isoformat(), row[1]), []).append((start, stop))
+                start = stop
         nights = {}
-        for (night, source), intervals in groupby(rows, key=lambda r: (r[0], r[1])):
+        for (night, source), intervals in sorted(grouped.items()):
             left = right = None
             seconds, n = 0, 0
-            for row in intervals:
-                start, end = datetime.fromisoformat(row[2]), datetime.fromisoformat(row[3])
+            for start, end in sorted(intervals):
                 if end < start:
                     continue
                 n += 1
@@ -82,8 +91,9 @@ def recompute_rollups(samples):
                 if night not in nights or seconds > nights[night][0]:
                     nights[night] = (seconds, n, source)
         samples.executemany("INSERT INTO daily_rollup VALUES ('sleep_hours',?,?,?,?,?)",
-                            [(day, seconds/3600, n, json.dumps([source]), CALC_VERSION)
+                            [(day, min(seconds/3600, 20), n, json.dumps([source]), CALC_VERSION)
                              for day, (seconds, n, source) in nights.items()])
+    return ["sleep_hours: clipped a night at 20 h" for seconds, _, _ in nights.values() if seconds > 20*3600]
 
 
 def _day(value):

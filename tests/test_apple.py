@@ -165,3 +165,28 @@ def test_archive_caps_and_compression_ratio(samples, vault, tmp_path):
             apple._safe_members(archive)
     result = apple.import_apple_health(samples, vault, _source(vault, path))
     assert result.status == "failed" and "ValueError" in result.warnings[0]
+
+
+def test_round2_malformed_workouts_skip_with_shared_warning_bound(samples, vault, tmp_path):
+    path = tmp_path / "bad-workouts.zip"
+    bad = '<Workout startDate="invalid-synthetic-date" endDate="2024-01-01 12:00:00 +0000"/>'
+    good = '<Workout workoutActivityType="Walking" startDate="2024-01-01 11:00:00 +0000" endDate="2024-01-01 12:00:00 +0000"/>'
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("export.xml", "<HealthData>"+bad*7+good+"</HealthData>")
+    result = apple.import_apple_health(samples, vault, _source(vault, path))
+    assert result.status == "succeeded" and result.counts["workouts"] == 1
+    assert result.counts["skipped"] == 7 and len(result.warnings) == 5
+    assert all("Workout" in w and "position" in w and "invalid-synthetic-date" not in w for w in result.warnings)
+
+
+@pytest.mark.parametrize("sample_type", [
+    "HKCategoryTypeIdentifierInfrequentMenstrualCycles", "HKCategoryTypeIdentifierIrregularMenstrualCycles",
+    "HKCategoryTypeIdentifierProlongedMenstrualPeriods", "HKCategoryTypeIdentifierPersistentIntermenstrualBleeding",
+    "HKQuantityTypeIdentifierBasalBodyTemperature"])
+def test_round2_additional_reproductive_samples(samples, vault, tmp_path, sample_type):
+    path = tmp_path / "reproductive.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("export.xml", '<HealthData><Record type="'+sample_type+
+                         '" value="1" startDate="2024-01-01 12:00:00 +0000"/></HealthData>')
+    assert apple.import_apple_health(samples, vault, _source(vault, path)).status == "succeeded"
+    assert samples.execute("SELECT category FROM sample").fetchone()[0] == "reproductive"
