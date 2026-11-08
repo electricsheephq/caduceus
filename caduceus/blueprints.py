@@ -29,8 +29,8 @@ BLUEPRINTS = (
         ),
         "slots": [
             _TIME("09:00"),
-            {"name": "recurrence", "type": "weekdays", "label": "Repeat on", "default": "monday",
-             "options": ["everyday", "weekdays", "weekends"]},
+            {"name": "day", "type": "enum", "label": "Which day?", "default": "monday",
+             "options": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]},
             _DELIVER,
         ],
         "skills": ["caduceus:caduceus-research"],
