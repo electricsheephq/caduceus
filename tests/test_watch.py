@@ -2,6 +2,8 @@
 import copy
 import io
 import json
+import random
+import re
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -311,7 +313,7 @@ def test_realistic_watch_volume_seed_none_then_one_new_within_budget(vault):
     seed = run_watch(vault, w, http=http, now=NOW)
     assert seed["kind"] == "seed" and seed["errors"] == []
     assert [r["pmid"] for r in seed["new_items"]] == ["91000000", "91000001", "91000002"]
-    assert len(seed["queried"]) == 28  # one primary page, two ClinVar, one per rsid
+    assert len(seed["queried"]) == 28  # relevance + overlap, two ClinVar, bounded enrichment
     assert http.requests[0][1]["sort"] == ""  # documented default is relevance
     assert vault.execute("SELECT count(*) FROM research_item").fetchone()[0] == 102
     second = run_watch(vault, w, http=http, now="2026-11-09")
@@ -336,31 +338,14 @@ def test_secondary_errors_do_not_freeze_primary_watermark(vault, source):
     assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-09"
 
 
-@pytest.mark.parametrize("budget,page_count,watermark", [(1, 1, "2026-11-03"), (30, 3, "2026-11-07")])
-def test_primary_budget_or_page_limit_keeps_only_fully_processed_dates(vault, budget, page_count, watermark):
+def test_fitting_window_fetches_all_three_pages_before_watermark(vault):
     w = watch(vault)
-    with write_txn(vault):
-        vault.execute("UPDATE watch SET last_since='2026-11-01' WHERE id=?", (w["id"],))
-    http = FakeHttp()
-    original = http.get_json
-
-    def pages(url, params):
-        data = original(url, params)
-        page = 0 if params["cursorMark"] == "*" else int(params["cursorMark"])
-        rows = papers(2)
-        for i, row in enumerate(rows):
-            row.update(id=str(94000000 + page * 2 + i), pmid=str(94000000 + page * 2 + i),
-                       doi=f"10.0000/paged.{page}.{i}",
-                       firstPublicationDate=(date(2026, 11, 3) + timedelta(days=page * 2 + i)).isoformat())
-        data.update(hitCount=2092, nextCursorMark=str(page + 1), resultList={"result": rows})
-        return data
-
-    http.get_json = pages
-    result = run_watch(vault, w, http=http, now="2026-11-10", budget=budget)
-    assert len(result["queried"]) == page_count
-    assert all(p["sort"] == "P_PDATE_D asc" for _, p in http.requests)
-    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == watermark
-    assert result["errors"][0]["error"] == ("BudgetExceeded" if budget == 1 else "PageLimit")
+    set_watermark(vault, w, "2026-11-01")
+    http = DateSliceHttp(dated_papers(299, date(2026, 11, 1), 8))
+    result = run_watch(vault, w, http=http, now=NOW, budget=30)
+    assert len(result["queried"]) == 3
+    assert len(result["new_items"]) == 299 and result["errors"] == []
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
 
 
 def test_litvar_budget_omissions_do_not_freeze_seed_or_exceed_budget(vault):
@@ -368,7 +353,8 @@ def test_litvar_budget_omissions_do_not_freeze_seed_or_exceed_budget(vault):
     w = watch(vault, ("europepmc", "clinvar", "litvar"), load_pack().watch["rsids"])
     result = run_watch(vault, w, http=FakeHttp(), now=NOW)
     assert len(result["queried"]) <= 28
-    assert any(e.get("skipped_rsids", 0) > 0 for e in result["errors"])
+    assert result["errors"] == []
+    assert any(e.get("rsids", 0) > 0 for e in result["skipped"])
     assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
 
 
@@ -388,3 +374,151 @@ def test_transport_response_size_cap(extra):
             http.get_json("https://www.ebi.ac.uk/test", {})
     else:
         assert http.get_json("https://www.ebi.ac.uk/test", {}) == {}
+
+
+class DateSliceHttp(FakeHttp):
+    """A date-filtered, relevance-shuffled API; sort parameters deliberately have no effect."""
+    def __init__(self, rows, *, fail_on=()):
+        super().__init__(rows=rows)
+        self.fail_on = set(fail_on)
+        self.primary_calls = 0
+
+    def get_json(self, url, params):
+        data = super().get_json(url, params)
+        if "ebi.ac.uk" not in url:
+            return data
+        self.primary_calls += 1
+        if self.primary_calls in self.fail_on:
+            raise URLError("synthetic interrupted date slice")
+        match = re.search(r"FIRST_PDATE:\[(\d{4}-\d{2}-\d{2}) TO (\d{4}-\d{2}-\d{2})\]", params["query"])
+        assert match, params["query"]
+        start, end = match.groups()
+        rows = [r for r in self.rows if start <= r["firstPublicationDate"] <= end]
+        offset = 0 if params["cursorMark"] == "*" else int(params["cursorMark"])
+        page_size = int(params["pageSize"])
+        result = {"hitCount": len(rows), "resultList": {"result": copy.deepcopy(rows[offset:offset + page_size])}}
+        if offset + page_size < len(rows):
+            result["nextCursorMark"] = str(offset + page_size)
+        return result
+
+
+def dated_papers(count, start, days):
+    template = papers(1)[0]
+    rows = []
+    for i in range(count):
+        row = {**template, "id": str(96000000 + i), "pmid": str(96000000 + i),
+               "doi": f"10.0000/slices.{i}", "firstPublicationDate": (start + timedelta(days=i % days)).isoformat()}
+        row.pop("abstractText", None)
+        rows.append(row)
+    random.Random(17).shuffle(rows)
+    return rows
+
+
+def set_watermark(vault, w, day):
+    with write_txn(vault):
+        vault.execute("UPDATE watch SET last_since=? WHERE id=?", (day, w["id"]))
+
+
+def test_round2_shuffled_slices_resume_without_lost_or_duplicate_deliveries(vault):
+    rows = dated_papers(1000, date(2026, 10, 20), 20)
+    # Reproduce the reviewer's non-monotonic prefix exactly before the shuffled remainder.
+    prefix = []
+    for day in ["2026-11-02", "2026-11-03", "2026-11-03", "2026-11-03", "2026-11-02", "2026-10-27"]:
+        row = next(r for r in rows if r["firstPublicationDate"] == day)
+        rows.remove(row)
+        prefix.append(row)
+    rows = prefix + rows
+    http = DateSliceHttp(rows, fail_on=(8,))
+    w = watch(vault)
+    set_watermark(vault, w, "2026-10-22")
+    delivered = []
+    for _ in range(6):
+        result = run_watch(vault, w, http=http, now=NOW, budget=30)
+        assert len(result["queried"]) <= 30
+        delivered.extend(r["pmid"] for r in result["new_items"])
+        watermark = vault.execute("SELECT last_since FROM watch").fetchone()[0]
+        expected_through_watermark = {r["pmid"] for r in rows if r["firstPublicationDate"] <= watermark}
+        stored = {r[0] for r in vault.execute("SELECT pmid FROM research_item")}
+        assert expected_through_watermark <= stored, "watermark passed an incomplete publication date"
+        if watermark == "2026-11-08":
+            break
+    assert watermark == "2026-11-08"
+    assert len(delivered) == len(set(delivered)) == 1000
+    assert set(delivered) == {r["pmid"] for r in rows}
+    replay = run_watch(vault, w, http=http, now=NOW, budget=30)
+    assert replay["kind"] == "none" and replay["new_items"] == []
+
+
+def test_round2_incomplete_shuffled_slice_stores_items_without_advancing_watermark(vault):
+    rows = dated_papers(250, date(2026, 11, 1), 8)
+    http = DateSliceHttp(rows)
+    w = watch(vault)
+    set_watermark(vault, w, "2026-11-01")
+    first = run_watch(vault, w, http=http, now=NOW, budget=1)
+    assert len(first["new_items"]) == 100
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-01"
+    assert first["errors"] == [{"source": "europepmc", "error": "BudgetExceeded"}]
+    second = run_watch(vault, w, http=http, now=NOW, budget=30)
+    assert len(second["new_items"]) == 150
+    assert not {r["pmid"] for r in first["new_items"]}.intersection(r["pmid"] for r in second["new_items"])
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
+
+
+def test_round2_overfull_single_day_is_visible_and_does_not_stall(vault):
+    http = DateSliceHttp(dated_papers(450, date(2026, 11, 8), 1))
+    w = watch(vault)
+    set_watermark(vault, w, "2026-11-07")
+    result = run_watch(vault, w, http=http, now=NOW, budget=30)
+    assert result["errors"] == [{"source": "europepmc", "error": "DayTruncated", "date": "2026-11-08", "omitted": 150}]
+    assert len(result["new_items"]) == 300
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-08"
+    replay = run_watch(vault, w, http=http, now="2026-11-09", budget=30)
+    assert replay["kind"] == "none"
+    assert vault.execute("SELECT last_since FROM watch").fetchone()[0] == "2026-11-09"
+
+
+def test_round2_seed_overlap_is_seen_without_delivering_stale_hits(vault):
+    from caduceus.knowledge.pack import load_pack
+    today = date(2026, 11, 8)
+    rows = dated_papers(1600, today - timedelta(days=364), 365)
+    http = DateSliceHttp(rows)
+    w = watch(vault, ("europepmc", "clinvar", "litvar"), load_pack().watch["rsids"])
+    seed = run_watch(vault, w, http=http, now=NOW, budget=30)
+    assert seed["kind"] == "seed"
+    assert [r["pmid"] for r in seed["new_items"]] == [r["pmid"] for r in rows[:3]]
+    stored = {r[0] for r in vault.execute("SELECT pmid FROM research_item")}
+    overlap = {r["pmid"] for r in rows if r["firstPublicationDate"] >= "2026-11-06"}
+    assert overlap <= stored
+    second = run_watch(vault, w, http=http, now="2026-11-09", budget=30)
+    assert second["kind"] == "none" and second["new_items"] == []
+    new = {**rows[0], "id": "97000000", "pmid": "97000000", "doi": "10.0000/round2.new",
+           "firstPublicationDate": "2026-11-10"}
+    http.rows.append(new)
+    third = run_watch(vault, w, http=http, now="2026-11-10", budget=30)
+    assert third["kind"] == "new" and [r["pmid"] for r in third["new_items"]] == ["97000000"]
+    assert all(len(r["queried"]) <= 30 for r in (seed, second, third))
+    assert seed["errors"] == second["errors"] == third["errors"] == []
+
+
+def test_round2_daily_rotation_enriches_every_rsid_and_planned_skips_are_not_errors(vault):
+    from caduceus.knowledge.pack import load_pack
+    rsids = sorted(load_pack().watch["rsids"])
+    assert len(rsids) == 28
+    w = watch(vault, ("europepmc", "clinvar", "litvar"), rsids)
+    http = DateSliceHttp([])
+    enriched = set()
+    for i in range(7):
+        day = date(2026, 11, 8) + timedelta(days=i)
+        row = dated_papers(1, day, 1)[0]
+        row.update(id=str(98000000 + i), pmid=str(98000000 + i), doi=f"10.0000/rotation.{i}")
+        http.rows.append(row)
+        result = run_watch(vault, w, http=http, now=day, budget=30)
+        actual = [re.search(r"rs\d+", q["url"])[0] for q in result["queried"] if q["source"] == "litvar"]
+        start = day.toordinal() % len(rsids)
+        expected = rsids[start:] + rsids[:start]
+        assert actual and actual == expected[:len(actual)]
+        enriched.update(actual)
+        assert result["errors"] == []
+        assert result["skipped"] == [{"source": "litvar", "rsids": len(rsids) - len(actual)}]
+        assert len(result["queried"]) <= 30
+    assert enriched == set(rsids)

@@ -162,8 +162,9 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
     since = ((date.fromisoformat(watch["last_since"][:10]) - timedelta(days=2)) if not seed else
              date.fromisoformat(until) - timedelta(days=365)).isoformat()
     budget = max(0, int(budget))
-    queried, errors, fetched = [], [], []
-    primary_items, primary_complete = [], False
+    queried, errors, fetched, skipped = [], [], [], []
+    primary_items, seed_items = [], []
+    watermark = watch["last_since"]
     request_start = getattr(http, "request_count", 0)
     ncbi_last = None
     sleep = getattr(http, "sleep", time.sleep)
@@ -189,34 +190,69 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
         return result
 
     def epmc(query):
-        nonlocal primary_complete
-        cursor = "*"
-        max_pages = 1 if seed else 3
-        for page in range(max_pages):
+        nonlocal watermark
+        # A slice is complete only after all its pages, irrespective of record date order.
+        completed_until = watermark
+
+        def page(first, last, cursor="*"):
             data = request("europepmc", EPMC, {
-                "query": query, "format": "json", "resultType": "core", "pageSize": 100,
-                "cursorMark": cursor, "sort": "" if seed else "P_PDATE_D asc"})
-            rows = data["resultList"]["result"]
-            items = [_publication(row) for row in rows]
+                "query": f"{query} AND FIRST_PDATE:[{first} TO {last}] AND (SRC:MED OR SRC:PPR)",
+                "format": "json", "resultType": "core", "pageSize": 100, "cursorMark": cursor, "sort": ""})
+            items = [_publication(row) for row in data["resultList"]["result"]]
             fetched.extend(items)
             primary_items.extend(items)
-            next_cursor = data.get("nextCursorMark")
-            more = bool(rows) and int(data.get("hitCount", len(primary_items))) > len(primary_items)
-            if seed or not more:
-                primary_complete = True
+            return data, items
+
+        def complete(first, last, initial=None):
+            nonlocal completed_until
+            data, items = initial if initial is not None else page(first, last)
+            total = int(data["hitCount"])
+            if total > 300 and first < last:
+                days = (last - first).days + 1
+                length = max(1, days * 250 // total)
+                cursor_date = first
+                while cursor_date <= last:
+                    end = min(last, cursor_date + timedelta(days=length - 1))
+                    complete(cursor_date, end)
+                    cursor_date = end + timedelta(days=1)
                 return
-            if not next_cursor or next_cursor == cursor:
-                raise ValueError("Europe PMC pagination cursor unavailable")
-            if page + 1 == max_pages:
-                errors.append({"source": "europepmc", "error": "PageLimit", "pages": max_pages})
-                return
-            cursor = next_cursor
+            received = len(items)
+            cursor = "*"
+            for _ in range(2):
+                if received >= total:
+                    break
+                next_cursor = data.get("nextCursorMark")
+                if not next_cursor or next_cursor == cursor:
+                    raise ValueError("Europe PMC pagination cursor unavailable")
+                cursor = next_cursor
+                data, items = page(first, last, cursor)
+                received += len(items)
+            if received < total:
+                if first != last or total <= 300:
+                    raise ValueError("Europe PMC date slice incomplete")
+                errors.append({"source": "europepmc", "error": "DayTruncated",
+                               "date": first.isoformat(), "omitted": total - received})
+            completed_until = max(completed_until or first.isoformat(), last.isoformat())
+
+        first, last = date.fromisoformat(since), date.fromisoformat(until)
+        try:
+            initial = page(first, last)
+            if seed:
+                seed_items.extend(initial[1])
+                # Store the complete future overlap as seen, without adding it to the seed digest.
+                complete(last - timedelta(days=2), last)
+            else:
+                complete(first, last, initial)
+        finally:
+            # An incomplete seed retries its overlap before establishing the initial watermark.
+            # Later runs keep every fully completed prefix, including empty date slices.
+            if not seed or completed_until == until:
+                watermark = completed_until
 
     pack = load_pack()
     marker_genes = {m["rsid"]: e["gene"] for e in pack.entries for m in e["markers"]}
     marker_genes.update({"rs429358": "APOE", "rs7412": "APOE"})
     rsids = sorted({r for r in terms.get("rsids", []) if re.fullmatch(r"rs\d+", str(r))})
-    window = f"FIRST_PDATE:[{since} TO {until}] AND (SRC:MED OR SRC:PPR)"
     with http.limited(budget) if isinstance(http, UrllibHttp) else nullcontext():
         # The primary source must run first, regardless of configured source order.
         ordered = (["europepmc"] if "europepmc" in sources else []) + [s for s in sources if s != "europepmc"]
@@ -226,7 +262,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
                     genes = _quoted(terms.get("genes", []))
                     topics = _quoted(terms.get("drugs", []) + terms.get("topics", []))
                     if genes and topics:
-                        epmc(f"({genes}) AND ({topics}) AND {window}")
+                        epmc(f"({genes}) AND ({topics})")
                 elif source == "clinvar" and rsids:
                     start = 0
                     while True:
@@ -253,11 +289,12 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
                         if item["pmid"]:
                             by_pmid.setdefault(item["pmid"], []).append(item)
                     cache = {}
-                    for index, rsid in enumerate(rsids):
+                    offset = date.fromisoformat(until).toordinal() % len(rsids) if rsids else 0
+                    rotated = rsids[offset:] + rsids[:offset]
+                    for index, rsid in enumerate(rotated):
                         # Leave two requests spare; enrichment is optional and its omissions are visible.
                         if remaining() <= 2:
-                            errors.append({"source": source, "error": "BudgetExceeded",
-                                           "skipped_rsids": len(rsids) - index})
+                            skipped.append({"source": source, "rsids": len(rotated) - index})
                             break
                         try:
                             if rsid not in cache:
@@ -276,20 +313,13 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
             except Exception as exc:
                 errors.append({"source": source, "error": type(exc).__name__})
 
-    watermark = watch["last_since"]
-    if primary_complete or ("europepmc" not in sources and not errors):
+    if "europepmc" not in sources and not errors:
         watermark = max(watermark or since, until)
-    elif primary_items and not seed:
-        # Ascending date order proves dates before the last encountered date complete;
-        # the boundary date may be split across pages, so leave it for the overlapping retry.
-        dates = sorted({item["pub_date"] for item in primary_items
-                        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", item["pub_date"] or "")})
-        if len(dates) > 1:
-            watermark = max(watermark or since, dates[-2])
 
     # Persist metadata and the delivery atomically. No DB write spans a network request.
     all_ids, new_ids, seen_ids = set(), set(), set()
     primary_ids = []
+    seed_keys = {(item["source"], item["external_id"]) for item in seed_items}
     with write_txn(conn):
         for item in fetched:
             if not item["external_id"]:
@@ -299,9 +329,9 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
             if item_id not in all_ids:
                 (seen_ids if existed else new_ids).add(item_id)
             all_ids.add(item_id)
-            if item["source"] == "europepmc" and item_id not in primary_ids:
+            if (item["source"], item["external_id"]) in seed_keys and item_id not in primary_ids:
                 primary_ids.append(item_id)
-        candidates = all_ids if seed else new_ids
+        candidates = (set(primary_ids) if primary_ids else all_ids) if seed else new_ids
         rows = [dict(conn.execute("SELECT * FROM research_item WHERE id=?", (i,)).fetchone()) for i in candidates]
         if seed:
             # Europe PMC supplied relevance order; secondary metadata cannot displace it.
@@ -318,4 +348,4 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
     for row in selected:
         row["matched"] = json.loads(row.pop("matched_json"))
     return {"kind": kind, "new_items": selected, "seen_before": len(seen_ids), "queried": queried,
-            "errors": errors, "since": since, "until": until}
+            "errors": errors, "since": since, "until": until, "skipped": skipped}
