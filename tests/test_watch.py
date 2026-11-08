@@ -175,6 +175,29 @@ def test_clinvar_reclassification_is_new_and_ncbi_is_paced(vault):
     assert result["new_items"][0]["external_id"].endswith(":2026-11-09")
 
 
+@pytest.mark.parametrize("errorlist,fails", [
+    ({"phrasesnotfound": ["rs10305420[All Fields]"], "fieldsnotfound": []}, False),  # a marker ClinVar does not list
+    ({"phrasesnotfound": [], "fieldsnotfound": ["snp"]}, True),                      # a malformed search
+])
+def test_clinvar_terms_it_cannot_find_are_a_notice_not_a_failure(vault, errorlist, fails):
+    w = watch(vault, ("clinvar",), ("rs4244285", "rs10305420"))
+    http = FakeHttp()
+    original = http.get_json
+
+    def with_errorlist(url, params):
+        result = original(url, params)
+        if "esearch" in url:
+            result["esearchresult"]["errorlist"] = errorlist
+        return result
+
+    http.get_json = with_errorlist
+    result = run_watch(vault, w, http=http, now=NOW)
+    if fails:
+        assert result["errors"] == [{"source": "clinvar", "error": "ValueError"}] and not result["new_items"]
+    else:
+        assert result["errors"] == [] and result["new_items"]
+
+
 def test_default_watch_medications_topics_and_idempotent_schema(vault, data_dir):
     with write_txn(vault):
         for drug, event, day in [("Ozempic", "start", "2026-10-01"), ("Plavix", "start", "2026-10-02"),

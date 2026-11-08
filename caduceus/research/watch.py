@@ -148,6 +148,19 @@ def _store(conn, item, watch_id, stamp):
     return item_id, bool(existing)
 
 
+def _eutils_error(search) -> bool:
+    """Whether an E-utilities search failed. Terms it could not find (``phrasesnotfound``) are only a notice: the rest
+    of the search ran, and markers that ClinVar does not list (research-only variants) are expected."""
+    if not isinstance(search, dict):
+        return False
+    if search.get("ERROR"):
+        return True
+    problems = search.get("errorlist") or {}
+    if not isinstance(problems, dict):
+        return bool(problems)
+    return bool(problems.get("fieldsnotfound"))
+
+
 def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> dict:
     """Run a bounded primary digest; secondary enrichment errors never freeze its watermark."""
     watch = dict(watch)
@@ -189,7 +202,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
             ncbi_last = clock()
         queried.append({"source": source, "url": url, "params": dict(params)})
         result = http.get_json(url, params)
-        if isinstance(result, dict) and (result.get("error") or result.get("esearchresult", {}).get("errorlist")):
+        if isinstance(result, dict) and (result.get("error") or _eutils_error(result.get("esearchresult"))):
             raise ValueError("source returned an API error")
         return result
 

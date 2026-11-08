@@ -39,7 +39,7 @@ research about their genes. Answer from the tools, never from memory, and cite w
 | Top findings, or what is imported | `caduceus_genome op=summary`; `op=filter` with `min_magnitude`, `repute` or `topic` |
 | Rebuild the variant report | `caduceus_genome op=report` (returns a local file link) |
 | Weight, steps, sleep or heart rate over time | `caduceus_trend op=series metric=…`; `op=metrics` lists them |
-| Before and after a medication | `caduceus_trend op=compare metric=… drug=…` (uses the recorded start date; the after window runs to the latest data unless you pass `after_days`) |
+| Before and after a medication | `caduceus_trend op=compare metric=… drug=…` (uses the recorded start date; the after window runs to the latest data, up to a year, unless you pass `after_days`) |
 | A lab over time (HbA1c, LDL …) | `caduceus_trend op=labs lab=…` |
 | Anything else in the vault | `caduceus_search query=…`, then `ref=…` for the full record |
 | A one-page brief for a doctor | `caduceus_capture op=brief` |
