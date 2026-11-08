@@ -15,7 +15,9 @@ duplicates.
 | `sources.update_progress(conn, run_id, dict)` | Call about every 10k–50k rows. |
 | `sources.finish_import(conn, run_id, *, counts, status, errors=())` | `status` is one of `succeeded`, `failed`, `cancelled`. |
 | `search.index_doc(conn, *, kind, ref, title, body, category, ts=None)` | Upsert into the search index. `kind` is in `search.KINDS`; `category` is a `policy.Category`. |
-| `policy.Category`, `policy.Policy`, `policy.allowed(policy, category)`, `policy.categorize(genes=…, text=…, default=…)` | Categorize every record you index or store. |
+| `policy.Category`, `policy.Policy`, `policy.allowed(policy, category)`, `policy.categorize(genes=…, text=…, markers=…, default=…)` | Categorize every record you index or store. `markers` applies the fixed categories in `policy.MARKER_CATEGORY` (APOE and the BRCA founder variants), whatever the text says. |
+| `policy.visible(policy, category, *, kind=None)` | What the tools show: the item's own category **and** the base category of its kind (`observation` and `condition` → records, `medication` → medication, `research` → research). Hiding `medication` hides a contraceptive too. |
+| `policy.medication_category(text)` | The category of one of the user's own medications: sensitive when its text says so or when the drug is prescribed mainly for a sensitive condition (an SSRI, a contraceptive). Never used for gene–drug records, which stay drug-response items. |
 | `contracts.ImportResult`, `contracts.Call`, `contracts.CallState`, `contracts.SourceKind` | Shared types. |
 
 **Importer error handling:** catch exceptions, call `finish_import(status="failed", errors=[...])`, and return the result. Check
@@ -96,7 +98,7 @@ def metrics(samples) -> list[dict]
 def trend(samples, metric, *, start=None, end=None, bucket="week") -> dict
 def compare_windows(samples, metric, *, pivot, before_days=28, after_days=28) -> dict
 def daily_check(samples, *, thresholds=None, today=None) -> dict
-def observation_series(vault, name_or_code, *, start=None, end=None) -> dict   # in health/fhir.py
+def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict   # in health/fhir.py
 def trend_svg(points, *, unit, title, markers=()) -> str
 ```
 
@@ -108,25 +110,30 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 **Trend results:**
 - **Every result carries** `unit`, `source_policy`, `coverage` (with gaps), and `calc_version`.
 - **Metric names** are friendly (`weight`, `steps`, `resting_heart_rate`, `sleep_hours`, …) and map to HealthKit identifiers.
-- **`observation_series` points** carry `date`, `value`, `unit`, `reference_range`, `interpretation`, `source` and `category`; callers filter points by `category`. HbA1c is converted to % (NGSP); other mixed units are never pooled in `points`.
+- **`observation_series` points** carry `date`, `value`, `unit`, `reference_range`, `interpretation`, `source` and `category`. HbA1c is converted to % (NGSP); other mixed units are never pooled in `points`.
+  - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
 **Records semantics:**
+- **Identity.** A resource is named by its Bundle entry's absolute `fullUrl` when there is one (ids repeat across providers), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
 - **Statuses.**
-  - Observations with status `entered-in-error` or `cancelled`, and Conditions verified `entered-in-error` or `refuted`, are skipped.
-  - If an earlier import stored the same resource, it is removed: Observations match by resource id and effective time, Conditions by resource id and code.
-  - A `corrected` or `amended` Observation supersedes stored rows with the same id, code and time.
+  - Observations with status `entered-in-error` or `cancelled`, Conditions verified `entered-in-error` or `refuted`, and medications `entered-in-error` or `cancelled`, are skipped.
+  - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. A row that another resource still asserts is kept, without the withdrawn identity.
+  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time.
+- **Panels.** Each component row stores only its own component, so a sibling's code or value never sits under another row's category.
 - **Medications.**
   - `completed` and `stopped` with an end date give a start and a stop.
   - With no end date, the start is kept with `{"status": ..., "current": false}` in its note. No date is ever invented.
+  - A later import of the same medication and date updates the stored status. A row's category never loosens: the stricter of the old and new category is kept.
+  - `medication_event.category` holds each row's category (`policy.medication_category` for the user's own records and for imports).
 - **Sensitive categories** come from display text first, then from codes in `code`, in components and in `valueCodeableConcept`:
-  - ICD-10 (CM and WHO) and ICD-9-CM ranges;
+  - ICD-10 (CM and WHO) and ICD-9-CM ranges, written with or without the dot: mental health and pregnancy, plus Alzheimer's disease and the dementias (G30, F00–F03; 290, 294.1, 331.0), genetic susceptibility to and family history of cancer (Z15, Z80; V84.0, V16) and carrier status (Z14, Z84.81; V83);
   - a curated list of SNOMED CT concepts;
   - mental-health and pregnancy LOINC codes.
 
   A code with no system is matched by its shape, so privacy fails closed. The SNOMED list is not exhaustive: unlisted child concepts with no display text are not caught.
 - **Known limits (follow-ups):**
-  - A correction's identity is not scoped by source.
-  - Corrections apply in arrival order, not by `meta.lastUpdated`.
+  - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time.
+  - Corrections and status updates apply in arrival order, not by `meta.lastUpdated`.
   - Sleep nights are assigned noon to noon in each sample's own offset, so a large eastward flight can split one night.
 
 **`trend_svg`:**
@@ -134,6 +141,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 - The vertical range spans at least a tenth of the values' size, so noise is not drawn as a swing.
 - Axis numbers are rounded for reading; the first and last dates are labelled.
 - Series of 24 points or fewer show a dot per measurement.
+- Values beyond ±1e12 are not drawn (no health value comes close, and the arithmetic stays finite).
 - No external resources.
 
 
@@ -145,8 +153,8 @@ def load_pack() -> Pack
 def normalize_drug(name) -> str | None
 def pgx_check(pack, drug, calls) -> dict
 def derive(pack, calls) -> list[dict]
-def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict
-def default_watch(conn, *, topics=()) -> dict
+def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> dict
+def default_watch(conn, *, topics=(), allow=None) -> dict
 class UrllibHttp: get_json(url, params) -> dict
 ```
 
@@ -157,7 +165,7 @@ class UrllibHttp: get_json(url, params) -> dict
 **`derive`:** APOE, CYP2C19, CYP2C9, SLCO1B1, VKORC1 and others, each with a confidence of `called`, `ambiguous` or `not_assessed`.
 
 **`run_watch`:**
-- **Query terms** come from the pack's watch list, the user's medications and their topics, never from genotypes.
+- **Query terms** come from the pack's watch list, the user's medications and their topics, never from genotypes. With `allow` (a category predicate), medications the privacy settings hide are left out, so they never become search terms sent to the research services.
 - **Matching** to the user's genotypes happens locally.
 - **Dedupe:** by PMID, DOI or ClinVar id.
 - **Digests:** the first run gives a top-3 seed digest; later runs give only new items.

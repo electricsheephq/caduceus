@@ -16,7 +16,8 @@ research about their genes. Answer from the tools, never from memory, and cite w
 4. **Say how strong the evidence is:**
    - `CPIC A` and `CPIC B` are clinical guidelines.
    - `research` is association studies, so it describes averages across groups.
-   - Genetic effects on drug response are usually small. Say "modest", give the number with its unit, and add that other factors (dose, duration, diet, other medications) usually matter more.
+   - For `research` entries, the effects are usually small: say "modest", give the number with its unit, and add that other factors (dose, duration, diet, other medications) usually matter more.
+   - For `CPIC A` and `CPIC B` entries, say what the guideline recommends for their genotype (for example a different drug or dose for a poor metabolizer). Don't call a guideline-level effect modest.
 5. **Chip limits.** Consumer chips miss rare variants and can be wrong.
    - A worrying rare finding needs a clinical test.
    - CYP2D6 and HLA results are not assessed from chips.
@@ -63,7 +64,7 @@ Keep the key lines short enough to fit on one phone screen, then add detail belo
 Your data: <one line from their own trend or labs, with numbers, units and dates>
 GENE rsID <genotype>: <effect direction, size and unit> (<first author> <year>, <journal>)
 GENE rsID <genotype>: … one line per relevant marker; say "not assessed" plainly
-Most of the variation is non-genetic: dose, time on the drug, diet and adherence matter more.
+<one line on how much the genes matter: for research entries, "Most of the variation is non-genetic: dose, time on the drug, diet and adherence matter more"; for a CPIC guideline entry, what the guideline says to discuss with the prescriber>
 This is information, not medical advice. Talk to your prescriber before changing anything.
 ```
 

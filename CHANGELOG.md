@@ -27,6 +27,8 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
   - Results marked entered-in-error or cancelled, and refuted diagnoses, are skipped, and removed if an earlier import stored them.
   - Corrected results replace the originals.
   - Stopped medications never get an invented stop date.
-- **Sensitive codes.** Diagnoses are recognised from their codes as well as their text (ICD-10, ICD-9-CM, SNOMED CT, LOINC screening codes), including codes carried as values.
+- **Sensitive codes.** Diagnoses are recognised from their codes as well as their text (ICD-10, ICD-9-CM, SNOMED CT, LOINC screening codes), including codes carried as values. This covers Alzheimer's disease and the dementias, genetic cancer risk and family history, and carrier status, as well as mental health and reproductive health.
+- **Medications keep their own category.** A contraceptive is reproductive and an antidepressant is mental health, in the brief, before/after comparisons, search and the research watch. Hiding `medication` hides every medication. Medications the privacy settings hide are never used as research search terms.
+- **Record identity.** Retractions are scoped by the record's `fullUrl` and compare times as instants and every coding. A value that another record still reports is kept. A later import updates a medication's status. Confirming a new dose for the same medication event updates the stored dose.
 - **A synthetic demo persona** (`tests/synth/persona.py`): DNA raw data, a variant report and an Apple Health export with health records, for demos and end-to-end tests. It contains no real person's data.
 - **A real Hermes loader test** in CI, plus local-only checks on a maintainer's own files that print totals only.
