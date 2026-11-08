@@ -612,7 +612,7 @@ def test_a_correction_is_asserted_only_by_the_resource_that_made_it(vault, tmp_p
     import_fhir(vault, _source(vault, tmp_path / "3.json", _bundle_urls((b, _glucose("2", 100)))))  # a stale copy
     assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [200]
     document = json.loads(vault.execute("SELECT raw_json FROM observation").fetchone()[0])
-    assert document["_caduceus"]["resource_ids"] == [a] and document["_caduceus"]["superseded_ids"] == [b]
+    assert document["_caduceus"]["resource_ids"] == [a] and set(document["_caduceus"]["superseded"]) == {b}
     import_fhir(vault, _source(vault, tmp_path / "4.json", _bundle_urls((a, _glucose("1", 200, status="entered-in-error")))))
     assert observation_series(vault, "glucose")["points"] == []
 
@@ -622,4 +622,15 @@ def test_a_later_correction_from_a_superseded_resource_keeps_the_first(vault, tm
     import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls((a, _glucose("1", 100)), (b, _glucose("2", 100)))))
     import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 200, status="corrected")))))
     import_fhir(vault, _source(vault, tmp_path / "3.json", _bundle_urls((b, _glucose("2", 150, status="corrected")))))
+    assert sorted(p["value"] for p in observation_series(vault, "glucose")["points"]) == [150, 200]
+
+
+def test_a_superseded_resource_keeps_its_own_later_result(vault, tmp_path):
+    a, b = "https://a.example/fhir/Observation/1", "https://b.example/fhir/Observation/2"
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls(
+        (a, _glucose("1", 100)), (b, _glucose("2", 100, status="preliminary")))))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 200, status="corrected")))))
+    import_fhir(vault, _source(vault, tmp_path / "3.json", _bundle_urls((b, _glucose("2", 100)))))  # its old copy: stale
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [200]
+    import_fhir(vault, _source(vault, tmp_path / "4.json", _bundle_urls((b, _glucose("2", 150)))))  # its own final result
     assert sorted(p["value"] for p in observation_series(vault, "glucose")["points"]) == [150, 200]

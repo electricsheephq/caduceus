@@ -70,9 +70,11 @@ def _migrate_vault(conn: sqlite3.Connection) -> None:
             category = medication_category(" ".join(str(x) for x in (row[1], row[2]) if x)).value
             ref = f"user:{row[0]}" if row[3] == "user" else str(row[0])
             indexed = conn.execute("SELECT category FROM search_doc WHERE kind='medication' AND ref=?", (ref,)).fetchone()
-            if category not in sensitive and indexed and indexed[0] in sensitive:
-                category = indexed[0]  # the index already filed it under a sensitive category: the stricter wins
+            if indexed and indexed[0] in sensitive:
+                category = indexed[0]  # the index already filed it under a sensitive category: it keeps it
             conn.execute("UPDATE medication_event SET category=? WHERE id=?", (category, row[0]))
+            if indexed and indexed[0] != category:  # the search index follows, so search and fetch agree
+                conn.execute("UPDATE search_doc SET category=? WHERE kind='medication' AND ref=?", (category, ref))
 
 
 def open_samples(path=None) -> sqlite3.Connection:

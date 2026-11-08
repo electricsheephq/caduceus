@@ -118,7 +118,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 - **Statuses.**
   - Observations with status `entered-in-error` or `cancelled`, Conditions verified `entered-in-error` or `refuted`, and medications `entered-in-error` or `cancelled`, are skipped.
   - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. A row that another resource still asserts is kept, without the withdrawn identity.
-  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value; the copies' resources are listed in `_caduceus.superseded_ids`, so their stale re-sends are ignored, and a later retraction of the correction removes it.
+  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value. Each copy's resource is listed in `_caduceus.superseded` with the content key of the copy it sent, so a re-send of that same copy is ignored as stale, a different value from it is stored as its own, and a later retraction of the correction removes it.
 - **Panels.** Each component row stores only its own component, without the panel's own value, interpretation, reference range or notes, so neither a sibling's nor the panel's content sits under another row's category. No row of a panel keeps the narrative (`text`), which describes every part.
 - **Medications.**
   - `completed` and `stopped` with an end date give a start and a stop.
@@ -137,9 +137,8 @@ def trend_svg(points, *, unit, title, markers=()) -> str
   - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time (medication retractions also check the drug and start).
   - A resource imported with a `fullUrl` and retracted without one (or the reverse) is not matched: identities are compared as given.
   - An exporter that writes a new `urn:uuid` for the same resource in every export makes corrections and retractions miss across exports. A missed match is preferred to deleting another resource's row.
-  - Once a correction has replaced a resource's identical copy, that resource's later non-correction values for the same code and time are ignored as stale. A correction from it is stored.
   - The drug lists fail closed. Drugs with ordinary uses (diazepam for vertigo, clonazepam for seizures, methadone for pain, sildenafil for pulmonary hypertension) are filed under the sensitive category, so they show only once that category is unlocked.
-  - Schema columns added after a vault was created are added on open (`db._migrate_vault`); `medication_event.category` is backfilled from the drug names.
+  - Schema columns added after a vault was created are added on open (`db._migrate_vault`). `medication_event.category` is backfilled from the drug names, a sensitive category the search index already had wins, and the search index then takes the row's category.
   - Corrections and status updates apply in arrival order, not by `meta.lastUpdated`.
   - Sleep nights are assigned noon to noon in each sample's own offset, so a large eastward flight can split one night.
 

@@ -303,6 +303,26 @@ def test_an_older_vault_keeps_a_sensitive_category_its_index_already_had(tmp_pat
         conn.close()
 
 
+def test_an_older_vault_files_the_search_index_under_the_new_category(tmp_path):
+    path = tmp_path / "old.db"
+    conn = open_vault(path)
+    with write_txn(conn):
+        cur = conn.execute("INSERT INTO medication_event(drug, event, dose, occurred_on, source, created_at) "
+                           "VALUES ('sertraline', 'start', '50 mg', '2026-01-05', 'user', 'x')")
+        search.index_doc(conn, kind="medication", ref=f"user:{cur.lastrowid}", title="Started sertraline",
+                         body="Started sertraline on 2026-01-05. Dose: 50 mg.", category=Category.MEDICATION)
+        conn.execute("ALTER TABLE medication_event DROP COLUMN category")  # the shape before the column existed
+    conn.close()
+    conn = open_vault(path)
+    try:
+        assert conn.execute("SELECT category FROM medication_event").fetchone()[0] == "mental_health"
+        assert conn.execute("SELECT category FROM search_doc WHERE kind='medication'").fetchone()[0] == "mental_health"
+        found = search.search(conn, "sertraline", policy=Policy(level="standard"))
+        assert found["results"] == [] and found["withheld"] == 1
+    finally:
+        conn.close()
+
+
 def test_concurrent_opens_of_an_older_vault_migrate_once(tmp_path):
     path = tmp_path / "old.db"
     conn = open_vault(path)

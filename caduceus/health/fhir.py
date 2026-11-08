@@ -199,6 +199,16 @@ def _stricter(new, stored):
     return new, False
 
 
+def _stale(document, identity, key):
+    """Whether a non-correction only re-sends what a stored correction replaced: anything at this code and time from
+    the correcting resource, or the identical copy another resource had sent. A different value is new."""
+    if document.get("status") not in ("corrected", "amended"):
+        return False
+    if identity in _resource_ids(document):
+        return True
+    return ((document.get("_caduceus") or {}).get("superseded") or {}).get(identity) == key
+
+
 def _restatus(vault, kind, ref, fields, metadata):
     """Update only the status fields of a stored search document, keeping its text, title and category.
 
@@ -323,14 +333,14 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
                              Category.RECORDS)
         key = _key(["Observation", system, code, when, [num, text], unit, code if component is not None else None])
         identities = {identity} if identity else set()
-        superseded = set()  # resources whose identical copy a correction replaced: they no longer assert the value
+        superseded = {}  # resource -> content key of its identical copy that a correction replaced
         if identity:
             previous = [row for row in vault.execute(
                 "SELECT id,dedupe_key,raw_json,effective_at FROM observation WHERE source='fhir' AND code_system IS ? "
                 "AND code IS ? AND (EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?) "
-                "OR EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.superseded_ids') WHERE value=?))",
+                "OR EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.superseded') WHERE key=?))",
                 (system, code, identity, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)]
-            if not corrected and any(json.loads(row["raw_json"]).get("status") in ("corrected", "amended") for row in previous):
+            if not corrected and any(_stale(json.loads(row["raw_json"]), identity, key) for row in previous):
                 counts["observation_ignored_after_correction"] = counts.get("observation_ignored_after_correction", 0)+1
                 continue
             if corrected:
@@ -340,7 +350,9 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
                     if identity not in _resource_ids(document):
                         # Another resource's correction already replaced this one's copy: that corrected value stays,
                         # and this correction stands on its own.
-                        meta["superseded_ids"] = sorted(set(meta.get("superseded_ids") or []) - {identity})
+                        meta["superseded"] = {k: v for k, v in (meta.get("superseded") or {}).items() if k != identity}
+                        if not meta["superseded"]:
+                            del meta["superseded"]
                         kept = json.dumps(document, sort_keys=True, separators=(",", ":"))
                         vault.execute("UPDATE observation SET raw_json=? WHERE id=?", (kept, row["id"]))
                         vault.execute("UPDATE search_doc SET body=? WHERE kind='observation' AND ref=?",
@@ -348,7 +360,8 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
                         continue
                     # A correction replaces every identical copy, but only the correcting resource asserts the new
                     # value: the others are remembered as superseded, so a retraction of the correction removes it.
-                    superseded |= _resource_ids(document) | set(meta.get("superseded_ids") or [])
+                    superseded.update(meta.get("superseded") or {})
+                    superseded.update({rid: row["dedupe_key"] for rid in _resource_ids(document)})
                     search.remove_doc(vault, kind="observation", ref=str(row["id"]))
                     vault.execute("DELETE FROM observation WHERE id=?", (row["id"],))
                     counts["observation_superseded"] = counts.get("observation_superseded", 0) + 1
@@ -356,15 +369,15 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         if existing:
             stored = json.loads(existing["raw_json"])
             identities.update(_resource_ids(stored))
-            superseded |= set((stored.get("_caduceus") or {}).get("superseded_ids") or [])
-        superseded -= identities
+            superseded = {**((stored.get("_caduceus") or {}).get("superseded") or {}), **superseded}
+        superseded = {rid: copy for rid, copy in superseded.items() if rid not in identities}
         if corrected or existing is None:
             document, scope = own, full_url
         else:
             document = json.loads(existing["raw_json"])
             scope = (document.get("_caduceus") or {}).get("full_url")
         raw = _raw(document, precision, resource_ids=sorted(identities),
-                   **({"superseded_ids": sorted(superseded)} if superseded else {}),
+                   **({"superseded": dict(sorted(superseded.items()))} if superseded else {}),
                    **({"full_url": scope} if scope else {}))
         cur = vault.execute(
             "INSERT OR IGNORE INTO observation(code_system,code,name,value_num,value_text,unit,effective_at,"
