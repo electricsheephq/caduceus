@@ -13,7 +13,8 @@ from ..core.db import write_txn
 PARSER = "dtc"
 PARSER_VERSION = "1"
 BATCH_SIZE = 20_000
-MAX_INFLATE = 1 << 30
+MAX_INFLATE = 256 << 20       # real raw-data files are 15-30 MB decompressed
+MAX_LINE = 4096               # real lines are under 100 bytes; a longer one means this is not raw data
 _MARKER = re.compile(r"(?:rs|i)[0-9]+\Z")
 _GENOTYPE = re.compile(r"(?:[ACGT]{1,2}|[DI]{1,2}|--)\Z")
 _BUILD = re.compile(r"(?:build\s*|grch\s*|assembly\s*(?:build\s*)?)(37|38)\b", re.I)
@@ -22,41 +23,50 @@ _ANCESTRY_CHROMS = {"23": "X", "24": "Y", "25": "XY", "26": "MT"}
 _INSERT = "INSERT OR IGNORE INTO genotype_call(callset_id, marker, chrom, pos, genotype) VALUES (?,?,?,?,?)"
 
 
-def _lines(raw, max_inflate):
+class DtcError(ValueError):
+    """A refusal whose message holds no input bytes, so it is safe to show and to store."""
+
+
+def _lines(raw, max_inflate, max_line=MAX_LINE):
     used = 0
     while True:
-        line = raw.readline(max_inflate - used + 1)
+        line = raw.readline(max_line + 1)
         if not line:
             return
         used += len(line)
         if used > max_inflate:
-            raise ValueError("DTC decompressed byte limit exceeded")
-        yield line.decode("utf-8-sig").rstrip("\r\n")
+            raise DtcError("DTC decompressed byte limit exceeded")
+        if len(line) > max_line and not line.endswith(b"\n"):
+            raise DtcError("DTC line is too long; this is not a raw-data file")
+        # A stray non-UTF-8 byte becomes U+FFFD, so that one line is skipped as malformed.
+        yield line.decode("utf-8-sig", "replace").rstrip("\r\n")
 
 
 @contextmanager
-def _open_text(path, *, max_inflate=MAX_INFLATE):
+def _open_text(path, *, max_inflate=None, max_line=None):
     """Yield (lines, member name), bounded by actual decompressed bytes, without extraction."""
+    max_inflate = MAX_INFLATE if max_inflate is None else max_inflate
+    max_line = MAX_LINE if max_line is None else max_line
     if max_inflate < 0:
-        raise ValueError("DTC byte limit must be nonnegative")
+        raise DtcError("DTC byte limit must be nonnegative")
     if not zipfile.is_zipfile(path):
         with open(path, "rb") as raw:
-            yield _lines(raw, max_inflate), path.name
+            yield _lines(raw, max_inflate, max_line), path.name
         return
     with zipfile.ZipFile(path) as archive:
         members = archive.infolist()
         for member in members:
             name = member.filename.replace("\\", "/")
             if name.startswith("/") or ".." in PurePosixPath(name).parts or ":" in name:
-                raise ValueError("Unsafe DTC archive member path")
+                raise DtcError("Unsafe DTC archive member path")
         texts = [m for m in members if not m.is_dir() and m.filename.lower().endswith(".txt")]
         if not texts:
-            raise ValueError("DTC archive has no text member")
+            raise DtcError("DTC archive has no text member")
         member = max(texts, key=lambda m: m.file_size)
         if member.file_size > max_inflate:
-            raise ValueError("DTC decompressed byte limit exceeded")
+            raise DtcError("DTC decompressed byte limit exceeded")
         with archive.open(member) as raw:
-            yield _lines(raw, max_inflate), member.filename
+            yield _lines(raw, max_inflate, max_line), member.filename
 
 
 def _header(lines):
@@ -72,8 +82,8 @@ def _header(lines):
         if fields == ["rsid", "chromosome", "position", "allele1", "allele2"]:
             return "AncestryDNA", build
         if text and not text.startswith("#"):
-            raise ValueError("Unrecognized DTC header")
-    raise ValueError("Missing DTC header")
+            raise DtcError("Unrecognized DTC header")
+    raise DtcError("Missing DTC header")
 
 
 def _parse(line, vendor):
@@ -188,10 +198,14 @@ def import_dtc(conn, src, *, cancel=None) -> ImportResult:
                         if cancel is not None and cancel.is_set():
                             result.status = "cancelled"
                             break
-                if batch:
-                    _flush(conn, run.id, callset_id, batch, counts)
-                if cancel is not None and cancel.is_set():
-                    result.status = "cancelled"
+                else:
+                    if batch:
+                        _flush(conn, run.id, callset_id, batch, counts)
+                    if counts["markers"] == 0:
+                        raise DtcError("No genotype rows found in the file")
+    except DtcError as exc:
+        result.status = "failed"
+        result.warnings.append(f"DTC import failed: {exc}")
     except Exception as exc:
         result.status = "failed"
         # Error strings from decoders can include private input bytes.

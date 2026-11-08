@@ -10,20 +10,35 @@ class NoCallset(LookupError):
     """No DNA callset exists for this lookup."""
 
 
+# A callset is complete once a dtc import of its source succeeded with at least one row. Rows from a
+# running, cancelled or failed import stay stored (the next run resumes them) but are never looked up.
+_COMPLETE = ("EXISTS (SELECT 1 FROM import_run r WHERE r.source_id = c.source_id AND r.parser = 'dtc' "
+             "AND r.status = 'succeeded') AND c.marker_count > 0")
+
+
 def callsets(conn) -> list[dict]:
-    return [dict(row) for row in conn.execute("SELECT * FROM callset ORDER BY created_at DESC, id DESC")]
+    return [dict(row) for row in conn.execute(
+        f"SELECT c.*, ({_COMPLETE}) AS complete FROM callset c ORDER BY c.created_at DESC, c.id DESC")]
 
 
 def get_calls(conn, markers, *, callset_id=None) -> dict[str, Call]:
     if callset_id is None:
-        selected = conn.execute("SELECT id FROM callset ORDER BY created_at DESC, id DESC LIMIT 1").fetchone()
+        selected = conn.execute(
+            f"SELECT c.id FROM callset c WHERE {_COMPLETE} ORDER BY c.created_at DESC, c.id DESC LIMIT 1"
+        ).fetchone()
+        if selected is None and conn.execute("SELECT 1 FROM callset LIMIT 1").fetchone() is not None:
+            raise NoCallset("The DNA import has not finished; check it with caduceus_capture op=status.")
     else:
         selected = conn.execute("SELECT id FROM callset WHERE id=?", (callset_id,)).fetchone()
     if selected is None:
         raise NoCallset("Import a DNA callset before looking up markers.")
     callset_id = selected[0]
+    if isinstance(markers, str):
+        markers = [markers]
     result = {}
     for name in markers:
+        if not isinstance(name, str):
+            continue
         marker = name.strip().lower()
         resolved = None
         row = conn.execute("SELECT * FROM genotype_call WHERE callset_id=? AND marker=?",

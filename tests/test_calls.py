@@ -60,3 +60,30 @@ def test_newest_and_explicit_callset(vault, tmp_path):
     with pytest.raises(NoCallset):
         get_calls(vault, ["rs1"], callset_id=999)
     assert get_calls(vault, []) == {}
+
+
+def test_lookup_skips_unfinished_or_failed_callsets(vault, tmp_path):
+    done = _import(vault, tmp_path, "one_v5_dna.txt", {"rs1": "AA"})
+    src, _ = sources.store_source(vault, make_23andme(tmp_path / "two_v5_dna.txt", n=2, inject={"rs1": "GG"}),
+                                  SourceKind.DTC)
+    run = sources.begin_import(vault, src, "dtc", "1")
+    with write_txn(vault):  # a newer callset whose import is still running, holding only part of its rows
+        vault.execute("INSERT INTO callset(source_id, vendor, build, marker_count, created_at) "
+                      "VALUES (?, '23andMe', '37', 1, '2099-01-01T00:00:00Z')", (src.id,))
+        partial = vault.execute("SELECT id FROM callset WHERE source_id=?", (src.id,)).fetchone()[0]
+        vault.execute("INSERT INTO genotype_call VALUES (?, 'rs2', '1', 1002, 'CC')", (partial,))
+    assert get_calls(vault, ["rs1"])["rs1"].callset_id == done
+    sources.finish_import(vault, run.id, counts={}, status="failed")
+    assert get_calls(vault, "rs1")["rs1"].genotype == "AA"          # a bare string is one marker
+    assert {row["id"]: row["complete"] for row in callsets(vault)} == {partial: 0, done: 1}
+    assert get_calls(vault, ["rs2"], callset_id=partial)["rs2"].genotype == "CC"   # explicit id: diagnostics
+
+
+def test_only_an_unfinished_callset_says_so(vault, tmp_path):
+    src, _ = sources.store_source(vault, make_23andme(tmp_path / "dna.txt", n=2), SourceKind.DTC)
+    sources.begin_import(vault, src, "dtc", "1")
+    with write_txn(vault):
+        vault.execute("INSERT INTO callset(source_id, vendor, build, created_at) VALUES (?, '23andMe', '37', 'x')",
+                      (src.id,))
+    with pytest.raises(NoCallset, match="has not finished"):
+        get_calls(vault, ["rs1"])

@@ -184,3 +184,35 @@ def test_200k_speed(vault, tmp_path):
     elapsed = time.monotonic() - start
     assert result.status == "succeeded" and result.counts["markers"] == 200_000
     assert elapsed < 10, f"200k-row import exceeded the lane's ten-second gate: {elapsed:.2f}s"
+
+
+def test_one_huge_line_is_refused_without_reading_it(vault, tmp_path):
+    path = make_23andme(tmp_path / "dna.txt", n=3)
+    with path.open("a") as fh:
+        fh.write("rs9\t1\t9\t" + "A" * 50_000 + "\n")
+    result = dtc.import_dtc(vault, _source(vault, path))
+    assert result.status == "failed"
+    assert result.warnings == ["DTC import failed: DTC line is too long; this is not a raw-data file"]
+    assert not any(r["complete"] for r in __import__("caduceus.genome.calls", fromlist=["x"]).callsets(vault))
+
+
+def test_non_utf8_byte_skips_only_that_line(vault, tmp_path):
+    path = make_23andme(tmp_path / "dna.txt", n=3)
+    with path.open("ab") as fh:
+        fh.write(b"rs9\t1\t9\tA\xffG\n")
+    result = dtc.import_dtc(vault, _source(vault, path))
+    assert result.status == "succeeded"
+    assert (result.counts["markers"], result.counts["skipped_lines"]) == (3, 1)
+
+
+def test_header_only_file_fails(vault, tmp_path):
+    path = make_23andme(tmp_path / "dna.txt", n=0)
+    result = dtc.import_dtc(vault, _source(vault, path))
+    assert result.status == "failed" and result.warnings == ["DTC import failed: No genotype rows found in the file"]
+
+
+def test_byte_cap_is_read_when_called(vault, tmp_path, monkeypatch):
+    path = make_23andme(tmp_path / "dna.txt", n=50)
+    monkeypatch.setattr(dtc, "MAX_INFLATE", 200)
+    result = dtc.import_dtc(vault, _source(vault, path))
+    assert result.status == "failed" and "byte limit exceeded" in result.warnings[0]
