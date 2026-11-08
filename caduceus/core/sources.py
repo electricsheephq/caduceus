@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sqlite3
+import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,9 +53,15 @@ def store_source(conn: sqlite3.Connection, path, kind, *, subject_id: int = 1) -
     dest = db_dir(conn) / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     if not dest.exists():
-        part = dest.with_name(dest.name + ".part")
-        shutil.copyfile(path, part)
-        os.replace(part, dest)
+        # Each copy has its own temporary name: two imports of the same new file must not share one.
+        fd, part = tempfile.mkstemp(dir=dest.parent, prefix=name + ".", suffix=".part")
+        os.close(fd)
+        try:
+            shutil.copyfile(path, part)
+            os.replace(part, dest)  # identical content either way, so the last rename wins harmlessly
+        finally:
+            if os.path.exists(part):
+                os.unlink(part)
     with write_txn(conn):
         conn.execute(
             "INSERT OR IGNORE INTO source_artifact(subject_id, kind, sha256, original_name, stored_path, "

@@ -22,7 +22,11 @@ from pathlib import Path
 
 MAX_BYTES = 1 << 20
 MEDIA_OK = ("docs/media/",)
-_GENOTYPE_ROW = re.compile(rb"^(?:rs|i)\d+\t[0-9XYMT]{1,2}\t\d+\t[ACGTDI-]{1,2}\r?$", re.M)
+# 23andMe (rsid, chromosome, position, genotype), AncestryDNA (two allele columns) and quoted CSV exports.
+_GENOTYPE_ROW = re.compile(rb"^(?:(?:rs|i)\d+\t[0-9XYMT]{1,2}\t\d+\t(?:[ACGTDI-]{1,2}|[ACGTDI0]\t[ACGTDI0])"
+                           rb'|"?(?:rs|i)\d+"?,"?[0-9XYMT]{1,2}"?,"?\d+"?,"?[ACGTDI-]{1,2}"?)\r?$', re.M)
+_FHIR_PATIENT = re.compile(rb'"resourceType"\s*:\s*"Patient"')
+_FHIR_IDENTIFIER = re.compile(rb'"identifier"\s*:\s*\[')
 _PROM_CHUNK = re.compile(rb"decompressString\('")
 
 
@@ -68,6 +72,8 @@ def check(files, hashes, words) -> list[str]:
             problems.append(f"{name}: looks like a real Promethease report")
         if b"<HealthData" in data and data.count(b"<Record ") > 200:
             problems.append(f"{name}: looks like a real Apple Health export")
+        if _FHIR_PATIENT.search(data) and _FHIR_IDENTIFIER.search(data):
+            problems.append(f"{name}: looks like a FHIR record with patient identifiers")
         text = data.decode("utf-8", "replace")
         if any(w.search(text) for w in words):
             problems.append(f"{name}: contains an entry from your private denylist")

@@ -298,7 +298,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str:
         except (TypeError, ValueError, OverflowError):
             continue
         day = _day(point.get("day") or point.get("date"))
-        if day is not None and math.isfinite(value):
+        if day is not None and math.isfinite(value) and abs(value) <= 1e12:  # beyond any health value; no overflow
             values.append((day.toordinal(), value))
     values.sort()
     low = min((v for _, v in values), default=0.0)

@@ -10,6 +10,9 @@ import pytest
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
+# The repo root has its own __init__.py (the Hermes loader entry). Import the inner package now, so pytest never
+# imports the root under the name "caduceus" when a single test file runs.
+import caduceus  # noqa: E402,F401
 
 
 class FakeCtx:

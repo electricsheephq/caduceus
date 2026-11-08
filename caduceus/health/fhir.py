@@ -6,12 +6,12 @@ import json
 import math
 import re
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from ..core import search, sources
 from ..core.contracts import ImportResult
 from ..core.db import write_txn
-from ..core.policy import Category, SENSITIVE, categorize
+from ..core.policy import Category, SENSITIVE, categorize, medication_category
 
 PARSER = "fhir"
 PARSER_VERSION = "1"
@@ -34,6 +34,7 @@ MENTAL_SNOMED = frozenset({"35489007", "370143000", "197480006", "21897009", "37
                           "7200002", "66590003", "11061003", "75544000", "6471006", "248062006"})
 REPRODUCTIVE_SNOMED = frozenset({"77386006", "17369002", "34801009", "129103003", "237055002", "8619003",
                                "860914002", "397803000"})
+ALZHEIMERS_SNOMED = frozenset({"26929004", "52448006"})  # Alzheimer's disease; dementia
 
 
 def _display(concept):
@@ -70,25 +71,41 @@ def _code_category(system, code):
         if code in REPRODUCTIVE_LOINC:
             return Category.REPRODUCTIVE
     if system == SNOMED or (not system and re.fullmatch(r"\d{6,18}", code)):
+        if code in ALZHEIMERS_SNOMED:
+            return Category.ALZHEIMERS
         if code in MENTAL_SNOMED:
             return Category.MENTAL_HEALTH
         if code in REPRODUCTIVE_SNOMED:
             return Category.REPRODUCTIVE
     if system in ICD_SYSTEMS or (not system and re.fullmatch(r"[A-Z][0-9][0-9A-Z](?:\.?[0-9A-Z]{1,4})?", code)):
-        if re.match(r"F(?:0[1-9]|[1-9][0-9])", code):
+        flat = code.replace(".", "")
+        if re.match(r"G30|F0[0-3]", flat):  # Alzheimer's disease and the dementias
+            return Category.ALZHEIMERS
+        if re.match(r"Z15|Z80", flat):  # genetic susceptibility to cancer; family history of cancer
+            return Category.CANCER_RISK
+        if re.match(r"Z14|Z8481", flat):  # genetic carrier status
+            return Category.CARRIER
+        if re.match(r"F(?:0[4-9]|[1-9][0-9])", flat):
             return Category.MENTAL_HEALTH
-        if re.match(r"O(?:[0-8][0-9]|9[0-9A])|Z3[0-9]|N9[6-8]|N80|N52", code) or code.replace(".", "") == "E282":
+        if re.match(r"O(?:[0-8][0-9]|9[0-9A])|Z3[0-9]|N9[6-8]|N80|N52", flat) or flat == "E282":
             return Category.REPRODUCTIVE
-    if system in ICD9_SYSTEMS or (not system and re.fullmatch(r"(?:\d{3}|V\d{2})(?:\.\d{1,2})?", code)):
-        head = code[:3]
+    # ICD-9-CM, written with or without its dot ("296.20" and "29620" are the same code).
+    if system in ICD9_SYSTEMS or (not system and re.fullmatch(r"(?:\d{3}|V\d{2})(?:\.?\d{1,2})?", code)):
+        flat, head = code.replace(".", ""), code[:3]
         if head.isdigit():
             number = int(head)
+            if number == 290 or flat.startswith(("3310", "29410", "29411")):  # dementias, Alzheimer's disease
+                return Category.ALZHEIMERS
             if 290 <= number <= 319:  # ICD-9-CM mental disorders
                 return Category.MENTAL_HEALTH
-            if 630 <= number <= 679 or 614 <= number <= 629 or number == 606 or code.startswith("607.84"):
+            if 630 <= number <= 679 or 614 <= number <= 629 or number == 606 or flat.startswith("60784"):
                 return Category.REPRODUCTIVE
         elif head in ("V22", "V23", "V24", "V25", "V26", "V27", "V28"):  # pregnancy, contraception, procreation
             return Category.REPRODUCTIVE
+        elif head == "V16" or flat.startswith("V840"):  # family history of, or genetic susceptibility to, cancer
+            return Category.CANCER_RISK
+        elif head == "V83":  # genetic carrier status
+            return Category.CARRIER
     return None
 
 
@@ -134,9 +151,48 @@ def _status(concept):
     return next((c["code"] for c in (concept or {}).get("coding", []) if c.get("code")), _display(concept))
 
 
+def _identity(resource, full_url=None):
+    """What names a resource across imports: its absolute fullUrl when its Bundle gives one (ids repeat across
+    providers), otherwise its id."""
+    if isinstance(full_url, str) and full_url.startswith(("http://", "https://")):
+        return full_url
+    rid = resource.get("id")
+    return rid if isinstance(rid, str) and rid else None
+
+
 def _resource_ids(document):
-    return {value for value in [document.get("id"), *(document.get("_caduceus") or {}).get("resource_ids", [])]
-            if isinstance(value, str)}
+    """Every resource that asserts a stored row; the stored list is authoritative once written."""
+    meta = document.get("_caduceus") or {}
+    ids = meta.get("resource_ids")
+    if isinstance(ids, list):
+        return {value for value in ids if isinstance(value, str)}
+    own = _identity(document, meta.get("full_url"))
+    return {own} if own else set()
+
+
+def _instant(value):
+    """A comparable form of a FHIR date: timestamps as UTC instants (so -05:00 and Z agree), others as written."""
+    when, precision = _date_value(value)
+    if precision == "timestamp":
+        parsed = datetime.fromisoformat(when)
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).isoformat()
+    return when
+
+
+def _note(text):
+    try:
+        note = json.loads(text or "{}")
+    except ValueError:
+        return {}
+    return note if isinstance(note, dict) else {}
+
+
+def _stricter(new, stored):
+    """A row's category never loosens when another import describes it less specifically."""
+    if stored in {c.value for c in SENSITIVE} and new not in SENSITIVE:
+        return Category(stored)
+    return new
 
 
 def _skip(counts, kind, reason):
@@ -144,8 +200,11 @@ def _skip(counts, kind, reason):
     counts[key] = counts.get(key, 0) + 1
 
 
-def _medications(vault, resource, source_id, name):
-    """Write only dates provided by the source, with activity status in metadata."""
+def _medications(vault, resource, source_id, name, counts=None, full_url=None):
+    """Write only dates provided by the source, with activity status in metadata.
+
+    A later import of the same medication updates the stored status: a record that now says stopped makes an earlier
+    start not current. Each row lists the resources that assert it, so a retraction removes only its own."""
     status = resource.get("status")
     period = resource.get("effectivePeriod") or {}
     start, precision = _date_value(period.get("start") or resource.get("effectiveDateTime") or resource.get("authoredOn"))
@@ -155,19 +214,38 @@ def _medications(vault, resource, source_id, name):
     if status in ("completed", "stopped") and end:
         events.append(("stop", end, end_precision))
     category = _category([resource.get("medicationCodeableConcept") or {}], Category.MEDICATION)
+    if category not in SENSITIVE:
+        category = medication_category(name)  # a drug prescribed mainly for a sensitive condition
+    identity = _identity(resource, full_url)
+    scope = {"full_url": full_url} if full_url else {}
     inserted = 0
     for event, when, precision in events:
         when = when[:10] if precision == "timestamp" else when
         metadata = {"date_precision": precision, "status": status, "current": status == "active"}
-        note = json.dumps({"dedupe_key": _key([resource["resourceType"], name, event, when]), **metadata})
-        cur = vault.execute(
-            "INSERT OR IGNORE INTO medication_event(drug,event,occurred_on,source,source_id,note,created_at) "
-            "VALUES (?,?,?,'fhir',?,?,?)", (name, event, when, source_id, note, sources.now_iso()))
-        if cur.rowcount:
-            search.index_doc(vault, kind="medication", ref=str(cur.lastrowid), title=name,
-                             body=_raw(resource, precision, event=event, current=metadata["current"]),
-                             category=category, ts=when)
+        body = _raw(resource, precision, event=event, current=metadata["current"], **scope)
+        row = vault.execute("SELECT id, note, category FROM medication_event WHERE drug=? AND event=? AND occurred_on=? "
+                            "AND source='fhir'", (name, event, when)).fetchone()
+        if row is None:
+            note = json.dumps({"dedupe_key": _key([resource["resourceType"], name, event, when]), **metadata,
+                               "resource_ids": [identity] if identity else []})
+            cur = vault.execute(
+                "INSERT INTO medication_event(drug,event,occurred_on,source,source_id,note,category,created_at) "
+                "VALUES (?,?,?,'fhir',?,?,?,?)", (name, event, when, source_id, note, category.value, sources.now_iso()))
+            ref = cur.lastrowid
             inserted += 1
+        else:
+            old = _note(row["note"])
+            ids = sorted(set(old.get("resource_ids") or []) | ({identity} if identity else set()))
+            note = json.dumps({**old, **metadata, "resource_ids": ids})
+            category = _stricter(category, row["category"])
+            if note == row["note"] and category.value == row["category"]:
+                continue
+            vault.execute("UPDATE medication_event SET note=?, category=?, source_id=? WHERE id=?",
+                          (note, category.value, source_id, row["id"]))
+            ref = row["id"]
+            if counts is not None:
+                counts["medication_updated"] = counts.get("medication_updated", 0) + 1
+        search.index_doc(vault, kind="medication", ref=str(ref), title=name, body=body, category=category, ts=when)
     return inserted
 
 
@@ -178,12 +256,18 @@ def warning_messages(counts):
             for key, n in sorted(counts.items()) if key.startswith("skipped:")]
 
 
-def _observations(vault, resource, source_id, when, precision, counts):
+def _observations(vault, resource, source_id, when, precision, counts, full_url=None):
     components = resource.get("component") or []
+    base = {key: value for key, value in resource.items() if key != "component"}
     parts = ([(resource, None)] if not components or any(k.startswith("value") for k in resource) else [])
     parts += [(component, component.get("code")) for component in components]
+    identity = _identity(resource, full_url)
+    corrected = resource.get("status") in ("corrected", "amended")
     inserted = 0
     for part, component in parts:
+        # Each row stores only its own part of a panel: a sibling's code or value must never ride along under
+        # this row's category (a glucose result beside a depression score).
+        own = base if component is None else {**base, "component": [part]}
         concept = part.get("code") or {}
         system, code, name = _concept(concept, loinc=True)
         quantity = part.get("valueQuantity") or {}
@@ -200,14 +284,12 @@ def _observations(vault, resource, source_id, when, precision, counts):
         category = _category([resource.get("code") or {}, concept, part.get("valueCodeableConcept") or {}],
                              Category.RECORDS)
         key = _key(["Observation", system, code, when, [num, text], unit, code if component is not None else None])
-        identities = _resource_ids({"id": resource.get("id")})
-        corrected = resource.get("status") in ("corrected", "amended")
-        if resource.get("id"):
-            previous = vault.execute(
-                "SELECT id,dedupe_key,raw_json FROM observation WHERE source='fhir' AND code_system IS ? "
-                "AND code IS ? AND effective_at=? AND (json_extract(raw_json,'$.id')=? OR EXISTS "
-                "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?))",
-                (system, code, when, resource["id"], resource["id"])).fetchall()
+        identities = {identity} if identity else set()
+        if identity:
+            previous = [row for row in vault.execute(
+                "SELECT id,dedupe_key,raw_json,effective_at FROM observation WHERE source='fhir' AND code_system IS ? "
+                "AND code IS ? AND EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)",
+                (system, code, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)]
             if not corrected and any(json.loads(row["raw_json"]).get("status") in ("corrected", "amended") for row in previous):
                 counts["observation_ignored_after_correction"] = counts.get("observation_ignored_after_correction", 0)+1
                 continue
@@ -220,8 +302,12 @@ def _observations(vault, resource, source_id, when, precision, counts):
         existing = vault.execute("SELECT id,raw_json,name,category FROM observation WHERE dedupe_key=?", (key,)).fetchone()
         if existing:
             identities.update(_resource_ids(json.loads(existing["raw_json"])))
-        document = resource if corrected or existing is None else json.loads(existing["raw_json"])
-        raw = _raw(document, precision, resource_ids=sorted(identities))
+        if corrected or existing is None:
+            document, scope = own, full_url
+        else:
+            document = json.loads(existing["raw_json"])
+            scope = (document.get("_caduceus") or {}).get("full_url")
+        raw = _raw(document, precision, resource_ids=sorted(identities), **({"full_url": scope} if scope else {}))
         cur = vault.execute(
             "INSERT OR IGNORE INTO observation(code_system,code,name,value_num,value_text,unit,effective_at,"
             "ref_low,ref_high,interpretation,category,source,source_id,dedupe_key,raw_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -245,54 +331,133 @@ def _observations(vault, resource, source_id, when, precision, counts):
     return inserted
 
 
-def _retract(vault, resource, kind, counts):
-    """A resource re-sent as entered-in-error, cancelled or refuted removes what an earlier import stored for it."""
-    rid = resource.get("id")
-    if not isinstance(rid, str) or not rid:
+def _retract(vault, resource, kind, counts, full_url=None):
+    """A resource re-sent as entered-in-error, cancelled or refuted withdraws what an earlier import stored for it.
+
+    It is matched by identity (fullUrl, else id), then by its time and any of its codes when it gives them. A stored
+    value that another resource still asserts is kept, without the withdrawn identity."""
+    identity = _identity(resource, full_url)
+    if identity is None:
+        return
+    if kind.startswith("Medication"):
+        _retract_medications(vault, identity, counts)
         return
     if kind == "Observation":
-        when, _ = _date_value(resource.get("effectiveDateTime") or (resource.get("effectivePeriod") or {}).get("start")
-                              or resource.get("issued"))
-        rows = vault.execute(
-            "SELECT id FROM observation WHERE source='fhir' AND (json_extract(raw_json,'$.id')=? OR EXISTS "
-            "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?))"
-            + (" AND effective_at=?" if when else ""), (rid, rid) + ((when,) if when else ())).fetchall()
-        table = "observation"
+        table, column, codes = "observation", "effective_at", set()
+        when = resource.get("effectiveDateTime") or (resource.get("effectivePeriod") or {}).get("start") or resource.get("issued")
     else:
-        _, code, _ = _concept(resource.get("code") or {})
-        rows = vault.execute("SELECT id FROM condition WHERE source='fhir' AND json_extract(raw_json,'$.id')=? "
-                             "AND code IS ?", (rid, code)).fetchall()
-        table = "condition"
+        table, column = "condition", "onset"
+        when = resource.get("onsetDateTime") or (resource.get("onsetPeriod") or {}).get("start")
+        codes = {str(c["code"]).strip().upper() for c in (resource.get("code") or {}).get("coding", [])
+                 if isinstance(c, dict) and c.get("code")}
+    when = _instant(when)
+    rows = vault.execute(
+        f"SELECT id, code, {column} AS at, raw_json FROM {table} WHERE source='fhir' AND EXISTS "
+        "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)", (identity,)).fetchall()
+    removed = 0
     for row in rows:
+        if when is not None and _instant(row["at"]) != when:
+            continue
+        if codes and row["code"] is not None and str(row["code"]).strip().upper() not in codes:
+            continue
+        document = json.loads(row["raw_json"])
+        others = _resource_ids(document) - {identity}
+        if others:  # another resource still says this: keep the value, drop only the withdrawn identity
+            document.setdefault("_caduceus", {})["resource_ids"] = sorted(others)
+            raw = json.dumps(document, sort_keys=True, separators=(",", ":"))
+            vault.execute(f"UPDATE {table} SET raw_json=? WHERE id=?", (raw, row["id"]))
+            vault.execute("UPDATE search_doc SET body=? WHERE kind=? AND ref=?", (raw, table, str(row["id"])))
+            continue
         search.remove_doc(vault, kind=table, ref=str(row["id"]))
         vault.execute(f"DELETE FROM {table} WHERE id=?", (row["id"],))
-    if rows:
-        counts[f"{table}_retracted"] = counts.get(f"{table}_retracted", 0) + len(rows)
+        removed += 1
+    if removed:
+        counts[f"{table}_retracted"] = counts.get(f"{table}_retracted", 0) + removed
+
+
+def _retract_medications(vault, identity, counts):
+    removed = 0
+    for row in vault.execute("SELECT id, note FROM medication_event WHERE source='fhir'").fetchall():
+        note = _note(row["note"])
+        ids = set(note.get("resource_ids") or [])
+        if identity not in ids:
+            continue
+        if ids - {identity}:
+            vault.execute("UPDATE medication_event SET note=? WHERE id=?",
+                          (json.dumps({**note, "resource_ids": sorted(ids - {identity})}), row["id"]))
+            continue
+        search.remove_doc(vault, kind="medication", ref=str(row["id"]))
+        vault.execute("DELETE FROM medication_event WHERE id=?", (row["id"],))
+        removed += 1
+    if removed:
+        counts["medication_retracted"] = counts.get("medication_retracted", 0) + removed
+
+
+def _condition(vault, resource, source_id, when, precision, counts, full_url=None):
+    concept = resource.get("code") or {}
+    system, code, name = _concept(concept)
+    category = _category([concept], Category.RECORDS)
+    key = _key([system, code, when, name])
+    clinical = _status(resource.get("clinicalStatus"))
+    verification = _status(resource.get("verificationStatus"))
+    current = False if clinical in ("resolved", "inactive", "remission") else (
+        True if clinical in ("active", "recurrence", "relapse") else None)
+    identity = _identity(resource, full_url)
+    scope = {"full_url": full_url} if full_url else {}
+    title = name + (f" [verification: {verification}]" if verification else "")
+    if current is False:
+        title += f" [not current: {clinical}]"
+    previous = vault.execute("SELECT id,clinical_status,raw_json,category FROM condition WHERE dedupe_key=?", (key,)).fetchone()
+    if previous is None:
+        raw = _raw(resource, precision, verification_status=verification, current=current,
+                   resource_ids=[identity] if identity else [], **scope)
+        cur = vault.execute(
+            "INSERT INTO condition(code_system,code,name,clinical_status,onset,category,source,source_id,dedupe_key,raw_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)", (system, code, name, clinical, when, category.value, "fhir", source_id, key, raw))
+        search.index_doc(vault, kind="condition", ref=str(cur.lastrowid), title=title, body=raw, category=category, ts=when)
+        counts["condition"] += 1
+        return
+    old = json.loads(previous["raw_json"])
+    ids = _resource_ids(old) | ({identity} if identity else set())
+    if previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification:
+        category = _stricter(category, previous["category"])
+        raw = _raw(resource, precision, verification_status=verification, current=current, resource_ids=sorted(ids), **scope)
+        vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=? WHERE id=?",
+                      (clinical, raw, source_id, category.value, previous["id"]))
+        search.index_doc(vault, kind="condition", ref=str(previous["id"]), title=title, body=raw, category=category, ts=when)
+        counts["condition_updated"] = counts.get("condition_updated", 0)+1
+    elif ids != _resource_ids(old):  # the same condition from another resource: remember who else asserts it
+        old.setdefault("_caduceus", {})["resource_ids"] = sorted(ids)
+        raw = json.dumps(old, sort_keys=True, separators=(",", ":"))
+        vault.execute("UPDATE condition SET raw_json=? WHERE id=?", (raw, previous["id"]))
+        vault.execute("UPDATE search_doc SET body=? WHERE kind='condition' AND ref=?", (raw, str(previous["id"])))
 
 
 def ingest(vault, document, source_id, *, cancel=None, run_id=None):
     """Shared local ingestion; each resource and its index rows commit together."""
     counts = {"observation": 0, "condition": 0, "medication": 0, "ignored": 0}
-    resources, processed = [document], 0
+    resources, processed = [(document, None)], 0
     while resources:
         if cancel is not None and cancel.is_set():
             break
         if processed and processed % 10_000 == 0 and run_id is not None:
             sources.update_progress(vault, run_id, counts)
-        resource = resources.pop()
+        resource, full_url = resources.pop()
         kind = resource.get("resourceType")
         if kind == "Bundle":
-            resources.extend(reversed([e["resource"] for e in resource.get("entry", []) if "resource" in e]))
+            resources.extend(reversed([(e["resource"], e.get("fullUrl")) for e in resource.get("entry", [])
+                                       if isinstance(e, dict) and "resource" in e]))
             continue
         processed += 1
         if kind not in ("Observation", "Condition", "MedicationRequest", "MedicationStatement"):
             counts["ignored"] += 1
             continue
         if (kind == "Observation" and resource.get("status") in ("entered-in-error", "cancelled")) or (
-                kind == "Condition" and _status(resource.get("verificationStatus")) in ("entered-in-error", "refuted")):
+                kind == "Condition" and _status(resource.get("verificationStatus")) in ("entered-in-error", "refuted")) or (
+                kind.startswith("Medication") and resource.get("status") in ("entered-in-error", "cancelled")):
             _skip(counts, kind, "status")
             with write_txn(vault):
-                _retract(vault, resource, kind, counts)
+                _retract(vault, resource, kind, counts, full_url)
             continue
         if kind.startswith("Medication"):
             status = resource.get("status")
@@ -317,42 +482,11 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
             continue
         with write_txn(vault):
             if kind == "Observation":
-                counts["observation"] += _observations(vault, resource, source_id, when, precision, counts)
-                continue
-            if kind == "Condition":
-                concept = resource.get("code") or {}
-                system, code, name = _concept(concept)
-                category = _category([concept], Category.RECORDS)
-                key = _key([system, code, when, name])
-                clinical = _status(resource.get("clinicalStatus"))
-                verification = _status(resource.get("verificationStatus"))
-                current = False if clinical in ("resolved", "inactive", "remission") else (
-                    True if clinical in ("active", "recurrence", "relapse") else None)
-                raw = _raw(resource, precision, verification_status=verification, current=current)
-                cur = vault.execute(
-                    "INSERT OR IGNORE INTO condition(code_system,code,name,clinical_status,onset,category,source,source_id,dedupe_key,raw_json) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (system, code, name, clinical, when, category.value, "fhir", source_id, key, raw))
-                search_kind = "condition"
-                title = name + (f" [verification: {verification}]" if verification else "")
-                if current is False:
-                    title += f" [not current: {clinical}]"
-                if not cur.rowcount:
-                    previous = vault.execute("SELECT id,clinical_status,raw_json FROM condition WHERE dedupe_key=?", (key,)).fetchone()
-                    old_verification = _status(json.loads(previous["raw_json"]).get("verificationStatus"))
-                    if previous["clinical_status"] != clinical or old_verification != verification:
-                        vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=? WHERE id=?",
-                                      (clinical, raw, source_id, category.value, previous["id"]))
-                        search.index_doc(vault, kind="condition", ref=str(previous["id"]), title=title,
-                                         body=raw, category=category, ts=when)
-                        counts["condition_updated"] = counts.get("condition_updated", 0)+1
+                counts["observation"] += _observations(vault, resource, source_id, when, precision, counts, full_url)
+            elif kind == "Condition":
+                _condition(vault, resource, source_id, when, precision, counts, full_url)
             else:
-                counts["medication"] += _medications(vault, resource, source_id, name)
-                continue
-            if cur.rowcount:
-                search.index_doc(vault, kind=search_kind, ref=str(cur.lastrowid), title=title,
-                                 body=raw, category=category, ts=when)
-                counts[search_kind] += 1
+                counts["medication"] += _medications(vault, resource, source_id, name, counts, full_url)
     return counts
 
 
@@ -379,8 +513,19 @@ def import_fhir(vault, src, *, cancel=None) -> ImportResult:
     return ImportResult(status, run.id, src.id, counts, errors)
 
 
-def observation_series(vault, name_or_code, *, start=None, end=None) -> dict:
-    """Return one compatible unit per series, with explicit conversions/exclusions."""
+def _stored_quantity(document):
+    """The quantity a stored row was read from: its own component's, for a row cut from a panel."""
+    parts = document.get("component") or []
+    if len(parts) == 1 and isinstance(parts[0], dict):
+        return parts[0].get("valueQuantity") or {}
+    return document.get("valueQuantity") or {}
+
+
+def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict:
+    """Return one compatible unit per series, with explicit conversions/exclusions.
+
+    With *allow* (a category predicate), hidden results are removed before anything else is computed from them, so
+    units, coverage and unplotted results describe visible results only; ``withheld`` counts the rest."""
     from .trends import _bound, coverage
 
     name = str(name_or_code).strip()
@@ -392,13 +537,17 @@ def observation_series(vault, name_or_code, *, start=None, end=None) -> dict:
                "reference_range": {"low": r["ref_low"], "high": r["ref_high"]},
                "interpretation": r["interpretation"], "source": r["source"], "source_id": r["source_id"],
                "category": r["category"], "status": json.loads(r["raw_json"] or "{}").get("status"),
-               "_quantity": json.loads(r["raw_json"] or "{}").get("valueQuantity", {})} for r in rows]
+               "_quantity": _stored_quantity(json.loads(r["raw_json"] or "{}"))} for r in rows]
     low, high = _bound(start) if start else None, _bound(end, end=True) if end else None
     if (start and low is None) or (end and high is None):
         raise ValueError("invalid series date bound")
     points = [p for p in points if _bound(p["date"]) is not None and
               (low is None or _bound(p["date"], end=True) >= low) and
               (high is None or _bound(p["date"]) <= high)]
+    withheld = 0
+    if allow is not None:
+        shown = [p for p in points if allow(p["category"])]
+        withheld, points = len(points) - len(shown), shown
     for point in points:
         scale, offset = None, 0
         quantity = point.pop("_quantity")
@@ -436,4 +585,5 @@ def observation_series(vault, name_or_code, *, start=None, end=None) -> dict:
     points = [p for p in points if p["unit"] == unit]
     return {"name": name, "points": points, "unplotted_points": unplotted, "unit": unit, "other_units": other_units,
             "source_policy": "individual clinical observations; most common unit after known conversions",
-            "coverage": coverage([p["date"] for p in points], start, end), "calc_version": "trend/1"}
+            "coverage": coverage([p["date"] for p in points], start, end), "calc_version": "trend/1",
+            **({"withheld": withheld} if allow is not None else {})}

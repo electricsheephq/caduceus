@@ -242,3 +242,22 @@ def test_metabolizer_and_pgx_gene_records_reach_drug_response_section(vault, tmp
     html = build_report(vault, tmp_path / "out", policy=Policy()).read_text()
     section = re.search(r"<article><h2>Drug response</h2>(.*?)</article>", html, re.S)[1]
     assert "rs99999111" in section and "rs99999222" in section
+
+
+def test_a_failed_write_keeps_the_previous_report(vault, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    src = _import(vault, tmp_path)
+    first = build_report(vault, tmp_path / "out", policy=Policy(), source_id=src.id)
+    before = first.read_text(encoding="utf-8")
+    real = Path.write_text
+
+    def half_then_fail(self, text, *args, **kwargs):
+        real(self, text[: len(text) // 2], *args, **kwargs)
+        raise OSError("synthetic disk full")
+
+    monkeypatch.setattr(Path, "write_text", half_then_fail)
+    with pytest.raises(OSError):
+        build_report(vault, tmp_path / "out", policy=Policy(), source_id=src.id)
+    monkeypatch.undo()
+    assert first.read_text(encoding="utf-8") == before

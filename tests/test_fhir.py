@@ -492,3 +492,98 @@ def test_a_diagnosis_carried_in_the_value_counts(vault, tmp_path):
     import_fhir(vault, _source(vault, tmp_path / "v.json", symptom))
     assert vault.execute("SELECT category FROM observation").fetchone()[0] == "mental_health"
     assert search.search(vault, "75325-1", policy=Policy(level="standard"))["results"] == []
+
+
+def _bundle_urls(*pairs):
+    return {"resourceType": "Bundle", "entry": [{"fullUrl": url, "resource": r} for url, r in pairs]}
+
+
+def test_a_retraction_is_scoped_by_full_url(vault, tmp_path):
+    a, b = "https://a.example/fhir/Observation/1", "https://b.example/fhir/Observation/1"
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls((a, _glucose("1", 111)), (b, _glucose("1", 222)))))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 111, status="entered-in-error")))))
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [222]
+
+
+def test_a_value_another_resource_still_asserts_is_kept(vault, tmp_path):
+    a, b = "https://a.example/fhir/Observation/1", "https://b.example/fhir/Observation/9"
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls((a, _glucose("1", 111)), (b, _glucose("9", 111)))))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 111, status="entered-in-error")))))
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [111]
+
+
+def test_a_condition_retraction_without_a_code_removes_it(vault, tmp_path):
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _condition("E11.9", "http://hl7.org/fhir/sid/icd-10-cm")))
+    retraction = {"resourceType": "Condition", "id": "c1", "verificationStatus": {"coding": [{"code": "entered-in-error"}]}}
+    import_fhir(vault, _source(vault, tmp_path / "2.json", retraction))
+    assert vault.execute("SELECT count(*) FROM condition").fetchone()[0] == 0
+
+
+def test_a_retraction_matches_any_coding_and_the_same_instant(vault, tmp_path):
+    original = _condition("E11.9", "http://hl7.org/fhir/sid/icd-10-cm")
+    original["code"]["coding"].append({"system": "http://snomed.info/sct", "code": "44054006"})
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle(original, _glucose("g1", 150))))
+    refuted = json.loads(json.dumps(original))
+    refuted["code"]["coding"].reverse()
+    refuted["verificationStatus"] = {"coding": [{"code": "refuted"}]}
+    error = _glucose("g1", 150, status="entered-in-error", when="2024-03-01T03:00:00-05:00")  # the same instant
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle(refuted, error)))
+    assert vault.execute("SELECT count(*) FROM condition").fetchone()[0] == 0
+    assert observation_series(vault, "glucose")["points"] == []
+
+
+def test_another_providers_retraction_with_another_onset_spares_the_original(vault, tmp_path):
+    first = {**_condition("E11.9", "http://hl7.org/fhir/sid/icd-10-cm", rid="1"), "onsetDateTime": "2020-01-01"}
+    other = {**_condition("E11.9", "http://hl7.org/fhir/sid/icd-10-cm", rid="1", verification="refuted"),
+             "onsetDateTime": "2025-06-01"}
+    import_fhir(vault, _source(vault, tmp_path / "a.json", first))
+    import_fhir(vault, _source(vault, tmp_path / "b.json", other))
+    assert vault.execute("SELECT onset FROM condition").fetchall()[0][0] == "2020-01-01"
+
+
+def _warfarin(status="active"):
+    return {"resourceType": "MedicationStatement", "id": "m1", "status": status,
+            "medicationCodeableConcept": {"text": "Warfarin 5 mg tablet"}, "effectivePeriod": {"start": "2024-02-01"}}
+
+
+def test_a_medication_entered_in_error_is_removed(vault, tmp_path):
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _warfarin()))
+    assert vault.execute("SELECT count(*) FROM medication_event").fetchone()[0] == 1
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _warfarin("entered-in-error")))
+    assert vault.execute("SELECT count(*) FROM medication_event").fetchone()[0] == 0
+    assert search.search(vault, "warfarin", policy=Policy())["results"] == []
+
+
+def test_a_later_record_that_says_stopped_updates_the_stored_start(vault, tmp_path):
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _warfarin()))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _warfarin("stopped")))  # stopped, with no stop date
+    rows = vault.execute("SELECT event, note FROM medication_event").fetchall()
+    assert [r["event"] for r in rows] == ["start"]
+    note = json.loads(rows[0]["note"])
+    assert note["current"] is False and note["status"] == "stopped"
+
+
+def test_a_medication_keeps_its_sensitive_category(vault, tmp_path):
+    statement = {**_warfarin(), "medicationCodeableConcept": {"text": "Levonorgestrel 1.5 mg tablet"}}
+    import_fhir(vault, _source(vault, tmp_path / "1.json", statement))
+    assert vault.execute("SELECT category FROM medication_event").fetchone()[0] == "reproductive"
+
+
+@pytest.mark.parametrize("resource,expected", [
+    (_condition("G30.9"), "alzheimers"),
+    (_condition("Z15.01"), "cancer_risk"),
+    (_condition("Z14.1"), "carrier"),
+    (_condition("F03.90", "http://hl7.org/fhir/sid/icd-10-cm"), "alzheimers"),
+    (_condition("Z80.3", "http://hl7.org/fhir/sid/icd-10-cm"), "cancer_risk"),
+    (_condition("331.0", "http://hl7.org/fhir/sid/icd-9-cm"), "alzheimers"),
+    (_condition("V84.01", "http://hl7.org/fhir/sid/icd-9-cm"), "cancer_risk"),
+    (_condition("V83.81", "http://hl7.org/fhir/sid/icd-9-cm"), "carrier"),
+    (_condition("26929004", "http://snomed.info/sct"), "alzheimers"),
+    (_condition("29620"), "mental_health"),                         # ICD-9 written without its dot
+    (_condition("V220"), "reproductive"),
+    (_condition("E11.9", "http://hl7.org/fhir/sid/icd-10-cm"), "records"),
+    (_condition("250.00", "http://hl7.org/fhir/sid/icd-9-cm"), "records"),
+])
+def test_right_not_to_know_codes_without_text(vault, tmp_path, resource, expected):
+    import_fhir(vault, _source(vault, tmp_path / "c.json", resource))
+    assert vault.execute("SELECT category FROM condition").fetchone()[0] == expected

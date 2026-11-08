@@ -188,7 +188,7 @@ def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedR
     context_index, total = -1, 0
     total_nodes = record_ordinal = info_ordinal = 0
 
-    def accept_item(value, ordinal, label):
+    def accept_item(value, ordinal, label, max_depth):
         nonlocal total_nodes
         nodes, depth = _node_stats(value)
         total_nodes += nodes
@@ -197,9 +197,8 @@ def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedR
         if nodes > MAX_NODES_PER_RECORD:
             warnings.add(f"{label} {ordinal}: node limit exceeded")
             return False
-        # Fields are roots of the text walk, one level below the item. Text the classifier
-        # cannot reach must not be published, so a too-deep item is dropped, never kept.
-        if depth > MAX_TEXT_DEPTH + 1:
+        # Text the classifier cannot reach must not be published, so a too-deep item is dropped, never kept.
+        if depth > max_depth:
             warnings.add(f"{label} {ordinal}: text depth limit exceeded")
             return False
         return True
@@ -235,7 +234,8 @@ def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedR
                         raise ValueError("record chunk must be a list of objects")
                     ordinal = record_ordinal
                     record_ordinal += 1
-                    if accept_item(record, ordinal, "record"):
+                    # A record's fields are roots of the text walk, one level below the record.
+                    if accept_item(record, ordinal, "record", MAX_TEXT_DEPTH + 1):
                         _record_warnings(record, ordinal, warnings)
                         value.append(record)
                 decoded.records.extend(value)
@@ -244,7 +244,8 @@ def decode_report(path, *, max_inflate=1 << 20, max_total=128 << 20) -> DecodedR
                 for marker, genotypes in _chunk_items(raw, mapping=True, limit=MAX_KEYS_PER_CHUNK):
                     ordinal = info_ordinal
                     info_ordinal += 1
-                    if not accept_item(genotypes, ordinal, "genotype-info record"):
+                    # Genotype info is walked from the value itself, so it gets no extra level.
+                    if not accept_item(genotypes, ordinal, "genotype-info record", MAX_TEXT_DEPTH):
                         continue
                     marker = _marker({"rsnum": marker}) or marker
                     key = f"{set_name}:{marker}"
@@ -353,7 +354,7 @@ def _category(record, text=None):
     text = _body(record) if text is None else text
     pgx = any(g.strip().upper() in _PGX_GENES for g in _genes(record))
     default = Category.PGX if record.get("med") or _DRUG.search(text) or pgx else Category.GENERAL
-    return categorize(genes=_genes(record), text=text, default=default)
+    return categorize(genes=_genes(record), text=text, markers=[_marker(record)], default=default)
 
 
 def _summary(records, info):
@@ -384,7 +385,7 @@ def _snapshot_rows(decoded):
         marker = key.split(":", 1)[1]
         related = by_marker.get(marker, [])
         # Its own text counts too: unknown content in a map must fail closed, not open.
-        category = categorize(genes=[g for r, _, _ in related for g in _genes(r)],
+        category = categorize(genes=[g for r, _, _ in related for g in _genes(r)], markers=[marker],
                               text=" ".join([text for _, text, _ in related] + [_string(info["genotypes"]) or ""]),
                               default=Category.PGX if any(cat == Category.PGX for _, _, cat in related) else Category.GENERAL)
         yield (ordinal, "genotype_info", marker, None, None, None, None, None, "[]", category.value, _json(info), None, "")

@@ -78,7 +78,17 @@ def _value(value) -> str:
 
 def _medications(vault) -> list[dict]:
     return [dict(r) for r in vault.execute(
-        "SELECT drug, brand, event, dose, occurred_on, source, note FROM medication_event ORDER BY occurred_on, id")]
+        "SELECT drug, brand, event, dose, occurred_on, source, note, category FROM medication_event "
+        "ORDER BY occurred_on, id")]
+
+
+def _is_day(value) -> bool:
+    """A full date: records may give only a month or a year, and no day is ever invented."""
+    try:
+        date.fromisoformat(str(value or "")[:10])
+    except ValueError:
+        return False
+    return len(str(value)) >= 10
 
 
 def _not_current(m) -> bool:
@@ -113,12 +123,13 @@ def _try(fn, *args, **kwargs):
         return None, str(exc)
 
 
-def _meds_section(meds, policy) -> tuple[str, int]:
+def _meds_section(meds, hidden) -> tuple[str, int]:
+    """*meds* are the medications the policy shows; *hidden* counts the rest."""
     if not meds:
+        if hidden:
+            return "", hidden
         return ("<h2>Medications</h2><p class='note'>No medications recorded. Ask your agent to record one "
                 "(it will show you the details to confirm).</p>"), 0
-    if not allowed(policy, Category.MEDICATION):
-        return "", len(meds)
     from .ops import display_drug
 
     brand, dose = any(m["brand"] for m in meds), any(m["dose"] for m in meds)  # no empty columns
@@ -132,7 +143,7 @@ def _meds_section(meds, policy) -> tuple[str, int]:
 
     heads = ["Drug"] + (["Brand"] if brand else []) + ["Event"] + (["Dose"] if dose else []) + ["Date", "Source"]
     return ("<h2>Medications</h2><div class='panel'><table><tr>" + "".join(f"<th>{h}</th>" for h in heads) +
-            "</tr>" + "".join(row(m) for m in meds) + "</table></div>"), 0
+            "</tr>" + "".join(row(m) for m in meds) + "</table></div>"), hidden
 
 
 def _compare_text(cmp: dict, unit: str, drug: str) -> str:
@@ -162,7 +173,7 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
     if not allowed(policy, Category.WELLNESS):
         return "", 1
     blocks, start = [], today - timedelta(days=365)
-    starts = [m for m in meds if m["event"] == "start"] if allowed(policy, Category.MEDICATION) else []
+    starts = [m for m in meds if m["event"] == "start" and _is_day(m["occurred_on"])]
     markers = _markers(starts)
     for metric, label in TREND_METRICS:
         series, _err = _try(_lane(trends_mod.trend), samples, metric, start=start, end=today, bucket="week")
@@ -245,7 +256,7 @@ def _genes_section(vault, meds, policy) -> tuple[str, int]:
         return "", 0
     if not allowed(policy, Category.PGX):
         return "", 1
-    drugs = _current(meds) if allowed(policy, Category.MEDICATION) else []
+    drugs = _current(meds)
     if not drugs:
         return "", 0
     loaded, err = _try(_pack_calls, vault)
@@ -301,16 +312,22 @@ def _lane(fn):
 
 
 def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
+    from .ops import medication_visible
+
     today = today or date.today()
-    meds = _medications(vault)
+    recorded = _medications(vault)
+    # Each medication passes the policy on its own category (a contraceptive is reproductive), once, here: every
+    # section below sees only the medications the policy shows.
+    meds = [m for m in recorded if medication_visible(policy, m["category"])]
+    hidden_meds = len(recorded) - len(meds)
     sections, withheld = [], 0
-    for build in (lambda: _meds_section(meds, policy), lambda: _trend_section(samples, meds, policy, today),
+    for build in (lambda: _meds_section(meds, hidden_meds), lambda: _trend_section(samples, meds, policy, today),
                   lambda: _labs_section(vault, policy), lambda: _genes_section(vault, meds, policy)):
         body, hidden = build()
         withheld += hidden
         if body:
             sections.append(body)
-    if not meds and len(sections) <= 1:  # only the "no medications" placeholder, or nothing at all
+    if not recorded and len(sections) <= 1:  # only the "no medications" placeholder, or nothing at all
         sections = ["<p>Nothing to show yet. Import an Apple Health export, your records or your DNA raw "
                     "data first, or ask your agent to record a medication.</p>"]
     hidden_note = (f"<p class='panel warn'>{withheld} item{'s' if withheld != 1 else ''} hidden by your privacy "

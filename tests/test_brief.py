@@ -65,3 +65,26 @@ def test_a_medication_the_records_say_was_stopped_is_not_current(call, tmp_path)
     page = _brief(call)
     assert "no longer taken; stop date unknown" in page
     assert "Genes and your medications" not in page  # nothing current to check
+
+
+def test_a_month_only_start_never_breaks_the_brief(vault, samples, tmp_path):
+    from datetime import date
+
+    from caduceus.brief import write_brief
+    from caduceus.core import sources
+    from caduceus.core.policy import Policy
+    from caduceus.health.apple import import_apple_health
+    from caduceus.health.fhir import import_fhir
+    from synth.apple import make_export
+
+    export = tmp_path / "export.zip"
+    make_export(export, days=90)
+    assert import_apple_health(samples, vault, sources.store_source(vault, export, "apple_health")[0]).status == "succeeded"
+    statement = {"resourceType": "MedicationStatement", "id": "m1", "status": "active",
+                 "medicationCodeableConcept": {"text": "Ozempic 0.5 mg pen"}, "effectivePeriod": {"start": "2024-04"}}
+    path = tmp_path / "m.json"
+    path.write_text(json.dumps(statement))
+    assert import_fhir(vault, sources.store_source(vault, path, "fhir")[0]).status == "succeeded"
+    # The latest start has only a month: it is listed as written, and never used as a chart pivot.
+    page = write_brief(vault, samples, tmp_path / "out", policy=Policy(), today=date(2024, 4, 30)).read_text()
+    assert "Weight, weekly average" in page and "<td>2024-04</td>" in page

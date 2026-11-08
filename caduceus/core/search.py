@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from .policy import Category, Policy, allowed
+from .policy import Category, Policy, visible
 
 _TOKEN = re.compile(r"[\w][\w.'*-]*", re.UNICODE)
 KINDS = ("annotation", "assertion", "research", "observation", "condition", "medication", "journal", "finding", "pgx")
@@ -55,6 +55,8 @@ def _query(conn, match: str, kinds, limit: int):
 
 def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8) -> dict:
     """Ranked hits allowed by *policy*: all terms first, any term when that finds nothing."""
+    if isinstance(kinds, str):
+        kinds = [kinds]
     kinds = [k for k in (kinds or []) if k in KINDS]
     limit = max(1, min(int(limit or 8), 25))
     match = sanitize(query)
@@ -67,7 +69,7 @@ def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=Non
         mode = "any_term"
     results, withheld = [], 0
     for row in rows:
-        if not allowed(policy, row["category"]):
+        if not visible(policy, row["category"], kind=row["kind"]):
             withheld += 1
             continue
         if len(results) < limit:
@@ -86,7 +88,7 @@ def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy) -> dict | None:
     ).fetchone()
     if row is None:
         return None
-    if not allowed(policy, row["category"]):
+    if not visible(policy, row["category"], kind=row["kind"]):
         return {"ref": ref, "withheld": True, "reason": "hidden by your privacy settings"}
     return {"ref": ref, "kind": row["kind"], "title": row["title"], "body": row["body"],
             "category": row["category"], "date": row["ts"]}

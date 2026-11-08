@@ -123,17 +123,43 @@ _TEXT_CATEGORY = (
     (re.compile(r"\bcarriers?\b|carrier status", re.I), Category.CARRIER),
     (re.compile(r"(breast|ovarian|colorectal|prostate|pancrea\w*) cancer|lynch syndrome|hereditary cancer", re.I),
      Category.CANCER_RISK),
-    (re.compile(r"schizophreni|bipolar|depressi|autis|adhd|anxiety|psychiatr|psychos[ie]s|\bptsd\b|post-?traumatic"
-                r"|\bocd\b|obsessive[- ]compulsive|anorexia nervosa|bulimi|eating disorder|binge[- ]eating"
-                r"|alcohol (?:use disorder|dependence)|substance use|opioid use disorder|addiction|suicid|self-harm"
+    # "ST depression" (an ECG finding) and other non-psychiatric uses of the word are not mental health.
+    (re.compile(r"schizo(?:phreni|affective|id\b|typal)|bipolar|dysthymi|autis|adhd|attention[- ]deficit|anxiety"
+                r"|(?<!\bst )(?<!\bst-)(?<!\bpr )(?<!segment )(?<!respiratory )(?<!marrow )(?<!\bcns )depress(?:i|ed mood)"
+                r"|psychiatr|psychos[ie]s|psychotic|\bptsd\b|post-?traumatic|\bocd\b|obsessive[- ]compulsive"
+                r"|anorexia nervosa|bulimi|eating disorder|binge[- ]eating|substance use|addiction|suicid|self-harm"
+                r"|(?:alcohol|opioid|cannabis|cocaine|stimulant|substance|drug) (?:use disorder|dependence|abuse)"
                 r"|panic disorder|\bphq-?9\b|\bgad-?7\b", re.I), Category.MENTAL_HEALTH),
     (re.compile(r"infertil|miscarriage|pregnan|endometriosis|\bpcos\b|polycystic ovar|erectile dysfunction"
                 r"|contracepti|\bivf\b|in vitro fertili|ectopic|abortion|menstrua", re.I), Category.REPRODUCTIVE),
 )
 
 
-def categorize(*, genes: Iterable[str] = (), text: str = "", default: Category = Category.GENERAL) -> Category:
+# Markers whose category is fixed, whatever text a record carries: APOE (e2/e3/e4), and the BRCA founder variants
+# (SNPedia: rs80357906 = BRCA1 5382insC, 23andMe i4000378; rs80359550 = BRCA2 6174delT, i4000379; DisGeNET ties
+# rs80357914 to BRCA1 185delAG). Listing a wrong one only hides that marker, so the list fails closed.
+MARKER_CATEGORY = {
+    **dict.fromkeys(("rs429358", "rs7412"), Category.ALZHEIMERS),
+    **dict.fromkeys(("rs80357906", "i4000378", "rs80359550", "i4000379", "rs80357914"), Category.CANCER_RISK),
+}
+# The base category of each kind of record: hiding "medication" hides every medication, whatever else it is.
+_KIND_BASE = {"observation": Category.RECORDS, "condition": Category.RECORDS, "medication": Category.MEDICATION,
+              "research": Category.RESEARCH, "pgx": Category.PGX}
+
+
+def visible(policy: Policy, category: object, *, kind: str | None = None) -> bool:
+    """True when an item may be shown: its own category and the base category of its kind are both allowed."""
+    base = _KIND_BASE.get(kind or "")
+    return allowed(policy, category) and (base is None or allowed(policy, base))
+
+
+def categorize(*, genes: Iterable[str] = (), text: str = "", markers: Iterable[str] = (),
+               default: Category = Category.GENERAL) -> Category:
     """Pick a category for an annotation. A sensitive match always wins over the default."""
+    for marker in markers or ():
+        cat = MARKER_CATEGORY.get(str(marker or "").strip().lower())
+        if cat is not None:
+            return cat
     for gene in genes or ():
         cat = _GENE_CATEGORY.get(str(gene).strip().upper())
         if cat is not None:
@@ -146,3 +172,34 @@ def categorize(*, genes: Iterable[str] = (), text: str = "", default: Category =
             if pattern.search(text):
                 return cat
     return default
+
+
+# Drugs prescribed mainly for a sensitive condition. Used only for the user's own medications: a gene–drug record
+# about citalopram is drug-response information, but a citalopram prescription says something about its owner.
+_MEDICATION_DRUGS = (
+    (re.compile(r"\b(?:citalopram|escitalopram|fluoxetine|fluvoxamine|paroxetine|sertraline|vilazodone|vortioxetine"
+                r"|venlafaxine|desvenlafaxine|duloxetine|levomilnacipran|amitriptyline|clomipramine|desipramine|doxepin"
+                r"|imipramine|nortriptyline|protriptyline|trimipramine|bupropion|mirtazapine|trazodone|nefazodone"
+                r"|phenelzine|tranylcypromine|esketamine|aripiprazole|brexpiprazole|cariprazine|clozapine|haloperidol"
+                r"|lurasidone|olanzapine|paliperidone|quetiapine|risperidone|ziprasidone|asenapine|iloperidone"
+                r"|lumateperone|lithium|atomoxetine|viloxazine|methylphenidate|dexmethylphenidate|lisdexamfetamine"
+                r"|amphetamine|dextroamphetamine|buprenorphine|disulfiram|acamprosate|zoloft|lexapro|prozac|paxil"
+                r"|celexa|effexor|cymbalta|wellbutrin|abilify|seroquel|zyprexa|risperdal|latuda|vraylar|rexulti"
+                r"|adderall|vyvanse|ritalin|concerta|strattera|suboxone|trintellix)\b", re.I), Category.MENTAL_HEALTH),
+    (re.compile(r"\b(?:levonorgestrel|norethindrone|norgestimate|norgestrel|desogestrel|drospirenone|etonogestrel"
+                r"|norelgestromin|segesterone|medroxyprogesterone|ulipristal|mifepristone|misoprostol|clomiphene"
+                r"|sildenafil|tadalafil|vardenafil|avanafil|plan b|nexplanon|mirena|kyleena|skyla|liletta"
+                r"|depo-provera|nuvaring|annovera|xulane|yaz|yasmin|viagra|cialis|levitra|clomid)\b", re.I),
+     Category.REPRODUCTIVE),
+)
+
+
+def medication_category(text: str) -> Category:
+    """The category of one of the user's medications, from its name and any text the record gives."""
+    category = categorize(text=text, default=Category.MEDICATION)
+    if category in SENSITIVE:
+        return category
+    for pattern, cat in _MEDICATION_DRUGS:
+        if pattern.search(text or ""):
+            return cat
+    return Category.MEDICATION

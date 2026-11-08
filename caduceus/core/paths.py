@@ -37,7 +37,7 @@ def reports_dir() -> Path:
 
 _SECRET_DIRS = {".ssh", ".aws", ".gnupg", ".kube", ".docker", "gcloud", "1Password", "Keychains"}
 _SECRET_NAME = re.compile(r"^\.env(\..*)?$|\.env$|^\.netrc$|^auth\.json$|^credentials|\.(pem|key|p12|pfx|kdbx)$"
-                          r"|^id_(rsa|dsa|ecdsa|ed25519)", re.I)
+                          r"|^id_(rsa|dsa|ecdsa|ed25519)|^\.git-credentials$|^\.pgpass$|^\.npmrc$|^\.pypirc$", re.I)
 
 
 def _own_block_error(path: Path) -> str | None:

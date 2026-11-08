@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS medication_event (
     source TEXT NOT NULL DEFAULT 'user',
     source_id INTEGER REFERENCES source_artifact(id),
     note TEXT,
+    category TEXT NOT NULL DEFAULT 'medication',  -- sensitive when the record or the drug says so (policy.py)
     created_at TEXT NOT NULL,
     UNIQUE (drug, event, occurred_on, source)
 );

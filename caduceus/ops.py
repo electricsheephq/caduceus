@@ -17,7 +17,8 @@ from .core import jobs, search as search_index, sources
 from .core.contracts import SourceKind
 from .core.db import open_samples, open_vault, write_txn
 from .core.paths import check_user_path, data_dir, reports_dir
-from .core.policy import DEFAULTS, SENSITIVE, Category, Policy, allowed, categorize
+from .core.policy import (DEFAULTS, MARKER_CATEGORY, SENSITIVE, Category, Policy, allowed, categorize,
+                          medication_category, visible)
 from .tools import LIMITS, ToolError
 
 IMPORT_WAIT_S = 45.0       # Hermes cuts a tool call off at 420 s; imports keep going in the background
@@ -26,7 +27,7 @@ _RSID = re.compile(r"^rs\d+$", re.I)
 _GENE = re.compile(r"^[A-Z0-9-]{2,15}$")
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
 _LOINC = re.compile(r"^\d{1,7}-\d$")
-_SENSITIVE_MARKERS = {"rs429358": Category.ALZHEIMERS, "rs7412": Category.ALZHEIMERS}
+_SENSITIVE_MARKERS = MARKER_CATEGORY  # APOE and the BRCA founder variants keep fixed categories
 CHIP_LIMITS = ("Consumer DNA chips test common variants; rare variants can be missed or miscalled. A clinical test "
                "confirms anything important.")
 
@@ -89,6 +90,49 @@ def _withheld(count: int) -> dict:
     return {"withheld": count, "withheld_note": "hidden by your privacy settings"} if count else {}
 
 
+def _int(args: dict, key: str, default: int, low: int, high: int) -> int:
+    """A whole-number argument within its schema bounds, or a clear error (never an internal one)."""
+    value = args.get(key)
+    if value in (None, ""):
+        return default
+    try:
+        number = int(value)
+        if isinstance(value, float) and value != number:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        raise ToolError(f"{key} must be a whole number") from None
+    if not low <= number <= high:
+        raise ToolError(f"{key} must be between {low} and {high}")
+    return number
+
+def _float(args: dict, key: str) -> float | None:
+    value = args.get(key)
+    if value in (None, ""):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ToolError(f"{key} must be a number") from None
+    if number != number or number in (float("inf"), float("-inf")):
+        raise ToolError(f"{key} must be a finite number")
+    return number
+
+def _strings(args: dict, key: str) -> list[str]:
+    """A list-of-strings argument; one string is taken as a one-item list."""
+    value = args.get(key)
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value]
+    if not isinstance(value, (list, tuple)) or not all(isinstance(v, str) for v in value):
+        raise ToolError(f"{key} must be a list of strings")
+    return list(value)
+
+def medication_visible(policy, category) -> bool:
+    """A medication shows only when medications show and its own category does (a contraceptive is reproductive)."""
+    return visible(policy, category or Category.MEDICATION, kind="medication")
+
+
 def _file_url(path) -> dict:
     path = path.resolve()
     return {"path": str(path), "file_url": path.as_uri()}
@@ -117,6 +161,8 @@ def dispatch(ctx, tool: str, args: dict) -> dict:
 
 def search_tool(ctx, args: dict) -> dict:
     policy = policy_for(ctx)
+    limit = _int(args, "limit", 8, 1, 25)
+    kinds = _strings(args, "kinds")
     with _Store() as store:
         if args.get("ref"):
             record = search_index.fetch(store.vault, str(args["ref"]), policy=policy)
@@ -126,8 +172,7 @@ def search_tool(ctx, args: dict) -> dict:
         query = str(args.get("query") or "").strip()
         if not query:
             raise ToolError("give a query, or a ref to fetch")
-        found = search_index.search(store.vault, query, policy=policy, kinds=args.get("kinds"),
-                                    limit=args.get("limit") or 8)
+        found = search_index.search(store.vault, query, policy=policy, kinds=kinds, limit=limit)
     out = {"query": query, "results": found["results"], "match": found.get("match")}
     out.update(_withheld(found["withheld"]))
     if not found["results"]:
@@ -272,14 +317,14 @@ def genome_tool(ctx, args: dict) -> dict:
     policy = policy_for(ctx)
     with _Store() as store:
         if op == "lookup":
-            return _lookup(store, policy, args.get("rsids") or [])
+            return _lookup(store, policy, _strings(args, "rsids"))
         if op == "gene":
             gene = str(args.get("gene") or "").strip().upper()
             if not _GENE.match(gene):
                 raise ToolError("give a gene symbol such as GLP1R")
             if not allowed(policy, categorize(genes=[gene])):
                 return {"gene": gene, "results": [], **_withheld(1)}
-            rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), int(args.get("limit") or 40))
+            rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), _int(args, "limit", 40, 1, 100))
             markers = sorted({r["marker"] for r in rows if r["marker"]})
             if not markers:
                 return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report."}
@@ -301,15 +346,19 @@ def genome_tool(ctx, args: dict) -> dict:
             return _genome_summary(store, policy)
         if op == "filter":
             return _filter(store, policy, args)
-        path = _need("genome.report", "build_report")(store.vault, reports_dir(), policy=policy)
+        try:
+            path = _need("genome.report", "build_report")(store.vault, reports_dir(), policy=policy)
+        except ValueError as exc:  # no report imported yet, and similar input problems
+            raise ToolError(str(exc)) from exc
         return {**_file_url(path), "note": "Your variant report was rebuilt on this machine. Open it in a browser."}
 
 
 def _filter(store, policy, args) -> dict:
     where, params = ["1=1"], []
-    if args.get("min_magnitude") is not None:
+    minimum = _float(args, "min_magnitude")
+    if minimum is not None:
         where.append("magnitude >= ?")
-        params.append(float(args["min_magnitude"]))
+        params.append(minimum)
     repute = args.get("repute")
     if repute in ("good", "bad"):
         where.append("lower(repute) = ?")
@@ -319,7 +368,7 @@ def _filter(store, policy, args) -> dict:
     if args.get("topic"):
         where.append("(record_json LIKE ? OR summary LIKE ?)")
         params += [f"%{args['topic']}%"] * 2
-    rows = _snapshot_rows(store.vault, " AND ".join(where), params, min(int(args.get("limit") or 30), 100))
+    rows = _snapshot_rows(store.vault, " AND ".join(where), params, _int(args, "limit", 30, 1, 100))
     shown = [_snapshot_dict(r) for r in rows if allowed(policy, r["category"])]
     return {"results": shown, "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(rows) - len(shown))}
 
@@ -377,15 +426,21 @@ def same_drug(asked: str, recorded: str) -> bool:
     return asked_l == recorded_l or (len(asked_l) >= 4 and (asked_l in words or (canonical or "") in words))
 
 
-def _drug_start(vault, drug: str) -> date:
-    """The latest recorded start of *drug*: the current course when a drug was stopped and restarted."""
-    starts = [r["occurred_on"] for r in vault.execute(
-        "SELECT drug, brand, occurred_on FROM medication_event WHERE event='start' ORDER BY occurred_on")
+def _drug_start(vault, drug: str, policy) -> tuple[date | None, int]:
+    """The latest recorded start of *drug* (the current course when it was stopped and restarted), and how many
+    matching starts the policy hid. A start the records give only to the month or year is no pivot."""
+    rows = [r for r in vault.execute(
+        "SELECT drug, brand, occurred_on, category FROM medication_event WHERE event='start' ORDER BY occurred_on")
         if same_drug(drug, r["drug"]) or same_drug(drug, r["brand"] or "")]
-    starts = [d for d in starts if d and _ISO_DAY.match(d)]
-    if not starts:
-        raise ToolError(f"no start date recorded for {drug}: record it with caduceus_capture op=medication")
-    return date.fromisoformat(starts[-1][:10])
+    shown = [r for r in rows if medication_visible(policy, r["category"])]
+    starts = [r["occurred_on"] for r in shown if r["occurred_on"] and _ISO_DAY.match(r["occurred_on"])]
+    if starts:
+        return date.fromisoformat(starts[-1][:10]), 0
+    if len(shown) < len(rows):
+        return None, len(rows) - len(shown)
+    if shown:
+        raise ToolError(f"the recorded start of {drug} has no day (only {shown[-1]['occurred_on']}): give a pivot date")
+    raise ToolError(f"no start date recorded for {drug}: record it with caduceus_capture op=medication")
 
 
 def trend_tool(ctx, args: dict) -> dict:
@@ -413,36 +468,43 @@ def trend_tool(ctx, args: dict) -> dict:
             return _lane(_need("health.trends", "trend"), store.samples, metric,
                          start=_date(args.get("start"), "start"), end=_date(args.get("end"), "end"),
                          bucket=args.get("bucket") or "week")
+        before_days, after_days = _int(args, "before_days", 28, 1, 730), _int(args, "after_days", 28, 1, 730)
         pivot = _date(args.get("pivot"), "pivot")
         if pivot is None:
             if not args.get("drug"):
                 raise ToolError("give a pivot date or a drug whose start date is recorded")
-            pivot = _drug_start(store.vault, str(args["drug"]))
+            pivot, hidden = _drug_start(store.vault, str(args["drug"]), policy)
+            if pivot is None:  # the drug's start is hidden: nothing about it, not even its date
+                return {"metric": metric, **_withheld(hidden)}
         result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
-                       before_days=int(args.get("before_days") or 28), after_days=int(args.get("after_days") or 28))
+                       before_days=before_days, after_days=after_days)
         return {**result, "pivot": pivot.isoformat()}
 
 
 def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:
     """A lab result over time, with points the policy hides removed and counted (shared with the brief)."""
     series = _need("health.fhir", "observation_series")
-    result = _lane(series, vault, lab, start=start, end=end)
-    if not result.get("points") and not _LOINC.match(lab):
+
+    def allow(category):
+        return visible(policy, category or Category.RECORDS, kind="observation")
+
+    result = _lane(series, vault, lab, start=start, end=end, allow=allow)
+    if not result.get("points") and not result.get("withheld") and not _LOINC.match(lab):
         # A word from the lab's own name ("A1c", "creatinine") finds its code; the most common match wins.
         like = "%" + lab.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         row = vault.execute("SELECT code FROM observation WHERE code IS NOT NULL AND name LIKE ? ESCAPE '\\' "
                             "GROUP BY code ORDER BY count(*) DESC LIMIT 1", (like,)).fetchone()
         if row:
-            result = {**_lane(series, vault, row["code"], start=start, end=end), "name": lab}
+            result = {**_lane(series, vault, row["code"], start=start, end=end, allow=allow), "name": lab}
+    withheld = int(result.pop("withheld", 0) or 0)
     points = list(result.get("points") or [])
-    shown = [p for p in points if allowed(policy, p.get("category", Category.RECORDS))]
-    if points and not shown:  # hidden results are counted, never described (no dates, units or coverage)
-        return {"name": lab, "points": [], **_withheld(len(points))}
-    units = sorted({p["unit"] for p in shown if p.get("unit")})
-    out = {**result, "points": shown, "unit": units[0] if len(units) == 1 else units}
-    if not points:
+    if withheld and not points and not result.get("unplotted_points"):
+        return {"name": lab, "points": [], **_withheld(withheld)}  # nothing visible: no dates, units or coverage
+    units = sorted({p["unit"] for p in points if p.get("unit")})
+    out = {**result, "points": points, "unit": units[0] if len(units) == 1 else units}
+    if not points and not withheld:
         out["note"] = "No results for this lab. Import records (FHIR JSON or an Apple Health export with Health Records)."
-    return {**out, **_withheld(len(points) - len(shown))}
+    return {**out, **_withheld(withheld)}
 
 
 # ---------------------------------------------------------------- caduceus_capture: import
@@ -500,7 +562,7 @@ def _import(args: dict) -> dict:
 _EVENT_WORDS = {"start": "Started", "dose_change": "Changed the dose of", "stop": "Stopped"}
 
 
-def _medication(args: dict) -> dict:
+def _medication(ctx, args: dict) -> dict:
     drug_in = str(args.get("drug") or "").strip()
     if not drug_in:
         raise ToolError("give the drug name")
@@ -515,29 +577,53 @@ def _medication(args: dict) -> dict:
     except ToolError:
         generic = drug_in.lower()
     brand = args.get("brand") or (drug_in if generic != drug_in.lower() else None)
-    preview = {"drug": generic, "brand": brand, "event": event, "dose": args.get("dose"), "date": when.isoformat()}
+    dose = str(args["dose"]).strip() if args.get("dose") not in (None, "") else None
+    preview = {"drug": generic, "brand": brand, "event": event, "dose": dose, "date": when.isoformat()}
     if args.get("confirm") is not True:
         return {"needs_confirmation": True, "preview": preview,
                 "instruction": "Show these details to the user. Call again with confirm=true only after they agree."}
+    category = medication_category(" ".join(str(x) for x in (generic, brand, drug_in) if x))
     now = sources.now_iso()
     with _Store() as store, write_txn(store.vault):
-        cur = store.vault.execute(
-            "INSERT OR IGNORE INTO medication_event(drug, brand, event, dose, occurred_on, source, note, created_at) "
-            "VALUES (?,?,?,?,?,'user',?,?)",
-            (generic, brand, event, args.get("dose"), when.isoformat(), args.get("text"), now))
-        inserted = cur.rowcount == 1
-        row = store.vault.execute(
-            "SELECT id FROM medication_event WHERE drug=? AND event=? AND occurred_on=? AND source='user'",
-            (generic, event, when.isoformat())).fetchone()
+        vault = store.vault
+        row = vault.execute("SELECT id, brand, dose, category FROM medication_event WHERE drug=? AND event=? "
+                            "AND occurred_on=? AND source='user'", (generic, event, when.isoformat())).fetchone()
+        outcome, previous_dose = "recorded", None
+        if row is None:
+            cur = vault.execute(
+                "INSERT INTO medication_event(drug, brand, event, dose, occurred_on, source, note, category, created_at) "
+                "VALUES (?,?,?,?,?,'user',?,?,?)",
+                (generic, brand, event, dose, when.isoformat(), args.get("text"), category.value, now))
+            ref = cur.lastrowid
+        else:
+            ref, outcome = row["id"], "already_recorded"
+            changed = {k: v for k, v in (("dose", dose), ("brand", brand)) if v and v != row[k]}
+            if changed:  # the user confirmed new details for the same event: the record follows them
+                previous_dose, outcome = row["dose"], "updated"
+                vault.execute("UPDATE medication_event SET " + ", ".join(f"{k}=?" for k in changed) + " WHERE id=?",
+                              (*changed.values(), ref))
+            if row["category"] in {c.value for c in SENSITIVE} and category not in SENSITIVE:
+                category = Category(row["category"])
+            elif category.value != row["category"]:
+                vault.execute("UPDATE medication_event SET category=? WHERE id=?", (category.value, ref))
+        stored = vault.execute("SELECT brand, dose FROM medication_event WHERE id=?", (ref,)).fetchone()
         words = _EVENT_WORDS[event]
         search_index.index_doc(
-            store.vault, kind="medication", ref=f"user:{row['id']}",
-            title=f"{words} {generic}" + (f" ({brand})" if brand else ""),
-            body=f"{words} {generic} on {when.isoformat()}. Dose: {args.get('dose') or 'not given'}.",
-            category=Category.MEDICATION, ts=when.isoformat())
-        store.vault.execute("INSERT INTO audit_event(ts, actor, action, detail_json) VALUES (?,?,?,?)",
-                            (now, "agent", "medication_recorded", json.dumps(preview)))
-    return {"recorded": inserted, "already_recorded": not inserted, **preview}
+            vault, kind="medication", ref=f"user:{ref}",
+            title=f"{words} {generic}" + (f" ({stored['brand']})" if stored["brand"] else ""),
+            body=f"{words} {generic} on {when.isoformat()}. Dose: {stored['dose'] or 'not given'}.",
+            category=category, ts=when.isoformat())
+        if outcome != "already_recorded":
+            vault.execute("INSERT INTO audit_event(ts, actor, action, detail_json) VALUES (?,?,?,?)",
+                          (now, "agent", f"medication_{outcome}", json.dumps(preview)))
+    out = {"recorded": outcome == "recorded", "already_recorded": outcome == "already_recorded",
+           "updated": outcome == "updated", **preview, "brand": stored["brand"], "dose": stored["dose"]}
+    if previous_dose is not None:
+        out["previous_dose"] = previous_dose
+    if not medication_visible(policy_for(ctx), category):
+        out["note"] = (f"Saved. Your privacy settings hide {category.value} items, so this medication will not "
+                       "appear in searches or the brief until the user unlocks it with /caduceus.")
+    return out
 
 
 def _journal(args: dict) -> dict:
@@ -581,30 +667,39 @@ def _watch_run(ctx, args: dict) -> dict:
     http_cls = _need("research.http", "UrllibHttp")
     get_calls = _need("genome.calls", "get_calls")
     load_pack = _need("knowledge.pack", "load_pack")
-    topics = [str(t) for t in list(_cfg(ctx, "research_topics", []) or []) + list(args.get("topics") or [])]
-    holder: dict = {}
+    topics = [str(t) for t in list(_cfg(ctx, "research_topics", []) or []) + _strings(args, "topics")]
+
+    def allow(category):  # hidden medications never become search terms sent to the research services
+        return medication_visible(policy, category)
+
+    # The waiting tool call delivers the result; only a run that outlives it is kept for the next watch_run.
+    # Both sides decide under the lock, so a result is delivered exactly once.
+    holder: dict = {"waiting": True}
 
     def job():
         vault = open_vault()
         try:
-            watch = default_watch(vault, topics=topics)
+            watch = default_watch(vault, topics=topics, allow=allow)
             try:
                 calls = get_calls(vault, _pack_rsids(load_pack()))
             except Exception:  # no DNA imported yet: the watch still runs, without local matching
                 calls = None
-            result = run_watch(vault, watch, http=http_cls(), now=datetime.now(timezone.utc), budget=30, calls=calls)
+            result = run_watch(vault, watch, http=http_cls(), now=datetime.now(timezone.utc), budget=30, calls=calls,
+                               allow=allow)
         finally:
             vault.close()
         with _WATCH_LOCK:
             holder["result"] = result
-            _WATCH_PENDING.append(holder)
+            if not holder["waiting"]:
+                _WATCH_PENDING.append(holder)
         return result
 
     outcome = jobs.submit("research-watch", job, wait_s=WATCH_WAIT_S)
-    if outcome["state"] == "done":
-        with _WATCH_LOCK:
-            _WATCH_PENDING[:] = [h for h in _WATCH_PENDING if h is not holder]
-        return _filter_watch(outcome["result"], policy)
+    with _WATCH_LOCK:
+        holder["waiting"] = False
+        finished = "result" in holder
+    if finished:
+        return _filter_watch(holder["result"], policy)
     if outcome["state"] == "error":
         raise ToolError(f"research watch failed: {outcome['error']}")
     return {"status": "running",
@@ -644,7 +739,7 @@ def capture_tool(ctx, args: dict) -> dict:
     if op == "import":
         return _import(args)
     if op == "medication":
-        return _medication(args)
+        return _medication(ctx, args)
     if op == "journal":
         return _journal(args)
     if op == "watch_run":
@@ -658,8 +753,8 @@ def capture_tool(ctx, args: dict) -> dict:
         return {**_file_url(path), "note": "Your health brief was written on this machine. Open it in a browser."}
     with _Store() as store:
         if op == "status":
-            if args.get("run_id") is not None:
-                info = sources.run_info(store.vault, int(args["run_id"]))
+            if args.get("run_id") not in (None, ""):
+                info = sources.run_info(store.vault, _int(args, "run_id", 0, 1, 2**62))
                 if info is None:
                     raise ToolError("no import run with that id")
                 return info
@@ -706,6 +801,8 @@ def command(ctx, raw: str) -> str:
     parts = raw.strip().split()
     sub = parts[0].lower() if parts else "status"
     if sub == "privacy":
+        if len(parts) > 2:
+            return "Usage: /caduceus privacy [open|standard]"
         if len(parts) > 1:
             level = parts[1].lower()
             if level not in ("open", "standard"):
@@ -716,7 +813,7 @@ def command(ctx, raw: str) -> str:
         return (f"Privacy level: {info['privacy_level']}. Hidden: {', '.join(info['hidden_categories']) or 'none'}. "
                 f"Sensitive categories shown: {', '.join(info['sensitive_categories_shown']) or 'none'}.")
     if sub in ("hide", "show", "unlock", "lock"):
-        if len(parts) < 2:
+        if len(parts) != 2:
             return f"Usage: /caduceus {sub} <category>"
         return _change_category(ctx, sub, parts[1])
     if sub == "imports":
@@ -727,6 +824,8 @@ def command(ctx, raw: str) -> str:
         return "\n".join(f"#{r['import_run_id']} {r['file']} ({r['kind']}): {r['status']}" for r in runs)
     if sub == "help":
         return _HELP
+    if sub != "status":
+        return f"Unknown command {parts[0]!r}.\n{_HELP}"
     info = _settings(ctx)
     c = info["counts"]
     return (f"Caduceus: {c['files']} files, {c['dna_callsets'] or 0} DNA callsets, {c['variant_report_records'] or 0} "

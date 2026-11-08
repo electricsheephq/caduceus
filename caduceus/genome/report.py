@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from collections import Counter
 from datetime import datetime, timezone
@@ -136,7 +137,9 @@ def build_report(conn, out_dir, *, policy, source_id=None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     date = datetime.now(timezone.utc).date().isoformat()
     path = out_dir / f"variant-report-{source.sha256[:8]}-{date}.html"
-    path.write_text(html, encoding="utf-8")
+    part = path.with_name(path.name + ".part")  # a failed write never replaces a complete report
+    part.write_text(html, encoding="utf-8")
+    os.replace(part, path)
     return path
 
 

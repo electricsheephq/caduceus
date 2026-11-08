@@ -250,3 +250,11 @@ def test_axis_numbers_are_readable_and_noise_is_not_magnified():
              if t.text and t.text.endswith(" h")]
     assert max(ticks) - min(ticks) >= 0.75 - 0.01      # at least a tenth of the values' size
     assert "1 Jan 2024" in svg and "8 Jan 2024" in svg and svg.count("<circle") == 2
+
+
+@pytest.mark.parametrize("values", [[1e308], [1e308, 5.0], [-1e308, 1e308]])
+def test_huge_values_never_make_nan_coordinates(values):
+    from caduceus.health.trends import trend_svg
+
+    points = [{"date": f"2026-01-0{i + 1}", "value": v} for i, v in enumerate(values)]
+    assert "nan" not in trend_svg(points, unit="kg", title="Synthetic").lower()

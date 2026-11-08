@@ -32,24 +32,28 @@ def _timestamp(now):
     return now.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _medications(conn):
+def _medications(conn, allow=None):
+    """Current medications the knowledge pack knows. *allow* (a category predicate) leaves out the ones the user's
+    privacy settings hide, so they never become search terms sent to the research services."""
     rows = conn.execute(
-        "SELECT drug, event FROM medication_event ORDER BY occurred_on DESC, id DESC"
+        "SELECT drug, event, category FROM medication_event ORDER BY occurred_on DESC, id DESC"
     )
     latest = {}
     for row in rows:
+        if allow is not None and not allow(row["category"]):
+            continue
         drug = normalize_drug(row["drug"])
         if drug and drug not in latest:
             latest[drug] = row["event"]
     return sorted(drug for drug, event in latest.items() if event != "stop")
 
 
-def default_watch(conn, *, topics=()) -> dict:
+def default_watch(conn, *, topics=(), allow=None) -> dict:
     pack = load_pack()
     if isinstance(topics, str):
         topics = [topics]
     terms = {**pack.watch, "topics": sorted(set(pack.watch.get("topics", [])) | {str(t).strip() for t in topics if str(t).strip()}),
-             "drugs": _medications(conn)}
+             "drugs": _medications(conn, allow)}
     now = _timestamp(datetime.now(timezone.utc))
     with write_txn(conn):
         conn.execute(
@@ -144,7 +148,7 @@ def _store(conn, item, watch_id, stamp):
     return item_id, bool(existing)
 
 
-def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
+def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> dict:
     """Run a bounded primary digest; secondary enrichment errors never freeze its watermark."""
     watch = dict(watch)
     stored = conn.execute("SELECT * FROM watch WHERE id=?", (watch["id"],)).fetchone()
@@ -153,8 +157,8 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None) -> dict:
     watch = dict(stored)
     terms = _terms(watch["terms_json"])
     # Medication changes affect terms, never genotype selection.
-    terms["drugs"] = (_medications(conn) if watch["name"] == "default" else
-                      sorted(set(terms.get("drugs", [])) | set(_medications(conn))))
+    terms["drugs"] = (_medications(conn, allow) if watch["name"] == "default" else
+                      sorted(set(terms.get("drugs", [])) | set(_medications(conn, allow))))
     sources = _terms(watch["sources_json"])
     stamp = _timestamp(now)
     until = stamp[:10]

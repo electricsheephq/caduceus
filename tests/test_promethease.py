@@ -512,3 +512,30 @@ def test_private_parity(vault, private_dir):
     print({name: {"records": checked[name]["records"], "by_kind": checked[name]["by_kind"]}
            for name in ("decoded", "stored", "rebuilt")})
     assert checked["ok"]
+
+
+@pytest.mark.parametrize("levels,kept", [(30, True), (31, True), (32, False)])
+def test_genotype_info_the_classifier_cannot_reach_is_dropped(vault, tmp_path, levels, kept):
+    from caduceus.genome.report import build_report
+
+    maps = ({"rs99999779": {"(A;G)": _nest("Invented Alzheimer disease remark", levels)}}, {})
+    src = _source(vault, tmp_path, rows=[{"rsnum": "rs99999778", "genosummary": "Invented harmless note"}], maps=maps)
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded"
+    assert ("genotype-info record 0: text depth limit exceeded" in result.warnings) is not kept
+    page = build_report(vault, tmp_path / "out", policy=Policy(level="standard")).read_text(encoding="utf-8")
+    assert "Alzheimer" not in page and "Invented harmless note" in page
+
+
+def test_fixed_marker_categories_hold_without_a_record_or_gene(vault, tmp_path):
+    from caduceus.genome.report import build_report
+
+    maps = ({"rs429358": {"(C;C)": {"mag": 4, "note": "Invented note"}}, "rs80357906": {"(D;I)": {"mag": 6}}}, {})
+    rows = [{"rsnum": "rs7412", "geno": "(C;C)", "magnitude": 2}, {"rsnum": "rs99999778", "genosummary": "Invented harmless note"}]
+    src = _source(vault, tmp_path, rows=rows, maps=maps)
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    stored = {r[0]: r[1] for r in vault.execute("SELECT marker, category FROM annotation_snapshot")}
+    assert (stored["rs429358"], stored["rs80357906"], stored["rs7412"]) == ("alzheimers", "cancer_risk", "alzheimers")
+    page = build_report(vault, tmp_path / "out", policy=Policy(level="standard")).read_text(encoding="utf-8")
+    assert "rs429358" not in page and "rs80357906" not in page and "rs7412" not in page
+    assert "Invented harmless note" in page

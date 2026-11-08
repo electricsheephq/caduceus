@@ -2,6 +2,7 @@
 import threading
 import time
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -196,3 +197,69 @@ def test_without_hermes_obvious_credential_files_are_still_refused(tmp_path, nam
             check_user_path(str(target))
     else:
         assert check_user_path(str(target)) == target.resolve()
+
+
+@pytest.mark.parametrize("text", ["Depressed mood", "Schizoaffective disorder", "Dysthymia", "Opioid dependence",
+                                  "Alcohol abuse", "Cannabis use disorder", "Attention deficit disorder"])
+def test_categorize_more_mental_health_wordings(text):
+    assert categorize(text=text, default=Category.RECORDS) is Category.MENTAL_HEALTH
+
+
+@pytest.mark.parametrize("text", ["ST depression on ECG", "ST-segment depression", "Respiratory depression after surgery"])
+def test_categorize_leaves_non_psychiatric_depression_alone(text):
+    assert categorize(text=text, default=Category.RECORDS) is Category.RECORDS
+
+
+def test_medication_categories_come_from_the_drug_only_for_medications():
+    from caduceus.core.policy import medication_category
+
+    assert medication_category("sertraline 50 mg tablet") is Category.MENTAL_HEALTH
+    assert medication_category("Zoloft") is Category.MENTAL_HEALTH
+    assert medication_category("levonorgestrel 1.5 mg") is Category.REPRODUCTIVE
+    assert medication_category("Ozempic 0.5 mg pen") is Category.MEDICATION
+    # A gene-drug record about the same drug is drug-response information, not a prescription.
+    assert categorize(text="CYP2C19 poor metabolizers and citalopram", default=Category.PGX) is Category.PGX
+
+
+def test_fixed_marker_categories():
+    assert categorize(markers=["RS429358"]) is Category.ALZHEIMERS
+    assert categorize(markers=["rs80359550"]) is Category.CANCER_RISK
+    assert categorize(markers=["rs99999999"]) is Category.GENERAL
+
+
+def test_fallback_guard_refuses_more_credential_files():
+    from caduceus.core.paths import _own_block_error
+
+    for name in (".git-credentials", ".pgpass", ".npmrc", ".pypirc"):
+        assert _own_block_error(Path("/synthetic/home") / name), name
+    assert _own_block_error(Path("/synthetic/home/genome.zip")) is None
+
+
+def test_concurrent_copies_of_a_new_file_all_succeed(data_dir, tmp_path):
+    import os
+
+    from caduceus.core.db import open_vault
+
+    path = tmp_path / "synthetic.txt"
+    path.write_bytes(os.urandom(16 << 20))
+    barrier, errors, results = threading.Barrier(6), [], []
+
+    def copy():
+        conn = open_vault(data_dir / "vault.db")
+        try:
+            barrier.wait()
+            results.append(sources.store_source(conn, path, "dtc")[0].sha256)
+        except Exception as exc:  # noqa: BLE001 - the test reports any failure
+            errors.append(type(exc).__name__)
+        finally:
+            conn.close()
+
+    threads = [threading.Thread(target=copy) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == [] and len(set(results)) == 1
+    stored = list((data_dir / "sources").rglob("*"))
+    assert not [p for p in stored if p.name.endswith(".part")]
+    assert [p.read_bytes() == path.read_bytes() for p in stored if p.is_file()] == [True]
