@@ -187,7 +187,7 @@ _MEDICATION_DRUGS = (
                 r"|amphetamine|dextroamphetamine|buprenorphine|disulfiram|acamprosate|zoloft|lexapro|prozac|paxil"
                 r"|celexa|effexor|cymbalta|wellbutrin|abilify|seroquel|zyprexa|risperdal|latuda|vraylar|rexulti"
                 r"|adderall|vyvanse|ritalin|concerta|strattera|suboxone|trintellix|alprazolam|lorazepam|clonazepam"
-                r"|diazepam|buspirone|xanax|ativan|klonopin|valium)\b", re.I), Category.MENTAL_HEALTH),
+                r"|diazepam|buspirone|xanax|ativan|klonopin|valium|methadone|naltrexone|vivitrol)\b", re.I), Category.MENTAL_HEALTH),
     (re.compile(r"\b(?:levonorgestrel|norethindrone|norgestimate|norgestrel|desogestrel|drospirenone|etonogestrel"
                 r"|norelgestromin|segesterone|medroxyprogesterone|ulipristal|mifepristone|misoprostol|clomiphene"
                 r"|sildenafil|tadalafil|vardenafil|avanafil|plan b|nexplanon|mirena|kyleena|skyla|liletta"
