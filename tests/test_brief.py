@@ -1,0 +1,53 @@
+"""The health brief: an empty vault, escaping, hidden categories, and value formatting."""
+import json
+from pathlib import Path
+
+import pytest
+
+from conftest import FakeCtx, load_plugin_package
+
+
+@pytest.fixture
+def call():
+    ctx = FakeCtx()
+    load_plugin_package().register(ctx)
+
+    def run(tool, **args):
+        return json.loads(ctx.tools[tool]["handler"](args))
+
+    run.ctx = ctx
+    return run
+
+
+def _brief(call) -> str:
+    result = call("caduceus_capture", op="brief")
+    path = Path(result["path"])
+    assert path.name.startswith("health-brief-") and not path.with_name(path.name + ".part").exists()
+    return path.read_text(encoding="utf-8")
+
+
+def test_an_empty_vault_says_what_to_do(call):
+    page = _brief(call)
+    assert "Nothing to show yet" in page and "talk to your prescriber" in page and "stored only here" in page
+
+
+def test_recorded_text_is_escaped(call):
+    call("caduceus_capture", op="medication", drug='Tonic <img src=x onerror="alert(1)"> & co', date="2026-05-01",
+         confirm=True)
+    page = _brief(call)
+    assert "<img src=x" not in page and "&lt;img src=x" in page
+
+
+def test_hidden_categories_are_counted_never_described(call):
+    call("caduceus_capture", op="medication", drug="semaglutide", dose="0.5 mg weekly", date="2026-05-04",
+         confirm=True)
+    assert "Semaglutide" in _brief(call)
+    call.ctx.config["hidden_categories"] = ["medication"]
+    page = _brief(call)
+    assert "semaglutide" not in page.lower() and "1 item hidden by your privacy settings" in page
+
+
+def test_medication_table_has_no_empty_columns(call):
+    call("caduceus_capture", op="medication", drug="metformin", date="2023-09-20", confirm=True)
+    page = _brief(call)
+    assert "<th>Brand</th>" not in page and "<th>Dose</th>" not in page and "<td>You</td>" in page

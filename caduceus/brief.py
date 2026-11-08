@@ -7,6 +7,7 @@ hidden sections say only how many items were left out. No external resources; al
 from __future__ import annotations
 
 import html
+import math
 import os
 from datetime import date, timedelta
 from pathlib import Path
@@ -57,6 +58,23 @@ def _num(value, digits=1) -> str:
         return _e(value)
 
 
+_SOURCE = {"fhir": "Health records", "apple_health": "Apple Health", "user": "You"}
+_UNIT = {"count/min": "bpm", "count": "steps"}
+
+
+def _value(value) -> str:
+    """A result as it was recorded: 8.1, 168 or 0.95, never 8.10 or 168.00."""
+    if value is None:
+        return "–"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return _e(value)
+    if not math.isfinite(number):
+        return "–"
+    return f"{number:,.2f}".rstrip("0").rstrip(".")
+
+
 def _medications(vault) -> list[dict]:
     return [dict(r) for r in vault.execute(
         "SELECT drug, brand, event, dose, occurred_on, source FROM medication_event ORDER BY occurred_on, id")]
@@ -93,12 +111,17 @@ def _meds_section(meds, policy) -> tuple[str, int]:
         return "", len(meds)
     from .ops import display_drug
 
-    rows = "".join(
-        f"<tr><td>{_e(display_drug(m['drug']))}</td><td>{_e(m['brand'] or '')}</td><td>{_e(_EVENT.get(m['event'], m['event']))}"
-        f"</td><td>{_e(m['dose'] or '')}</td><td>{_e(m['occurred_on'][:10])}</td><td>{_e(m['source'])}</td></tr>"
-        for m in meds)
-    return ("<h2>Medications</h2><div class='panel'><table><tr><th>Drug</th><th>Brand</th><th>Event</th><th>Dose</th>"
-            f"<th>Date</th><th>Source</th></tr>{rows}</table></div>"), 0
+    brand, dose = any(m["brand"] for m in meds), any(m["dose"] for m in meds)  # no empty columns
+
+    def row(m):
+        cells = [display_drug(m["drug"])] + ([m["brand"] or ""] if brand else []) + [_EVENT.get(m["event"], m["event"])]
+        cells += ([m["dose"] or ""] if dose else []) + [(m["occurred_on"] or "")[:10] or "date unknown",
+                                                        _SOURCE.get(m["source"], m["source"])]
+        return "<tr>" + "".join(f"<td>{_e(c)}</td>" for c in cells) + "</tr>"
+
+    heads = ["Drug"] + (["Brand"] if brand else []) + ["Event"] + (["Dose"] if dose else []) + ["Date", "Source"]
+    return ("<h2>Medications</h2><div class='panel'><table><tr>" + "".join(f"<th>{h}</th>" for h in heads) +
+            "</tr>" + "".join(row(m) for m in meds) + "</table></div>"), 0
 
 
 def _compare_text(cmp: dict, unit: str, drug: str) -> str:
@@ -135,7 +158,8 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
         if not series or not series.get("points"):
             continue
         unit = series.get("unit") or ""
-        svg = trends_mod.trend_svg(series["points"], unit=unit, title=f"{label}, weekly average", markers=markers)
+        svg = trends_mod.trend_svg(series["points"], unit=_UNIT.get(unit, unit), title=f"{label}, weekly average",
+                                   markers=markers)
         cov = series.get("coverage") or {}
         text = ""
         if starts and metric == "weight":
@@ -179,9 +203,9 @@ def _labs_section(vault, policy) -> tuple[str, int]:
         unit = series.get("unit") if isinstance(series.get("unit"), str) else ""
         chart = ""
         if trends_mod is not None and unit and len(points) > 1:
-            chart = f"<div class='chart'>{trends_mod.trend_svg(points, unit=unit, title=label)}</div>"
+            chart = f"<div class='chart'>{trends_mod.trend_svg(points, unit=unit, title=f'{label} over time')}</div>"
         rows = "".join(
-            f"<tr><td>{_e(str(p.get('date'))[:10])}</td><td>{_num(p.get('value'), 2)} {_e(p.get('unit') or '')}</td>"
+            f"<tr><td>{_e(str(p.get('date'))[:10])}</td><td>{_value(p.get('value'))} {_e(p.get('unit') or '')}</td>"
             f"<td>{_e(_range(p.get('reference_range')))}</td><td>{_e(p.get('interpretation') or '')}</td></tr>"
             for p in points[-12:])
         blocks.append(f"<div class='panel'><h3>{_e(label)}</h3>{chart}<table><tr><th>Date</th><th>Result</th>"
@@ -194,7 +218,11 @@ def _labs_section(vault, policy) -> tuple[str, int]:
 def _range(ref) -> str:
     if not isinstance(ref, dict) or (ref.get("low") is None and ref.get("high") is None):
         return ""
-    return f"{_num(ref.get('low'), 1)} to {_num(ref.get('high'), 1)}"
+    if ref.get("low") is None:
+        return f"below {_value(ref['high'])}"
+    if ref.get("high") is None:
+        return f"above {_value(ref['low'])}"
+    return f"{_value(ref['low'])} to {_value(ref['high'])}"
 
 
 def _genes_section(vault, meds, policy) -> tuple[str, int]:
@@ -269,9 +297,9 @@ def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
         withheld += hidden
         if body:
             sections.append(body)
-    if not sections:
-        sections.append("<p>Nothing to show yet. Import an Apple Health export, your records or your DNA raw "
-                        "data first.</p>")
+    if not meds and len(sections) <= 1:  # only the "no medications" placeholder, or nothing at all
+        sections = ["<p>Nothing to show yet. Import an Apple Health export, your records or your DNA raw "
+                    "data first, or ask your agent to record a medication.</p>"]
     hidden_note = (f"<p class='panel warn'>{withheld} item{'s' if withheld != 1 else ''} hidden by your privacy "
                    "settings.</p>" if withheld else "")
     page = (
