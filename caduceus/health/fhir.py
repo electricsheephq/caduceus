@@ -276,19 +276,24 @@ def _medications(vault, resource, source_id, name, counts=None, full_url=None):
             ids = sorted(set(old.get("resource_ids") or []) | ({identity} if identity else set()))
             note = json.dumps({**old, **metadata, "resource_ids": ids})
             kept, conflict = _stricter(category, row["category"])
-            if note == row["note"] and kept.value == row["category"]:
-                continue
-            vault.execute("UPDATE medication_event SET note=?, category=?, source_id=? WHERE id=?",
-                          (note, kept.value, source_id, row["id"]))
-            if counts is not None:
-                counts["medication_updated"] = counts.get("medication_updated", 0) + 1
+            changed = note != row["note"] or kept.value != row["category"]
+            if changed:
+                vault.execute("UPDATE medication_event SET note=?, category=?, source_id=? WHERE id=?",
+                              (note, kept.value, source_id, row["id"]))
+                if counts is not None:
+                    counts["medication_updated"] = counts.get("medication_updated", 0) + 1
+            # Whether or not this row changed, the resource's later events keep its category, and after a conflict
+            # its stored text as well.
             if conflict:  # the stored text stays under its own category; only the status moves
                 stored = _restatus(vault, "medication", row["id"], {"status": status},
                                    {"current": metadata["current"]})
                 held = (kept, stored or {"resourceType": resource.get("resourceType"),
                                          "medicationCodeableConcept": {"text": name}})
                 continue
-            ref, category = row["id"], kept
+            category = kept
+            if not changed:
+                continue
+            ref = row["id"]
         search.index_doc(vault, kind="medication", ref=str(ref), title=name, body=body, category=category, ts=when)
     return inserted
 

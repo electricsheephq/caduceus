@@ -203,3 +203,25 @@ def test_a_kept_category_covers_the_resources_other_events(reproductive_unlocked
     assert len(found) == 2 and {f["category"] for f in found} == {"mental_health"}
     for item in found:
         assert "pregnancy" not in unlocked("caduceus_search", ref=item["ref"])["body"]
+
+
+@pytest.mark.parametrize("later_coding,unlocked", [
+    ("Synthdrug for pregnancy prevention", ["reproductive"]),   # another sensitive category
+    ("Synthdrug for back pain", []),                            # an ordinary one: the category never loosens
+])
+def test_an_unchanged_start_still_covers_a_new_stop(tmp_path, later_coding, unlocked):
+    call = _plugin({"privacy_level": "standard", "unlocked_categories": unlocked})
+    active = _statement("mx", "Synthdrug 7 mg tablet")
+    active["medicationCodeableConcept"]["coding"] = [{"display": "Synthdrug for major depression"}]
+    _import(call, tmp_path, "1.json", active)
+    stopped = json.loads(json.dumps(active))
+    stopped["status"] = "stopped"  # no end date yet: the start row is marked not current
+    _import(call, tmp_path, "2.json", stopped)
+    ended = json.loads(json.dumps(stopped))
+    ended["effectivePeriod"]["end"] = "2024-06-01"
+    ended["medicationCodeableConcept"]["coding"] = [{"display": later_coding}]
+    _import(call, tmp_path, "3.json", ended)
+    found = call("caduceus_search", query="synthdrug")
+    assert found["results"] == [] and found["withheld"] == 2
+    every = _plugin({})("caduceus_search", query="synthdrug")["results"]
+    assert len(every) == 2 and {f["category"] for f in every} == {"mental_health"}
