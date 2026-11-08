@@ -1,0 +1,383 @@
+{
+  "source_url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=EXT_ID%3A21270794+OR+EXT_ID%3A21716271+OR+EXT_ID%3A21900891+OR+EXT_ID%3A22205192+OR+EXT_ID%3A22378157+OR+EXT_ID%3A22617227+OR+EXT_ID%3A23232549+OR+EXT_ID%3A23422873+OR+EXT_ID%3A23486447+OR+EXT_ID%3A23695185+OR+EXT_ID%3A23698643+OR+EXT_ID%3A23988873+OR+EXT_ID%3A24096968+OR+EXT_ID%3A24458010+OR+EXT_ID%3A24561393+OR+EXT_ID%3A24918167+OR+EXT_ID%3A25099164+OR+EXT_ID%3A25801146+OR+EXT_ID%3A25974703+OR+EXT_ID%3A26094938+OR+EXT_ID%3A26417955+OR+EXT_ID%3A27981572+OR+EXT_ID%3A27997040+OR+EXT_ID%3A28002639+OR+EXT_ID%3A28198005+OR+EXT_ID%3A29152729+OR+EXT_ID%3A29385237+OR+EXT_ID%3A29392710+OR+EXT_ID%3A30447069+OR+EXT_ID%3A30499100+OR+EXT_ID%3A30801677+OR+EXT_ID%3A32189324+OR+EXT_ID%3A32770672+OR+EXT_ID%3A32779747+OR+EXT_ID%3A33387367+OR+EXT_ID%3A34032273+OR+EXT_ID%3A35034351+OR+EXT_ID%3A35152405+OR+EXT_ID%3A37032427+OR+EXT_ID%3A38951961+OR+EXT_ID%3A41618934+OR+EXT_ID%3A41979467&format=json&resultType=lite&pageSize=100",
+  "results": [
+    {
+      "pmid": "41979467",
+      "pmcid": "PMC13339002",
+      "doi": "10.1002/cpt.70291",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6 Genotype and Use of 5-HT&lt;sub&gt;3&lt;/sub&gt; Receptor Antagonists: 2026 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2026",
+      "firstPublicationDate": "2026-04-14"
+    },
+    {
+      "pmid": "41618934",
+      "pmcid": "PMC12997511",
+      "doi": "10.1002/cpt.70209",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2026",
+      "firstPublicationDate": "2026-01-31"
+    },
+    {
+      "pmid": "38951961",
+      "pmcid": "PMC11502236",
+      "doi": "10.1002/cpt.3351",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC)\u00a0for CYP2D6, ADRB1, ADRB2, ADRA2C, GRK4, and GRK5 Genotypes and Beta-Blocker Therapy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2024",
+      "firstPublicationDate": "2024-07-01"
+    },
+    {
+      "pmid": "37032427",
+      "pmcid": "PMC10564324",
+      "doi": "10.1002/cpt.2903",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2023",
+      "firstPublicationDate": "2023-05-30"
+    },
+    {
+      "pmid": "35152405",
+      "pmcid": "PMC9035072",
+      "doi": "10.1002/cpt.2557",
+      "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2022",
+      "firstPublicationDate": "2022-03-11"
+    },
+    {
+      "pmid": "35034351",
+      "pmcid": "PMC9287492",
+      "doi": "10.1002/cpt.2526",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for CYP2C19 Genotype and Clopidogrel Therapy: 2022 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2022",
+      "firstPublicationDate": "2022-02-08"
+    },
+    {
+      "pmid": "34032273",
+      "pmcid": "PMC8613315",
+      "doi": "10.1002/cpt.2309",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2022",
+      "firstPublicationDate": "2021-06-20"
+    },
+    {
+      "pmid": "33387367",
+      "pmcid": "PMC8249478",
+      "doi": "10.1002/cpt.2149",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for CYP2D6, OPRM1, and COMT Genotypes and Select Opioid Therapy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2021",
+      "firstPublicationDate": "2021-02-09"
+    },
+    {
+      "pmid": "32770672",
+      "pmcid": "PMC7868475",
+      "doi": "10.1002/cpt.2015",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C19 and Proton Pump Inhibitor Dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2021",
+      "firstPublicationDate": "2020-09-20"
+    },
+    {
+      "pmid": "32779747",
+      "pmcid": "PMC7831382",
+      "doi": "10.1002/cpt.2008",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2021",
+      "firstPublicationDate": "2020-09-06"
+    },
+    {
+      "pmid": "32189324",
+      "pmcid": "PMC8080882",
+      "doi": "10.1002/cpt.1830",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2020",
+      "firstPublicationDate": "2020-04-28"
+    },
+    {
+      "pmid": "30801677",
+      "pmcid": "PMC6612570",
+      "doi": "10.1002/cpt.1409",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for Cytochrome P450 (CYP)2D6 Genotype and Atomoxetine Therapy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2019",
+      "firstPublicationDate": "2019-04-13"
+    },
+    {
+      "pmid": "30499100",
+      "pmcid": "PMC6513720",
+      "doi": "10.1002/cpt.1319",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2019",
+      "firstPublicationDate": "2019-01-24"
+    },
+    {
+      "pmid": "30447069",
+      "pmcid": "PMC6576267",
+      "doi": "10.1002/cpt.1304",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2018 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2019",
+      "firstPublicationDate": "2019-01-20"
+    },
+    {
+      "pmid": "29392710",
+      "pmcid": "PMC5847474",
+      "doi": "10.1002/cpt.1004",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2018",
+      "firstPublicationDate": "2018-02-02"
+    },
+    {
+      "pmid": "29385237",
+      "pmcid": "PMC5931215",
+      "doi": "10.1002/cpt.1007",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6 and Tamoxifen Therapy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2018",
+      "firstPublicationDate": "2018-01-31"
+    },
+    {
+      "pmid": "29152729",
+      "pmcid": "PMC5760397",
+      "doi": "10.1002/cpt.911",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Dihydropyrimidine Dehydrogenase Genotype and Fluoropyrimidine Dosing: 2017 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2018",
+      "firstPublicationDate": "2017-11-20"
+    },
+    {
+      "pmid": "27981572",
+      "pmcid": "PMC5474211",
+      "doi": "10.1002/cpt.583",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guidelines for CYP2C19 and Voriconazole Therapy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2017",
+      "firstPublicationDate": "2017-04-18"
+    },
+    {
+      "pmid": "28002639",
+      "pmcid": "PMC5479760",
+      "doi": "10.1002/cpt.598",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guideline for CYP2D6 genotype and use of ondansetron and tropisetron.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2017",
+      "firstPublicationDate": "2017-04-06"
+    },
+    {
+      "pmid": "28198005",
+      "pmcid": "PMC5546947",
+      "doi": "10.1002/cpt.668",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Pharmacogenetics-Guided Warfarin Dosing: 2017 Update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2017",
+      "firstPublicationDate": "2017-04-04"
+    },
+    {
+      "pmid": "27997040",
+      "pmcid": "PMC5478479",
+      "doi": "10.1002/cpt.597",
+      "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2017",
+      "firstPublicationDate": "2017-02-13"
+    },
+    {
+      "pmid": "26417955",
+      "pmcid": "PMC4785051",
+      "doi": "10.1002/cpt.269",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for UGT1A1 and Atazanavir Prescribing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2016",
+      "firstPublicationDate": "2015-11-09"
+    },
+    {
+      "pmid": "26094938",
+      "pmcid": "PMC4675696",
+      "doi": "10.1002/cpt.161",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for human leukocyte antigen B (HLA-B) genotype and allopurinol dosing: 2015 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2016",
+      "firstPublicationDate": "2015-07-16"
+    },
+    {
+      "pmid": "25974703",
+      "pmcid": "PMC4512908",
+      "doi": "10.1002/cpt.147",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6 and CYP2C19 Genotypes and Dosing of Selective Serotonin Reuptake Inhibitors.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2015",
+      "firstPublicationDate": "2015-06-29"
+    },
+    {
+      "pmid": "25801146",
+      "pmcid": "PMC4481158",
+      "doi": "10.1002/cpt.113",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guidelines for CYP3A5 Genotype and Tacrolimus Dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2015",
+      "firstPublicationDate": "2015-06-03"
+    },
+    {
+      "pmid": "25099164",
+      "pmcid": "PMC4206662",
+      "doi": "10.1038/clpt.2014.159",
+      "title": "Clinical pharmacogenetics implementation consortium guidelines for CYP2C9 and HLA-B genotypes and phenytoin dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2014",
+      "firstPublicationDate": "2014-08-06"
+    },
+    {
+      "pmid": "24918167",
+      "pmcid": "PMC4169720",
+      "doi": "10.1038/clpt.2014.125",
+      "title": "The clinical pharmacogenetics implementation consortium guideline for SLCO1B1 and simvastatin-induced myopathy: 2014 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2014",
+      "firstPublicationDate": "2014-06-11"
+    },
+    {
+      "pmid": "24561393",
+      "pmcid": "PMC3994233",
+      "doi": "10.1038/clpt.2014.38",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guidelines for HLA-B Genotype and Abacavir Dosing: 2014 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2014",
+      "firstPublicationDate": "2014-02-21"
+    },
+    {
+      "pmid": "24458010",
+      "pmcid": "PMC3975212",
+      "doi": "10.1038/clpt.2013.254",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for cytochrome P450 2D6 genotype and codeine therapy: 2014 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2014",
+      "firstPublicationDate": "2014-01-23"
+    },
+    {
+      "pmid": "24096968",
+      "pmcid": "PMC3904555",
+      "doi": "10.1038/clpt.2013.203",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for IFNL3 (IL28B) genotype and PEG interferon-\u03b1-based regimens.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2014",
+      "firstPublicationDate": "2013-10-04"
+    },
+    {
+      "pmid": "23988873",
+      "pmcid": "PMC3831181",
+      "doi": "10.1038/clpt.2013.172",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for dihydropyrimidine dehydrogenase genotype and fluoropyrimidine dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2013",
+      "firstPublicationDate": "2013-08-29"
+    },
+    {
+      "pmid": "23698643",
+      "pmcid": "PMC3748366",
+      "doi": "10.1038/clpt.2013.105",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for CYP2C19 genotype and clopidogrel therapy: 2013 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2013",
+      "firstPublicationDate": "2013-05-22"
+    },
+    {
+      "pmid": "23695185",
+      "pmcid": "PMC3748365",
+      "doi": "10.1038/clpt.2013.103",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for HLA-B genotype and carbamazepine dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2013",
+      "firstPublicationDate": "2013-05-21"
+    },
+    {
+      "pmid": "23422873",
+      "pmcid": "PMC3604643",
+      "doi": "10.1038/clpt.2013.4",
+      "title": "Clinical pharmacogenetics implementation consortium guidelines for thiopurine methyltransferase genotype and thiopurine dosing: 2013 update.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2013",
+      "firstPublicationDate": "2013-01-17"
+    },
+    {
+      "pmid": "23486447",
+      "pmcid": "PMC3689226",
+      "doi": "10.1038/clpt.2013.2",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guideline for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2013",
+      "firstPublicationDate": "2013-01-16"
+    },
+    {
+      "pmid": "23232549",
+      "pmcid": "PMC3564416",
+      "doi": "10.1038/clpt.2012.209",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for human leukocyte antigen-B genotype and allopurinol dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2013",
+      "firstPublicationDate": "2012-10-17"
+    },
+    {
+      "pmid": "22617227",
+      "pmcid": "PMC3384438",
+      "doi": "10.1038/clpt.2012.57",
+      "title": "The clinical pharmacogenomics implementation consortium: CPIC guideline for SLCO1B1 and simvastatin-induced myopathy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2012",
+      "firstPublicationDate": "2012-05-23"
+    },
+    {
+      "pmid": "22378157",
+      "pmcid": "PMC3374459",
+      "doi": "10.1038/clpt.2011.355",
+      "title": "Clinical pharmacogenetics implementation consortium guidelines for HLA-B genotype and abacavir dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2012",
+      "firstPublicationDate": "2012-02-29"
+    },
+    {
+      "pmid": "22205192",
+      "pmcid": "PMC3289963",
+      "doi": "10.1038/clpt.2011.287",
+      "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for codeine therapy in the context of cytochrome P450 2D6 (CYP2D6) genotype.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2012",
+      "firstPublicationDate": "2011-12-28"
+    },
+    {
+      "pmid": "21900891",
+      "pmcid": "PMC3187550",
+      "doi": "10.1038/clpt.2011.185",
+      "title": "Clinical Pharmacogenetics Implementation Consortium Guidelines for CYP2C9 and VKORC1 genotypes and warfarin dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2011",
+      "firstPublicationDate": "2011-09-07"
+    },
+    {
+      "pmid": "21716271",
+      "pmcid": "PMC3234301",
+      "doi": "10.1038/clpt.2011.132",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for cytochrome P450-2C19 (CYP2C19) genotype and clopidogrel therapy.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2011",
+      "firstPublicationDate": "2011-06-29"
+    },
+    {
+      "pmid": "21270794",
+      "pmcid": "PMC3098761",
+      "doi": "10.1038/clpt.2010.320",
+      "title": "Clinical Pharmacogenetics Implementation Consortium guidelines for thiopurine methyltransferase genotype and thiopurine dosing.",
+      "journalTitle": "Clin Pharmacol Ther",
+      "pubYear": "2011",
+      "firstPublicationDate": "2011-01-26"
+    }
+  ]
+}

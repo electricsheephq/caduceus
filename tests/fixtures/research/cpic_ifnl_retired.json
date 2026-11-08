@@ -1,0 +1,30 @@
+[
+  {
+    "pairid": 110126,
+    "drugid": "RxNorm:253453",
+    "drugname": "peginterferon alfa-2b",
+    "genesymbol": "IFNL4",
+    "guidelinename": "IFNL3 and Peginterferon-alpha-based Regimens",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251455",
+    "cpiclevel": "Retired",
+    "clinpgxlevel": "1B",
+    "pgxtesting": null,
+    "pmids": null,
+    "usedforrecommendation": "No",
+    "provisional": false
+  },
+  {
+    "pairid": 110124,
+    "drugid": "RxNorm:120608",
+    "drugname": "peginterferon alfa-2a",
+    "genesymbol": "IFNL4",
+    "guidelinename": "IFNL3 and Peginterferon-alpha-based Regimens",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251455",
+    "cpiclevel": "Retired",
+    "clinpgxlevel": "1B",
+    "pgxtesting": null,
+    "pmids": null,
+    "usedforrecommendation": "No",
+    "provisional": false
+  }
+]

@@ -1,0 +1,1544 @@
+[
+  {
+    "pairid": 1556299,
+    "drugid": "RxNorm:83367",
+    "drugname": "atorvastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110086,
+    "drugid": "RxNorm:194000",
+    "drugname": "capecitabine",
+    "genesymbol": "DPYD",
+    "guidelinename": "DPYD and Fluoropyrimidines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251462",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "23988873",
+      "29152729"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110088,
+    "drugid": "RxNorm:2002",
+    "drugname": "carbamazepine",
+    "genesymbol": "HLA-B",
+    "guidelinename": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251448",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "23695185",
+      "29392710"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110089,
+    "drugid": "RxNorm:140587",
+    "drugname": "celecoxib",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110090,
+    "drugid": "RxNorm:2556",
+    "drugname": "citalopram",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "25974703",
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 1556301,
+    "drugid": "RxNorm:41127",
+    "drugname": "fluvastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 3004620,
+    "drugid": "RxNorm:7337",
+    "drugname": "netilmicin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": null,
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110117,
+    "drugid": "RxNorm:7531",
+    "drugname": "nortriptyline",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 826284,
+    "drugid": "RxNorm:7934",
+    "drugname": "paromomycin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": null,
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 3004621,
+    "drugid": "RxNorm:NA",
+    "drugname": "ribostamycin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": null,
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110143,
+    "drugid": "RxNorm:10485",
+    "drugname": "thioguanine",
+    "genesymbol": "NUDT15",
+    "guidelinename": "TPMT, NUDT15 and Thiopurines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251442",
+    "cpiclevel": "A",
+    "clinpgxlevel": "3",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "21270794",
+      "23422873",
+      "30447069",
+      "41618934"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110147,
+    "drugid": "RxNorm:121243",
+    "drugname": "voriconazole",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2C19 and Voriconazole",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251456",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "27981572"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110168,
+    "drugid": "RxNorm:1455099",
+    "drugname": "vortioxetine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110150,
+    "drugid": "RxNorm:11289",
+    "drugname": "warfarin",
+    "genesymbol": "VKORC1",
+    "guidelinename": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251465",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "21900891",
+      "28198005"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110169,
+    "drugid": "RxNorm:154",
+    "drugname": "acenocoumarol",
+    "genesymbol": "CYP2C9",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": "1B",
+    "pgxtesting": null,
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110180,
+    "drugid": "RxNorm:2597",
+    "drugname": "clomipramine",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110181,
+    "drugid": "RxNorm:2597",
+    "drugname": "clomipramine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110189,
+    "drugid": "RxNorm:42355",
+    "drugname": "fluvoxamine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "25974703",
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110194,
+    "drugid": "RxNorm:5691",
+    "drugname": "imipramine",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110082,
+    "drugid": "RxNorm:343047",
+    "drugname": "atazanavir",
+    "genesymbol": "UGT1A1",
+    "guidelinename": "UGT1A1 and Atazanavir",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251453",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "26417955"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110083,
+    "drugid": "RxNorm:38400",
+    "drugname": "atomoxetine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6 and Atomoxetine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251459",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30801677"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110092,
+    "drugid": "RxNorm:2670",
+    "drugname": "codeine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, OPRM1, COMT, and Opioids",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251454",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "22205192",
+      "24458010",
+      "33387367"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 3004618,
+    "drugid": "RxNorm:3328",
+    "drugname": "dibekacin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": null,
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110098,
+    "drugid": "RxNorm:321988",
+    "drugname": "escitalopram",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "25974703",
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110099,
+    "drugid": "RxNorm:4492",
+    "drugname": "fluorouracil",
+    "genesymbol": "DPYD",
+    "guidelinename": "DPYD and Fluoropyrimidines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251462",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "23988873",
+      "29152729"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110100,
+    "drugid": "RxNorm:4502",
+    "drugname": "flurbiprofen",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 1556302,
+    "drugid": "RxNorm:41127",
+    "drugname": "fluvastatin",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110108,
+    "drugid": "RxNorm:6026",
+    "drugname": "isoflurane",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110159,
+    "drugid": "RxNorm:6099",
+    "drugname": "kanamycin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110065,
+    "drugid": "RxNorm:20890",
+    "drugname": "lornoxicam",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 1556300,
+    "drugid": "RxNorm:6472",
+    "drugname": "lovastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110067,
+    "drugid": "RxNorm:41493",
+    "drugname": "meloxicam",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110114,
+    "drugid": "RxNorm:103",
+    "drugname": "mercaptopurine",
+    "genesymbol": "TPMT",
+    "guidelinename": "TPMT, NUDT15 and Thiopurines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251442",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "21270794",
+      "23422873",
+      "30447069",
+      "41618934"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110116,
+    "drugid": "RxNorm:6857",
+    "drugname": "methoxyflurane",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 3004619,
+    "drugid": "RxNorm:7299",
+    "drugname": "neomycin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110118,
+    "drugid": "RxNorm:7646",
+    "drugname": "omeprazole",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2C19 and Proton Pump Inhibitors",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251441",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "32770672"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110120,
+    "drugid": "RxNorm:32624",
+    "drugname": "oxcarbazepine",
+    "genesymbol": "HLA-B",
+    "guidelinename": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251448",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "29392710"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110121,
+    "drugid": "RxNorm:40790",
+    "drugname": "pantoprazole",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2C19 and Proton Pump Inhibitors",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251441",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "32770672"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110122,
+    "drugid": "RxNorm:32937",
+    "drugname": "paroxetine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "25974703",
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110127,
+    "drugid": "RxNorm:8183",
+    "drugname": "phenytoin",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9, HLA-B and Phenytoin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251461",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "25099164",
+      "32779747"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110128,
+    "drugid": "RxNorm:8183",
+    "drugname": "phenytoin",
+    "genesymbol": "HLA-B",
+    "guidelinename": "CYP2C9, HLA-B and Phenytoin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251461",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "25099164",
+      "32779747"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110071,
+    "drugid": "RxNorm:8356",
+    "drugname": "piroxicam",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 1556298,
+    "drugid": "RxNorm:861634",
+    "drugname": "pitavastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110130,
+    "drugid": "RxNorm:2197878",
+    "drugname": "pitolisant",
+    "genesymbol": "CYP2D6",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": "Actionable PGx",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 826285,
+    "drugid": "RxNorm:2049549",
+    "drugname": "plazomicin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110381,
+    "drugid": "RxNorm:42463",
+    "drugname": "pravastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110391,
+    "drugid": "RxNorm:301542",
+    "drugname": "rosuvastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110216,
+    "drugid": "RxNorm:36437",
+    "drugname": "sertraline",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "25974703",
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110134,
+    "drugid": "RxNorm:36453",
+    "drugname": "sevoflurane",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110135,
+    "drugid": "RxNorm:36567",
+    "drugname": "simvastatin",
+    "genesymbol": "SLCO1B1",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "22617227",
+      "24918167",
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110136,
+    "drugid": "RxNorm:2121085",
+    "drugname": "siponimod",
+    "genesymbol": "CYP2C9",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Required",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110162,
+    "drugid": "RxNorm:10109",
+    "drugname": "streptomycin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110138,
+    "drugid": "RxNorm:10154",
+    "drugname": "succinylcholine",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110139,
+    "drugid": "RxNorm:42316",
+    "drugname": "tacrolimus",
+    "genesymbol": "CYP3A5",
+    "guidelinename": "CYP3A5 and Tacrolimus",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251451",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "25801146"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110141,
+    "drugid": "RxNorm:10324",
+    "drugname": "tamoxifen",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6 and Tamoxifen",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251458",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "29385237"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110072,
+    "drugid": "RxNorm:37790",
+    "drugname": "tenoxicam",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110164,
+    "drugid": "RxNorm:10627",
+    "drugname": "tobramycin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110145,
+    "drugid": "RxNorm:10689",
+    "drugname": "tramadol",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, OPRM1, COMT, and Opioids",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251454",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "33387367"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110186,
+    "drugid": "RxNorm:3638",
+    "drugname": "doxepin",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110276,
+    "drugid": "RxNorm:6918",
+    "drugname": "metoprolol",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, ADRB1, ADRB2, ADRA2C, GRK4, and GRK5 and Beta-Blockers",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166343383",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "38951961"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110079,
+    "drugid": "RxNorm:519",
+    "drugname": "allopurinol",
+    "genesymbol": "HLA-B",
+    "guidelinename": "HLA-B and Allopurinol",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251446",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "23232549",
+      "26094938"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110080,
+    "drugid": "RxNorm:704",
+    "drugname": "amitriptyline",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110085,
+    "drugid": "RxNorm:1256",
+    "drugname": "azathioprine",
+    "genesymbol": "TPMT",
+    "guidelinename": "TPMT, NUDT15 and Thiopurines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251442",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "21270794",
+      "23422873",
+      "30447069",
+      "41618934"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110097,
+    "drugid": "RxNorm:3920",
+    "drugname": "enflurane",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110101,
+    "drugid": "RxNorm:72236",
+    "drugname": "fosphenytoin",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9, HLA-B and Phenytoin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251461",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "25099164",
+      "32779747"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110102,
+    "drugid": "RxNorm:72236",
+    "drugname": "fosphenytoin",
+    "genesymbol": "HLA-B",
+    "guidelinename": "CYP2C9, HLA-B and Phenytoin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251461",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "25099164",
+      "32779747"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110157,
+    "drugid": "ATC:D06AX07",
+    "drugname": "gentamicin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110104,
+    "drugid": "RxNorm:5095",
+    "drugname": "halothane",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110063,
+    "drugid": "RxNorm:5640",
+    "drugname": "ibuprofen",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9 and NSAIDs",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251464",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "32189324"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110106,
+    "drugid": "RxNorm:51499",
+    "drugname": "irinotecan",
+    "genesymbol": "UGT1A1",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110110,
+    "drugid": "RxNorm:17128",
+    "drugname": "lansoprazole",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2C19 and Proton Pump Inhibitors",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251441",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "32770672"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110148,
+    "drugid": "RxNorm:11289",
+    "drugname": "warfarin",
+    "genesymbol": "CYP2C9",
+    "guidelinename": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251465",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "21900891",
+      "28198005"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110172,
+    "drugid": "RxNorm:1543543",
+    "drugname": "belinostat",
+    "genesymbol": "UGT1A1",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": null,
+    "pgxtesting": "Actionable PGx",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110183,
+    "drugid": "RxNorm:3247",
+    "drugname": "desipramine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110184,
+    "drugid": "RxNorm:816346",
+    "drugname": "dexlansoprazole",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2C19 and Proton Pump Inhibitors",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251441",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "32770672"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110187,
+    "drugid": "RxNorm:3638",
+    "drugname": "doxepin",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110195,
+    "drugid": "RxNorm:5691",
+    "drugname": "imipramine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110214,
+    "drugid": "RxNorm:35636",
+    "drugname": "risperidone",
+    "genesymbol": "CYP2D6",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "No Clinical PGx",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110223,
+    "drugid": "RxNorm:10834",
+    "drugname": "trimipramine",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110224,
+    "drugid": "RxNorm:10834",
+    "drugname": "trimipramine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110167,
+    "drugid": "RxNorm:39786",
+    "drugname": "venlafaxine",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110091,
+    "drugid": "RxNorm:32968",
+    "drugname": "clopidogrel",
+    "genesymbol": "CYP2C19",
+    "guidelinename": "CYP2C19 and Clopidogrel",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251443",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "21716271",
+      "23698643",
+      "35034351"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110094,
+    "drugid": "RxNorm:27340",
+    "drugname": "desflurane",
+    "genesymbol": "RYR1",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110171,
+    "drugid": "RxNorm:89013",
+    "drugname": "aripiprazole",
+    "genesymbol": "CYP2D6",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110173,
+    "drugid": "RxNorm:1739745",
+    "drugname": "brivaracetam",
+    "genesymbol": "CYP2C19",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": "3",
+    "pgxtesting": "Actionable PGx",
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 110193,
+    "drugid": "RxNorm:5489",
+    "drugname": "hydrocodone",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, OPRM1, COMT, and Opioids",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251454",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "33387367"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110151,
+    "drugid": "RxNorm:641",
+    "drugname": "amikacin",
+    "genesymbol": "MT-RNR1",
+    "guidelinename": "MT-RNR1 and Aminoglycosides",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251466",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "34032273"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110084,
+    "drugid": "RxNorm:1256",
+    "drugname": "azathioprine",
+    "genesymbol": "NUDT15",
+    "guidelinename": "TPMT, NUDT15 and Thiopurines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251442",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "21270794",
+      "23422873",
+      "30447069",
+      "41618934"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110146,
+    "drugid": "RxNorm:27392",
+    "drugname": "tropisetron",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6 and Ondansetron and Tropisetron",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251457",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "28002639",
+      "41979467"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110078,
+    "drugid": "RxNorm:190521",
+    "drugname": "abacavir",
+    "genesymbol": "HLA-B",
+    "guidelinename": "HLA-B and Abacavir",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251444",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "24561393",
+      "22378157"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110081,
+    "drugid": "RxNorm:704",
+    "drugname": "amitriptyline",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251445",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "23486447",
+      "27997040"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110113,
+    "drugid": "RxNorm:103",
+    "drugname": "mercaptopurine",
+    "genesymbol": "NUDT15",
+    "guidelinename": "TPMT, NUDT15 and Thiopurines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251442",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "21270794",
+      "23422873",
+      "30447069",
+      "41618934"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110119,
+    "drugid": "RxNorm:26225",
+    "drugname": "ondansetron",
+    "genesymbol": "CYP2D6",
+    "guidelinename": "CYP2D6 and Ondansetron and Tropisetron",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251457",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "No Clinical PGx",
+    "pmids": [
+      "28002639",
+      "41979467"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110144,
+    "drugid": "RxNorm:10485",
+    "drugname": "thioguanine",
+    "genesymbol": "TPMT",
+    "guidelinename": "TPMT, NUDT15 and Thiopurines",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251442",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Recommended",
+    "pmids": [
+      "21270794",
+      "23422873",
+      "30447069",
+      "41618934"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  }
+]

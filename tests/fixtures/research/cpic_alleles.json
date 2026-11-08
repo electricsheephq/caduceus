@@ -1,0 +1,247 @@
+[
+  {
+    "genesymbol": "CYP2C9",
+    "name": "*6",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": "0.0",
+    "definitionid": 777678
+  },
+  {
+    "genesymbol": "UGT1A1",
+    "name": "*6",
+    "clinicalfunctionalstatus": "Decreased function",
+    "activityvalue": null,
+    "definitionid": 779490
+  },
+  {
+    "genesymbol": "SLCO1B1",
+    "name": "*6",
+    "clinicalfunctionalstatus": "Uncertain function",
+    "activityvalue": null,
+    "definitionid": 779287
+  },
+  {
+    "genesymbol": "CYP2C9",
+    "name": "*3",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": "0.0",
+    "definitionid": 777672
+  },
+  {
+    "genesymbol": "UGT1A1",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 779488
+  },
+  {
+    "genesymbol": "CYP2C19",
+    "name": "*13",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 777556
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*2",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779394
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*3B",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779398
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*6",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779406
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 779392
+  },
+  {
+    "genesymbol": "NUDT15",
+    "name": "*13",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779088
+  },
+  {
+    "genesymbol": "NUDT15",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 779064
+  },
+  {
+    "genesymbol": "CYP2C9",
+    "name": "*17",
+    "clinicalfunctionalstatus": "Uncertain function",
+    "activityvalue": "n/a",
+    "definitionid": 777700
+  },
+  {
+    "genesymbol": "NUDT15",
+    "name": "*17",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779096
+  },
+  {
+    "genesymbol": "CYP2C19",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 777532
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*13",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779420
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*3C",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779400
+  },
+  {
+    "genesymbol": "MT-RNR1",
+    "name": "m.1555A>G",
+    "clinicalfunctionalstatus": "increased risk of aminoglycoside-induced hearing loss",
+    "activityvalue": null,
+    "definitionid": 3827916
+  },
+  {
+    "genesymbol": "SLCO1B1",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 1002623
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*17",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779428
+  },
+  {
+    "genesymbol": "CYP3A5",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": null,
+    "definitionid": 778218
+  },
+  {
+    "genesymbol": "CYP2C9",
+    "name": "*1",
+    "clinicalfunctionalstatus": "Normal function",
+    "activityvalue": "1.0",
+    "definitionid": 777668
+  },
+  {
+    "genesymbol": "TPMT",
+    "name": "*3A",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779396
+  },
+  {
+    "genesymbol": "CYP2C19",
+    "name": "*6",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 777542
+  },
+  {
+    "genesymbol": "CYP2C19",
+    "name": "*17",
+    "clinicalfunctionalstatus": "Increased function",
+    "activityvalue": null,
+    "definitionid": 777564
+  },
+  {
+    "genesymbol": "CYP2C9",
+    "name": "*13",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": "0.0",
+    "definitionid": 777692
+  },
+  {
+    "genesymbol": "CYP3A5",
+    "name": "*3",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 778222
+  },
+  {
+    "genesymbol": "CYP3A5",
+    "name": "*6",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 778228
+  },
+  {
+    "genesymbol": "NUDT15",
+    "name": "*3",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779068
+  },
+  {
+    "genesymbol": "CYP2C19",
+    "name": "*3",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 777536
+  },
+  {
+    "genesymbol": "CYP2C9",
+    "name": "*2",
+    "clinicalfunctionalstatus": "Decreased function",
+    "activityvalue": "0.5",
+    "definitionid": 777670
+  },
+  {
+    "genesymbol": "SLCO1B1",
+    "name": "*2",
+    "clinicalfunctionalstatus": "Uncertain function",
+    "activityvalue": null,
+    "definitionid": 779279
+  },
+  {
+    "genesymbol": "NUDT15",
+    "name": "*6",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 779074
+  },
+  {
+    "genesymbol": "NUDT15",
+    "name": "*2",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 8490336
+  },
+  {
+    "genesymbol": "CYP2C19",
+    "name": "*2",
+    "clinicalfunctionalstatus": "No function",
+    "activityvalue": null,
+    "definitionid": 777534
+  }
+]

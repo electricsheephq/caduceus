@@ -1,0 +1,347 @@
+{
+  "locations": [
+    {
+      "id": 828093,
+      "version": 107,
+      "name": "1555A>G",
+      "chromosomelocation": "m.1555A>G",
+      "genelocation": null,
+      "proteinlocation": null,
+      "genesymbol": "MT-RNR1",
+      "dbsnpid": "rs267606617",
+      "position": 1555
+    },
+    {
+      "id": 779256,
+      "version": 108,
+      "name": "37041T>C",
+      "chromosomelocation": "g.21178615T>C",
+      "genelocation": "g.52422T>C",
+      "proteinlocation": "p.V174A",
+      "genesymbol": "SLCO1B1",
+      "dbsnpid": "rs4149056",
+      "position": 21178615
+    },
+    {
+      "id": 777516,
+      "version": 108,
+      "name": "17948G>A",
+      "chromosomelocation": "g.94780653G>A",
+      "genelocation": "g.22973G>A",
+      "proteinlocation": "p.W212X",
+      "genesymbol": "CYP2C19",
+      "dbsnpid": "rs4986893",
+      "position": 94780653
+    },
+    {
+      "id": 777518,
+      "version": 108,
+      "name": "19154G>A",
+      "chromosomelocation": "g.94781859G>A",
+      "genelocation": "g.24179G>A",
+      "proteinlocation": "splicing defect",
+      "genesymbol": "CYP2C19",
+      "dbsnpid": "rs4244285",
+      "position": 94781859
+    },
+    {
+      "id": 777622,
+      "version": 108,
+      "name": "3608C>T",
+      "chromosomelocation": "g.94942290C>T",
+      "genelocation": "g.9133C>T",
+      "proteinlocation": "p.R144C",
+      "genesymbol": "CYP2C9",
+      "dbsnpid": "rs1799853",
+      "position": 94942290
+    },
+    {
+      "id": 779060,
+      "version": 108,
+      "name": "7973C>T",
+      "chromosomelocation": "g.48045719C>T",
+      "genelocation": "g.13153C>T",
+      "proteinlocation": "p.R139C",
+      "genesymbol": "NUDT15",
+      "dbsnpid": "rs116855232",
+      "position": 48045719
+    },
+    {
+      "id": 778211,
+      "version": 108,
+      "name": "6981A>G",
+      "chromosomelocation": "g.99672916T>C",
+      "genelocation": "g.12083A>G",
+      "proteinlocation": "splicing defect",
+      "genesymbol": "CYP3A5",
+      "dbsnpid": "rs776746",
+      "position": 99672916
+    },
+    {
+      "id": 778268,
+      "version": 108,
+      "name": "c.1129-5923C>G",
+      "chromosomelocation": "g.97579893G>C",
+      "genelocation": "g.346167C>G",
+      "proteinlocation": "splicing defect",
+      "genesymbol": "DPYD",
+      "dbsnpid": "rs75017182",
+      "position": 97579893
+    },
+    {
+      "id": 778290,
+      "version": 108,
+      "name": "c.1679T>G",
+      "chromosomelocation": "g.97515787A>C",
+      "genelocation": "g.410273T>G",
+      "proteinlocation": "p.I560S",
+      "genesymbol": "DPYD",
+      "dbsnpid": "rs55886062",
+      "position": 97515787
+    },
+    {
+      "id": 778299,
+      "version": 108,
+      "name": "c.1905+1G>A",
+      "chromosomelocation": "g.97450058C>T",
+      "genelocation": "g.476002G>A",
+      "proteinlocation": "splicing defect",
+      "genesymbol": "DPYD",
+      "dbsnpid": "rs3918290",
+      "position": 97450058
+    },
+    {
+      "id": 778316,
+      "version": 108,
+      "name": "c.2846A>T",
+      "chromosomelocation": "g.97082391T>A",
+      "genelocation": "g.843669A>T",
+      "proteinlocation": "p.D949V",
+      "genesymbol": "DPYD",
+      "dbsnpid": "rs67376798",
+      "position": 97082391
+    },
+    {
+      "id": 777496,
+      "version": 108,
+      "name": "-806C>T",
+      "chromosomelocation": "g.94761900C>T",
+      "genelocation": "g.4220C>T",
+      "proteinlocation": "p.expression",
+      "genesymbol": "CYP2C19",
+      "dbsnpid": "rs12248560",
+      "position": 94761900
+    },
+    {
+      "id": 777650,
+      "version": 108,
+      "name": "42614A>C",
+      "chromosomelocation": "g.94981296A>C",
+      "genelocation": "g.48139A>C",
+      "proteinlocation": "p.I359L",
+      "genesymbol": "CYP2C9",
+      "dbsnpid": "rs1057910",
+      "position": 94981296
+    },
+    {
+      "id": 779361,
+      "version": 108,
+      "name": "238G>C",
+      "chromosomelocation": "g.18143724C>G",
+      "genelocation": "g.16420G>C",
+      "proteinlocation": "p.A80P",
+      "genesymbol": "TPMT",
+      "dbsnpid": "rs1800462",
+      "position": 18143724
+    },
+    {
+      "id": 779040,
+      "version": 108,
+      "name": "-1595G>A",
+      "chromosomelocation": "g.39248147C>T",
+      "genelocation": "g.1825G>A",
+      "proteinlocation": "unknown (upstream)",
+      "genesymbol": "IFNL3",
+      "dbsnpid": "rs12979860",
+      "position": 39248147
+    },
+    {
+      "id": 779372,
+      "version": 108,
+      "name": "460G>A",
+      "chromosomelocation": "g.18138997C>T",
+      "genelocation": "g.21147G>A",
+      "proteinlocation": "p.A154T",
+      "genesymbol": "TPMT",
+      "dbsnpid": "rs1800460",
+      "position": 18138997
+    },
+    {
+      "id": 779391,
+      "version": 108,
+      "name": "719A>G;719A>C",
+      "chromosomelocation": "g.18130687T>C; g.18130687T>G",
+      "genelocation": "g.29457A>G; g.29457A>C",
+      "proteinlocation": "p.Y240C; p.Y240S",
+      "genesymbol": "TPMT",
+      "dbsnpid": "rs1142345",
+      "position": 18130687
+    },
+    {
+      "id": 779484,
+      "version": 108,
+      "name": "-364C>T",
+      "chromosomelocation": "g.233759924C>T",
+      "genelocation": "g.175181C>T",
+      "proteinlocation": "5' Flanking",
+      "genesymbol": "UGT1A1",
+      "dbsnpid": "rs887829",
+      "position": 233759924
+    },
+    {
+      "id": 779506,
+      "version": 108,
+      "name": "-1639G>A",
+      "chromosomelocation": "g.31096368C>T",
+      "genelocation": "g.3588G>A",
+      "proteinlocation": "5' region",
+      "genesymbol": "VKORC1",
+      "dbsnpid": "rs9923231",
+      "position": 31096368
+    }
+  ],
+  "alleles": [
+    {
+      "alleledefinitionid": 779488,
+      "locationid": 779484,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779064,
+      "locationid": 779060,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779068,
+      "locationid": 779060,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777534,
+      "locationid": 777518,
+      "variantallele": "A",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777536,
+      "locationid": 777516,
+      "variantallele": "A",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777564,
+      "locationid": 777496,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777668,
+      "locationid": 777622,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777668,
+      "locationid": 777650,
+      "variantallele": "A",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777670,
+      "locationid": 777622,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 777672,
+      "locationid": 777650,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 778218,
+      "locationid": 778211,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 778222,
+      "locationid": 778211,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 1002623,
+      "locationid": 779256,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 3827916,
+      "locationid": 828093,
+      "variantallele": "G",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779392,
+      "locationid": 779361,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779392,
+      "locationid": 779372,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779392,
+      "locationid": 779391,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779394,
+      "locationid": 779361,
+      "variantallele": "G",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779396,
+      "locationid": 779372,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779396,
+      "locationid": 779391,
+      "variantallele": "C",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779398,
+      "locationid": 779372,
+      "variantallele": "T",
+      "version": 1
+    },
+    {
+      "alleledefinitionid": 779400,
+      "locationid": 779391,
+      "variantallele": "C",
+      "version": 1
+    }
+  ]
+}
