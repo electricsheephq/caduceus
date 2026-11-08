@@ -102,15 +102,15 @@ MEDICATIONS = [
     ("Metformin 1000 mg tablet", "1000 mg twice daily", "2023-09-20"),
     ("Atorvastatin 20 mg tablet", "20 mg once daily", "2024-01-15"),
 ]
-# (LOINC, display, unit, [(day, value)])
+# (LOINC, display, unit, (reference low, high), [(day, value)])
 LABS = [
-    ("4548-4", "Hemoglobin A1c/Hemoglobin.total in Blood", "%",
+    ("4548-4", "Hemoglobin A1c/Hemoglobin.total in Blood", "%", (4.0, 5.6),
      [("2025-11-03", 8.1), ("2026-04-27", 8.4), ("2026-08-10", 7.9), ("2026-10-26", 7.8)]),
-    ("1558-6", "Fasting glucose [Mass/volume] in Serum or Plasma", "mg/dL",
+    ("1558-6", "Fasting glucose [Mass/volume] in Serum or Plasma", "mg/dL", (70, 99),
      [("2026-04-27", 168), ("2026-08-10", 151), ("2026-10-26", 147)]),
-    ("13457-7", "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation", "mg/dL",
+    ("13457-7", "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation", "mg/dL", (None, 99),
      [("2025-11-03", 96), ("2026-10-26", 89)]),
-    ("2160-0", "Creatinine [Mass/volume] in Serum or Plasma", "mg/dL", [("2026-04-27", 0.9)]),
+    ("2160-0", "Creatinine [Mass/volume] in Serum or Plasma", "mg/dL", (0.5, 1.1), [("2026-04-27", 0.9)]),
 ]
 
 _CHROMOSOMES = [(str(n), size) for n, size in zip(range(1, 23), (
@@ -265,15 +265,21 @@ def clinical_resources() -> list[dict]:
             "resourceType": "MedicationStatement", "id": _resource_id(text), "status": "active",
             "medicationCodeableConcept": {"text": text}, "effectivePeriod": {"start": start},
             "dosage": [{"text": dosage}]})
-    for code, display, unit, points in LABS:
+    for code, display, unit, (low, high), points in LABS:
+        reference = {key: {"value": bound, "unit": unit} for key, bound in (("low", low), ("high", high))
+                     if bound is not None}
         for day, value in points:
+            flag = "H" if high is not None and value > high else "L" if low is not None and value < low else "N"
             resources.append({
                 "resourceType": "Observation", "id": _resource_id(f"{code}-{day}"), "status": "final",
                 "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/observation-category",
                                           "code": "laboratory"}]}],
                 "code": {"text": display, "coding": [{"system": "http://loinc.org", "code": code, "display": display}]},
                 "effectiveDateTime": f"{day}T08:30:00-05:00",
-                "valueQuantity": {"value": value, "unit": unit, "system": "http://unitsofmeasure.org", "code": unit}})
+                "valueQuantity": {"value": value, "unit": unit, "system": "http://unitsofmeasure.org", "code": unit},
+                "referenceRange": [reference],
+                "interpretation": [{"coding": [{
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation", "code": flag}]}]})
     return resources
 
 

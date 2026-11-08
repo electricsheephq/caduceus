@@ -70,8 +70,10 @@ def _current(meds) -> list[str]:
 
 
 def _markers(meds):
-    return [{"day": m["occurred_on"][:10], "label": f"{m['drug']} {_EVENT.get(m['event'], m['event'])}"}
-            for m in meds]
+    from .ops import short_drug
+
+    return [{"day": m["occurred_on"][:10], "label": f"{short_drug(m['drug'])} {_EVENT.get(m['event'], m['event'])}"}
+            for m in meds if m.get("occurred_on")]
 
 
 def _try(fn, *args, **kwargs):
@@ -89,8 +91,10 @@ def _meds_section(meds, policy) -> tuple[str, int]:
                 "(it will show you the details to confirm).</p>"), 0
     if not allowed(policy, Category.MEDICATION):
         return "", len(meds)
+    from .ops import display_drug
+
     rows = "".join(
-        f"<tr><td>{_e(m['drug'])}</td><td>{_e(m['brand'] or '')}</td><td>{_e(_EVENT.get(m['event'], m['event']))}"
+        f"<tr><td>{_e(display_drug(m['drug']))}</td><td>{_e(m['brand'] or '')}</td><td>{_e(_EVENT.get(m['event'], m['event']))}"
         f"</td><td>{_e(m['dose'] or '')}</td><td>{_e(m['occurred_on'][:10])}</td><td>{_e(m['source'])}</td></tr>"
         for m in meds)
     return ("<h2>Medications</h2><div class='panel'><table><tr><th>Drug</th><th>Brand</th><th>Event</th><th>Dose</th>"
@@ -141,7 +145,9 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
             cmp, _err = _try(_lane(trends_mod.compare_windows), samples, metric, pivot=pivot, before_days=28,
                              after_days=after_days)
             if cmp:
-                text = _compare_text(cmp, unit, latest["drug"])
+                from .ops import short_drug
+
+                text = _compare_text(cmp, unit, short_drug(latest["drug"]))
         gaps = len(cov.get("gaps") or [])
         blocks.append(
             f"<div class='panel'><h3>{_e(label)}</h3><div class='chart'>{svg}</div>{text}"
@@ -192,7 +198,7 @@ def _range(ref) -> str:
 
 
 def _genes_section(vault, meds, policy) -> tuple[str, int]:
-    from .ops import _pack_calls, _pgx
+    from .ops import _pack_calls, _pgx, display_drug
 
     if _module("knowledge.pack") is None or _module("genome.calls") is None:
         return "", 0
@@ -211,7 +217,7 @@ def _genes_section(vault, meds, policy) -> tuple[str, int]:
         withheld += result.get("withheld", 0)
         entries = result.get("entries") or []
         if not entries:
-            blocks.append(f"<div class='panel'><h3>{_e(drug)}</h3><p class='note'>"
+            blocks.append(f"<div class='panel'><h3>{_e(display_drug(drug))}</h3><p class='note'>"
                           f"{_e(result.get('note') or 'No gene–drug evidence in the knowledge pack.')}</p></div>")
             continue
         rows = []
@@ -227,7 +233,7 @@ def _genes_section(vault, meds, policy) -> tuple[str, int]:
                 f"{_e(_STATUS.get(status, status))}</span></td><td>{_e(entry.get('finding'))}"
                 f"<div class='note'>Evidence: {_e(entry.get('evidence') or entry.get('evidence_level') or '')}"
                 f"{' · ' + _e(cite) if cite else ''}</div></td></tr>")
-        blocks.append(f"<div class='panel'><h3>{_e(drug)}</h3><table><tr><th>Gene</th><th>Your genotype</th>"
+        blocks.append(f"<div class='panel'><h3>{_e(display_drug(drug))}</h3><table><tr><th>Gene</th><th>Your genotype</th>"
                       f"<th>Status</th><th>What it means</th></tr>{''.join(rows)}</table></div>")
     disclaimer = ""
     try:

@@ -24,6 +24,8 @@ IMPORT_WAIT_S = 45.0       # Hermes cuts a tool call off at 420 s; imports keep 
 WATCH_WAIT_S = 300.0
 _RSID = re.compile(r"^rs\d+$", re.I)
 _GENE = re.compile(r"^[A-Z0-9-]{2,15}$")
+_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_LOINC = re.compile(r"^\d{1,7}-\d$")
 _SENSITIVE_MARKERS = {"rs429358": Category.ALZHEIMERS, "rs7412": Category.ALZHEIMERS}
 CHIP_LIMITS = ("Consumer DNA chips test common variants; rare variants can be missed or miscalled. A clinical test "
                "confirms anything important.")
@@ -343,19 +345,47 @@ def _genome_summary(store, policy) -> dict:
 _TREND_OPS = ("metrics", "series", "compare", "labs", "check")
 
 
-def _drug_start(vault, drug: str) -> date:
-    name = drug.strip().lower()
+def canonical_drug(text) -> str | None:
+    """The knowledge pack's name for a drug ("Ozempic 0.5 mg pen" -> "semaglutide"), when the pack is present."""
     try:
-        name = _need("knowledge.pack", "normalize_drug")(drug) or name
+        return _need("knowledge.pack", "normalize_drug")(str(text or ""))
     except ToolError:
-        pass
-    row = vault.execute(
-        "SELECT min(occurred_on) AS d FROM medication_event WHERE event='start' AND (drug=? OR lower(brand)=?)",
-        (name, drug.strip().lower()),
-    ).fetchone()
-    if not row or not row["d"]:
+        return None
+
+
+def display_drug(text) -> str:
+    """A medication as written in the record, tidied for display: "ozempic (semaglutide) …" -> "Ozempic (semaglutide) …"."""
+    text = " ".join(str(text or "").split())
+    return text[:1].upper() + text[1:]
+
+
+def short_drug(text) -> str:
+    """The first word of a medication's name, for chart labels: "ozempic (semaglutide) 0.5 mg" -> "Ozempic"."""
+    first = re.split(r"[\s(]", " ".join(str(text or "").split()), maxsplit=1)[0]
+    return first[:1].upper() + first[1:]
+
+
+def same_drug(asked: str, recorded: str) -> bool:
+    """Whether a recorded medication (a record's free text, or a name the user confirmed) is the drug asked about."""
+    asked_l, recorded_l = asked.strip().lower(), " ".join(str(recorded or "").split()).lower()
+    if not asked_l or not recorded_l:
+        return False
+    canonical = canonical_drug(asked)
+    if canonical and canonical == canonical_drug(recorded):
+        return True
+    words = set(re.findall(r"[a-z0-9-]+", recorded_l))
+    return asked_l == recorded_l or (len(asked_l) >= 4 and (asked_l in words or (canonical or "") in words))
+
+
+def _drug_start(vault, drug: str) -> date:
+    """The latest recorded start of *drug*: the current course when a drug was stopped and restarted."""
+    starts = [r["occurred_on"] for r in vault.execute(
+        "SELECT drug, brand, occurred_on FROM medication_event WHERE event='start' ORDER BY occurred_on")
+        if same_drug(drug, r["drug"]) or same_drug(drug, r["brand"] or "")]
+    starts = [d for d in starts if d and _ISO_DAY.match(d)]
+    if not starts:
         raise ToolError(f"no start date recorded for {drug}: record it with caduceus_capture op=medication")
-    return date.fromisoformat(row["d"][:10])
+    return date.fromisoformat(starts[-1][:10])
 
 
 def trend_tool(ctx, args: dict) -> dict:
@@ -395,9 +425,19 @@ def trend_tool(ctx, args: dict) -> dict:
 
 def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:
     """A lab result over time, with points the policy hides removed and counted (shared with the brief)."""
-    result = _lane(_need("health.fhir", "observation_series"), vault, lab, start=start, end=end)
+    series = _need("health.fhir", "observation_series")
+    result = _lane(series, vault, lab, start=start, end=end)
+    if not result.get("points") and not _LOINC.match(lab):
+        # A word from the lab's own name ("A1c", "creatinine") finds its code; the most common match wins.
+        like = "%" + lab.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        row = vault.execute("SELECT code FROM observation WHERE code IS NOT NULL AND name LIKE ? ESCAPE '\\' "
+                            "GROUP BY code ORDER BY count(*) DESC LIMIT 1", (like,)).fetchone()
+        if row:
+            result = {**_lane(series, vault, row["code"], start=start, end=end), "name": lab}
     points = list(result.get("points") or [])
     shown = [p for p in points if allowed(policy, p.get("category", Category.RECORDS))]
+    if points and not shown:  # hidden results are counted, never described (no dates, units or coverage)
+        return {"name": lab, "points": [], **_withheld(len(points))}
     units = sorted({p["unit"] for p in shown if p.get("unit")})
     out = {**result, "points": shown, "unit": units[0] if len(units) == 1 else units}
     if not points:
