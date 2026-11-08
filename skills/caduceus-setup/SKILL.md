@@ -15,7 +15,8 @@ In two or three sentences:
 - To answer a question, your tools read only the slices it needs. Those slices reach the model they chose, like any message.
 - The research watch, if they turn it on, sends only gene, drug and topic words (never genotypes) to Europe PMC and NCBI.
 
-Say "stays on your machine". Never say "nothing is uploaded", "nothing leaves your machine" or "nothing was sent":
+Say "your vault stays on your machine", naming the vault. Never say "everything stays on your machine", "nothing is
+uploaded", "nothing leaves your machine" or "nothing was sent":
 the slices your tools return do reach the model, so those claims are false.
 
 ## 1. Import their files
