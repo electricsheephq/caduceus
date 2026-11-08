@@ -36,6 +36,17 @@ def chunk(value):
     return base64.b64encode(zlib.compress(raw)).decode("ascii")
 
 
+def chunk_page(*, record_chunks=(), rsinfo_chunks=(), othersinfo_chunks=()):
+    """Explicit chunk boundaries for small limit and corruption regression probes."""
+    parts = ['var meta={"version":"synthetic"};var mygenos=[];']
+    for rows in record_chunks:
+        parts.append(f"mygenos.push.apply(mygenos,JSON.parse(decompressString('{chunk(rows)}')));")
+    for name, chunks in (("rsinfo", rsinfo_chunks), ("othersinfo", othersinfo_chunks)):
+        parts.append(f"var {name}=$.extend({{}}," +
+                     ",".join(f"JSON.parse(decompressString('{chunk(value)}'))" for value in chunks) + ");")
+    return "".join(parts)
+
+
 def html_report(*, rows=None, maps=None, bad_chunk=False):
     rows = records() if rows is None else rows
     maps = genotype_maps() if maps is None else maps

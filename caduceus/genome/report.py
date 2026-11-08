@@ -13,7 +13,7 @@ from ..core import sources
 from ..core.policy import Policy, allowed
 from .promethease import _summary, decode_report
 
-_STYLE = """+:root {color-scheme:light dark;--bg:#101822;--panel:#1c2937;--ink:#edf3f8;--muted:#b4c5d5;--line:#43586c}
+_STYLE = """:root {color-scheme:light dark;--bg:#101822;--panel:#1c2937;--ink:#edf3f8;--muted:#b4c5d5;--line:#43586c}
 @media(prefers-color-scheme:light){:root{--bg:#f3f6f8;--panel:white;--ink:#182b3b;--muted:#405b70;--line:#c9d6df}}
 body.light{color-scheme:light;--bg:#f3f6f8;--panel:white;--ink:#182b3b;--muted:#405b70;--line:#c9d6df}
 body.dark{color-scheme:dark;--bg:#101822;--panel:#1c2937;--ink:#edf3f8;--muted:#b4c5d5;--line:#43586c}
@@ -47,14 +47,19 @@ document.getElementById('theme').addEventListener('click', () => {
 """
 
 
+class NoSuccessfulReport(ValueError):
+    """No complete Promethease import is available for the default report."""
+
+
 def _source(conn, source_id):
     if source_id is None:
         row = conn.execute(
             "SELECT s.id FROM source_artifact s WHERE s.kind='promethease' AND EXISTS "
-            "(SELECT 1 FROM annotation_snapshot a WHERE a.source_id=s.id) ORDER BY s.id DESC LIMIT 1"
+            "(SELECT 1 FROM import_run r WHERE r.source_id=s.id AND r.parser='promethease' "
+            "AND r.status='succeeded') ORDER BY s.id DESC LIMIT 1"
         ).fetchone()
         if row is None:
-            raise ValueError("no imported Promethease report")
+            raise NoSuccessfulReport("No successfully imported Promethease report")
         source_id = row[0]
     source = sources.get_source(conn, source_id)
     if source is None or source.kind != "promethease":
@@ -159,13 +164,17 @@ def parity(conn, source_id, *, report_path=None) -> dict:
     source = _source(conn, source_id)
     decoded = decode_report(sources.source_file(conn, source))
     rows = _rows(conn, source.id)
-    stored_records = [{"rsnum": r["marker"] if r["kind"] == "snp" else None, "title": r["title"],
+    stored_records = [{**({"rsnum": r["marker"]} if r["kind"] == "snp" else
+                         {"rsnum": None} if r["kind"] == "other" else {}), "title": r["title"],
                        "geno": r["geno"], "magnitude": r["magnitude"], "repute": r["repute"]}
                       for r in rows if r["kind"] != "genotype_info"]
     result = {"decoded": _summary(decoded.records, decoded.genotype_info),
               "stored": _summary(stored_records, [r for r in rows if r["kind"] == "genotype_info"])}
     stored_kinds = Counter(r["kind"] for r in rows)
     result["stored"]["by_kind"] = {kind: stored_kinds[kind] for kind in ("snp", "genoset", "other", "genotype_info")}
+    diffs = [f"decoded warning: {warning}" for warning in decoded.warnings]
+    if not decoded.records:
+        diffs.append("decoded: No records found in the report")
     if report_path is None:
         with tempfile.TemporaryDirectory(prefix="caduceus-parity-") as directory:
             path = build_report(conn, directory, policy=Policy(), source_id=source.id)
@@ -178,7 +187,7 @@ def parity(conn, source_id, *, report_path=None) -> dict:
         payload = json.loads("".join(parser.parts))
         result["rebuilt"] = _summary(payload["records"], payload["genotype_info"])
     except (ValueError, KeyError, TypeError, AttributeError):
-        return {"ok": False, **result, "rebuilt": {}, "diffs": ["rebuilt: missing or invalid data block"]}
-    diffs = [f"decoded vs {name}: {key}" for name in ("stored", "rebuilt")
-             for key, value in result["decoded"].items() if result[name].get(key) != value]
+        return {"ok": False, **result, "rebuilt": {}, "diffs": [*diffs, "rebuilt: missing or invalid data block"]}
+    diffs.extend(f"decoded vs {name}: {key}" for name in ("stored", "rebuilt")
+                 for key, value in result["decoded"].items() if result[name].get(key) != value)
     return {"ok": not diffs, **result, "diffs": diffs}

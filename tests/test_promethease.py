@@ -10,7 +10,7 @@ from caduceus.core import search, sources
 from caduceus.core.contracts import SourceKind
 from caduceus.core.policy import Policy
 from caduceus.genome import promethease as pm
-from synth.promethease import chunk, genotype_maps, html_report, records, write_report
+from synth.promethease import chunk, chunk_page, genotype_maps, html_report, records, write_report
 
 
 def _source(vault, tmp_path, **kwargs):
@@ -187,17 +187,153 @@ def test_cancel_between_batches_and_resume(vault, tmp_path, monkeypatch):
     assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 2005
 
 
-def test_pre_cancel_and_bad_source_are_recorded(vault, tmp_path):
+def test_pre_cancel_and_empty_source_are_recorded(vault, tmp_path):
     src = _source(vault, tmp_path)
     cancel = threading.Event()
     cancel.set()
     assert pm.import_promethease(vault, src, cancel=cancel).status == "cancelled"
     assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 0
-    sources.source_file(vault, src).write_bytes(b"not a zip")
-    # Ordinary non-report HTML is an empty decode; malformed encoding is a failed import.
     sources.source_file(vault, src).write_bytes(b"\xff")
     result = pm.import_promethease(vault, src)
-    assert result.status == "failed" and result.warnings == ["import failed: UnicodeDecodeError"]
+    assert result.status == "failed" and result.warnings == ["HTML contains non-UTF-8 bytes; replaced",
+                                                            "No records found in the report"]
+
+
+def test_object_limit_defaults():
+    assert (pm.MAX_RECORDS_PER_CHUNK, pm.MAX_KEYS_PER_CHUNK,
+            pm.MAX_RECORDS_TOTAL, pm.MAX_GENOTYPE_INFO_TOTAL) == (1000, 10000, 500000, 500000)
+
+
+@pytest.mark.parametrize("constant,page", [
+    ("MAX_RECORDS_PER_CHUNK", chunk_page(record_chunks=[[{}] * 4])),
+    ("MAX_KEYS_PER_CHUNK", chunk_page(rsinfo_chunks=[{str(i): {} for i in range(4)}])),
+    ("MAX_RECORDS_TOTAL", chunk_page(record_chunks=[[{}] * 2, [{}] * 2])),
+    ("MAX_GENOTYPE_INFO_TOTAL", chunk_page(rsinfo_chunks=[{"a": {}, "b": {}}],
+                                           othersinfo_chunks=[{"a": {}, "b": {}}])),
+])
+def test_object_limits_fail_decode_and_import_safely(vault, tmp_path, monkeypatch, constant, page):
+    monkeypatch.setattr(pm, constant, 3)
+    path = tmp_path / "object-bomb.html"
+    path.write_text(page)
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and result.warnings == ["import failed: ReportTooLarge"]
+    assert sources.run_info(vault, result.run_id)["errors"] == result.warnings
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 0
+
+
+def test_record_limit_stops_before_materializing_excess_objects(tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_RECORDS_PER_CHUNK", 3)
+    original = pm.json.JSONDecoder
+    calls = []
+
+    class CountingDecoder(original):
+        def raw_decode(self, text, pos=0):
+            calls.append(pos)
+            return super().raw_decode(text, pos)
+
+    monkeypatch.setattr(pm.json, "JSONDecoder", CountingDecoder)
+    path = tmp_path / "many.html"
+    path.write_text(chunk_page(record_chunks=[[{}] * 100]))
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    assert len(calls) == 3
+
+
+def test_object_limits_allow_boundaries_and_map_replacements(tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_RECORDS_PER_CHUNK", 2)
+    monkeypatch.setattr(pm, "MAX_KEYS_PER_CHUNK", 2)
+    monkeypatch.setattr(pm, "MAX_RECORDS_TOTAL", 4)
+    monkeypatch.setattr(pm, "MAX_GENOTYPE_INFO_TOTAL", 2)
+    path = tmp_path / "boundary.html"
+    path.write_text(chunk_page(record_chunks=[[{}] * 2, [{}] * 2],
+                               rsinfo_chunks=[{"a": {}, "b": {}}, {"a": {"replacement": 1}}]))
+    decoded = pm.decode_report(path)
+    assert len(decoded.records) == 4 and len(decoded.genotype_info) == 2 and not decoded.warnings
+    assert decoded.genotype_info["rsinfo:a"]["genotypes"] == {"replacement": 1}
+
+
+@pytest.mark.parametrize("field", ["rsnum", "geno", "title", "redirect_from", "genosummary", "magnitude", "repute"])
+@pytest.mark.parametrize("value", [["NEVER_ECHO_INPUT"], {"made_up_key": "NEVER_ECHO_INPUT"}])
+def test_wrong_typed_fields_do_not_abort_other_records(vault, tmp_path, field, value):
+    malformed = {**records()[0], field: value}
+    src = _source(vault, tmp_path, rows=[malformed, records()[2]], maps=({}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.counts["records"] == 2
+    assert result.warnings == [f"record 0: invalid field {field}"]
+    assert "NEVER_ECHO_INPUT" not in str(sources.run_info(vault, result.run_id)["errors"])
+    rows = vault.execute("SELECT * FROM annotation_snapshot ORDER BY ordinal").fetchall()
+    assert len(rows) == 2 and json.loads(rows[0]["record_json"]) == malformed
+    if field == "rsnum":
+        assert rows[0]["kind"] == "other" and rows[0]["marker"] is None
+    if field == "redirect_from":
+        assert result.counts["aliases"] == 0
+
+
+@pytest.mark.parametrize("marker,kind", [("rs123", "snp"), ("i456", "snp"), ("bad123", "other"),
+                                        (123, "other"), (None, "other"), ("rs1junk", "other")])
+def test_marker_validation_and_scalar_coercion(vault, tmp_path, marker, kind):
+    src = _source(vault, tmp_path, rows=[{"rsnum": marker, "title": 17, "geno": 42, "genosummary": True}], maps=({}, {}))
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    row = vault.execute("SELECT * FROM annotation_snapshot").fetchone()
+    assert row["kind"] == kind and row["marker"] == (marker if kind == "snp" else None)
+    assert (row["title"], row["geno"], row["summary"]) == ("17", "42", "True")
+
+
+def test_warning_list_keeps_first_twenty_and_suppressed_count(vault, tmp_path):
+    rows = [{"genosummary": ["NEVER_ECHO_INPUT"]} for _ in range(35)]
+    src = _source(vault, tmp_path, rows=rows, maps=({}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and len(result.warnings) == 21
+    assert result.warnings[:20] == [f"record {i}: invalid field genosummary" for i in range(20)]
+    assert result.warnings[-1] == "15 additional warnings suppressed"
+    assert sources.run_info(vault, result.run_id)["errors"] == result.warnings
+    assert result.as_dict()["warnings"] == result.warnings
+
+
+def test_corrupt_chunk_warnings_are_capped_and_empty_failure_message_survives(vault, tmp_path):
+    path = tmp_path / "corrupt.html"
+    path.write_text("mygenos.push.apply(mygenos,JSON.parse(decompressString('AAAA')));" * 35)
+    decoded = pm.decode_report(path)
+    assert len(decoded.warnings) == 21 and decoded.warnings[-1] == "15 additional warnings suppressed"
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and len(result.warnings) == 21
+    assert result.warnings[-1] == "16 additional warnings suppressed"
+    assert sources.run_info(vault, result.run_id)["errors"][0] == "No records found in the report"
+
+
+def test_non_utf8_page_chrome_warns_but_imports_payload(vault, tmp_path):
+    path = tmp_path / "encoding.html"
+    path.write_bytes(html_report().encode().replace(b"Synthetic report", b"Synthetic caf\xe9"))
+    decoded = pm.decode_report(path)
+    assert decoded.records == records() and decoded.warnings == ["HTML contains non-UTF-8 bytes; replaced"]
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.counts["records"] == 6
+
+
+@pytest.mark.parametrize("field", ["title", "summary", "genosummary", "genobody", "rstext", "topic", "cond",
+                                   "clinvar_diseases", "clinvar_1", "clinvar_future"])
+def test_all_annotation_text_reaches_classifier(field, monkeypatch):
+    captured = []
+    original = pm.categorize
+
+    def capture(**kwargs):
+        captured.append(kwargs["text"])
+        return original(**kwargs)
+
+    monkeypatch.setattr(pm, "categorize", capture)
+    assert pm._category({field: ["<b>Alzheimer disease</b>"]}) == "alzheimers"
+    assert "Alzheimer disease" in captured[0] and "<b>" not in captured[0]
+
+
+@pytest.mark.parametrize("gene", "CYP2C19 CYP2C9 CYP2D6 CYP3A5 CYP3A4 CYP1A2 CYP2B6 VKORC1 SLCO1B1 TPMT NUDT15 DPYD UGT1A1 IFNL3 HLA-A HLA-B G6PD NAT2 ABCG2 RYR1 CACNA1S MT-RNR1".split())
+def test_pgx_genes_default_to_pgx_but_sensitive_matches_win(gene):
+    assert pm._category({"genes": [gene.lower()]}) == "pgx"
+    assert pm._category({"genes": [gene], "clinvar_diseases": ["Alzheimer disease"]}) == "alzheimers"
 
 
 @pytest.mark.private
