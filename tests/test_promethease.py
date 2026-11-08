@@ -1,0 +1,480 @@
+import base64
+import inspect
+import json
+import threading
+import zipfile
+import zlib
+
+import pytest
+
+from caduceus.core import search, sources
+from caduceus.core.contracts import SourceKind
+from caduceus.core.policy import Policy
+from caduceus.genome import promethease as pm
+from synth.promethease import chunk, chunk_page, genotype_maps, html_report, records, write_report
+
+
+def _source(vault, tmp_path, **kwargs):
+    path = write_report(tmp_path / "promethease.zip", **kwargs)
+    return sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+
+
+@pytest.mark.parametrize("suffix", [".html", ".zip"])
+def test_decode_shapes_metadata_and_counts(tmp_path, suffix):
+    decoded = pm.decode_report(write_report(tmp_path / ("report" + suffix)))
+    assert decoded.records == records()
+    assert decoded.chunks == 3 and not decoded.warnings
+    assert decoded.metadata == {"version": "synthetic-1", "label": "invented", "count": 6, "enabled": True, "missing": None}
+    rsinfo, others = genotype_maps()
+    assert decoded.genotype_info["rsinfo:rs99999001"] == {"set": "rsinfo", "genotypes": rsinfo["rs99999001"]}
+    assert decoded.genotype_info["othersinfo:gsSynthetic1"]["genotypes"] == others["gsSynthetic1"]
+    assert len(decoded.genotype_info) == 5
+
+
+def test_repeated_map_marker_in_both_sets_is_preserved(tmp_path):
+    maps = ({"rs99999001": {"a": 1}}, {"rs99999001": {"b": 2}})
+    decoded = pm.decode_report(write_report(tmp_path / "report.html", maps=maps))
+    assert set(decoded.genotype_info) == {"rsinfo:rs99999001", "othersinfo:rs99999001"}
+
+
+def test_bad_chunk_warns_and_continues(tmp_path):
+    decoded = pm.decode_report(write_report(tmp_path / "report.html", bad_chunk=True))
+    assert decoded.records == records()
+    assert decoded.chunks == 4 and len(decoded.warnings) == 1
+
+
+@pytest.mark.parametrize("raw", [b"{broken json", b'{"wrong":"shape"}'])
+def test_bad_json_and_wrong_shape_warn(tmp_path, raw):
+    html = html_report(bad_chunk=True).replace("'AAAA'", repr(base64.b64encode(zlib.compress(raw)).decode()))
+    path = tmp_path / "report.html"
+    path.write_text(html)
+    decoded = pm.decode_report(path)
+    assert len(decoded.warnings) == 1 and decoded.records == records()
+
+
+def test_context_is_bounded_and_gzip_is_accepted(tmp_path):
+    value = [{"rsnum": "rs99999123", "geno": "(A;A)"}]
+    compressor = zlib.compressobj(wbits=31)
+    payload = base64.b64encode(compressor.compress(json.dumps(value).encode()) + compressor.flush()).decode()
+    html = html_report(rows=[], maps=({}, {}))
+    html += f"mygenos.push.apply(mygenos,JSON.parse(decompressString('{payload}')));"
+    html += f"decompressString('{chunk(value)}');"
+    path = tmp_path / "report.html"
+    path.write_text(html)
+    decoded = pm.decode_report(path)
+    assert decoded.records == value and len(decoded.warnings) == 1
+
+
+def test_inflate_limits_and_exact_boundary(tmp_path):
+    rows = [{"genosummary": "x" * 5000}]
+    path = write_report(tmp_path / "report.html", rows=rows, maps=({}, {}))
+    size = len(json.dumps(rows, ensure_ascii=False).encode())
+    assert pm.decode_report(path, max_inflate=size).records == rows
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path, max_inflate=size - 1)
+    # Two individually valid chunks still exceed the cumulative inflated limit.
+    path.write_text(html_report(rows=rows, maps=({}, {})) +
+                    f"mygenos.push.apply(mygenos,JSON.parse(decompressString('{chunk(rows)}')));")
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path, max_inflate=6000, max_total=7500)
+
+
+@pytest.mark.parametrize("name", ["../promethease.html", "/promethease.html", "C:/promethease.html", "x\\..\\promethease.html"])
+def test_zip_traversal_is_refused(tmp_path, name):
+    path = tmp_path / "bad.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(name, html_report())
+    with pytest.raises(ValueError, match="unsafe zip"):
+        pm.decode_report(path)
+
+
+def test_zip_member_cap(tmp_path):
+    path = write_report(tmp_path / "report.zip")
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path, max_total=10)
+
+
+def test_import_rows_aliases_search_and_idempotence(vault, tmp_path):
+    src = _source(vault, tmp_path)
+    # Import must read the provenance copy, even if the user's file disappears.
+    (tmp_path / "promethease.zip").unlink()
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.source_id == src.id
+    assert result.counts == {"records": 6, "snp": 4, "genoset": 1, "other": 1, "genotype_info_markers": 5,
+                             "chunks": 3, "aliases": 1,
+                             "magnitude_hist": {"0.0": 1, "2.0": 1, "3.5": 1, "4.0": 1, "5.0": 1, "None": 1},
+                             "repute_hist": {"Good": 2, "Bad": 2, "None": 2}}
+    rows = vault.execute("SELECT * FROM annotation_snapshot ORDER BY ordinal").fetchall()
+    assert [r["ordinal"] for r in rows] == list(range(11))
+    for row, record in zip(rows, records()):
+        assert row["record_json"] == json.dumps(record, sort_keys=True, ensure_ascii=False)
+    assert rows[0]["magnitude"] == 3.5 and rows[0]["genes_json"] == '["FAKE1"]'
+    assert rows[1]["category"] == "alzheimers" and rows[2]["category"] == "pgx"
+    assert rows[5]["repute"] is None and rows[5]["magnitude"] is None
+    assert [r["marker"] for r in rows[6:]] == ["rs99999001", "rs99999002", "rs99999003", "rs99999004", "gsSynthetic1"]
+    assert json.loads(rows[6]["record_json"])["set"] == "rsinfo"
+    assert rows[7]["category"] == "alzheimers"
+    assert tuple(vault.execute("SELECT alias, marker, source FROM marker_alias").fetchone()) == (
+        "rs99999901", "rs99999001", "promethease")
+    for word in ("luminous", "lanterns", "pebbles", "prism", "cobbles", "inventomycin"):
+        assert search.search(vault, word, policy=Policy())["results"]
+    assert len(search.fetch(vault, f"annotation:{src.id}:0", policy=Policy())["body"]) <= 2000
+    assert pm.import_promethease(vault, src).status == "skipped"
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 11
+    assert vault.execute("SELECT count(*) FROM search_doc").fetchone()[0] == 6
+    assert sources.run_info(vault, result.run_id)["counts"] == result.counts
+
+
+def _many_rows():
+    return [{"rsnum": f"rs99999{i:04}", "geno": "(A;A)", "magnitude": 1,
+             "genosummary": "Invented batch record"} for i in range(2005)]
+
+
+def test_crash_then_resume_committed_batches(vault, tmp_path, monkeypatch):
+    src = _source(vault, tmp_path, rows=_many_rows(), maps=({}, {}))
+    original = pm._write_batch
+    calls = []
+
+    def crash(conn, source_id, batch):
+        calls.append(len(batch))
+        if len(calls) == 2:
+            raise SystemExit("synthetic process interruption")
+        original(conn, source_id, batch)
+
+    monkeypatch.setattr(pm, "_write_batch", crash)
+    with pytest.raises(SystemExit):
+        pm.import_promethease(vault, src)
+    assert calls == [2000, 5]
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 2000
+    monkeypatch.setattr(pm, "_write_batch", original)
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    assert [r[0] for r in vault.execute("SELECT status FROM import_run ORDER BY id")] == ["interrupted", "succeeded"]
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 2005
+    assert vault.execute("SELECT count(*) FROM search_doc").fetchone()[0] == 2005
+
+
+def test_failed_batch_rolls_back_and_can_resume(vault, tmp_path, monkeypatch):
+    src = _source(vault, tmp_path)
+    original = pm.search.index_doc
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("synthetic index failure")
+
+    monkeypatch.setattr(pm.search, "index_doc", fail)
+    failed = pm.import_promethease(vault, src)
+    assert failed.status == "failed"
+    assert sources.run_info(vault, failed.run_id)["status"] == "failed"
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 0
+    assert vault.execute("SELECT count(*) FROM marker_alias").fetchone()[0] == 0
+    monkeypatch.setattr(pm.search, "index_doc", original)
+    assert pm.import_promethease(vault, src).status == "succeeded"
+
+
+def test_cancel_between_batches_and_resume(vault, tmp_path, monkeypatch):
+    src = _source(vault, tmp_path, rows=_many_rows(), maps=({}, {}))
+    cancel = threading.Event()
+    original = pm._write_batch
+
+    def first_batch(conn, source_id, batch):
+        original(conn, source_id, batch)
+        cancel.set()
+
+    monkeypatch.setattr(pm, "_write_batch", first_batch)
+    cancelled = pm.import_promethease(vault, src, cancel=cancel)
+    assert cancelled.status == "cancelled"
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 2000
+    monkeypatch.setattr(pm, "_write_batch", original)
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 2005
+
+
+def test_pre_cancel_and_empty_source_are_recorded(vault, tmp_path):
+    src = _source(vault, tmp_path)
+    cancel = threading.Event()
+    cancel.set()
+    assert pm.import_promethease(vault, src, cancel=cancel).status == "cancelled"
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 0
+    sources.source_file(vault, src).write_bytes(b"\xff")
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and result.warnings == ["HTML contains non-UTF-8 bytes; replaced",
+                                                            "No records found in the report"]
+
+
+def test_object_limit_defaults():
+    assert (pm.MAX_RECORDS_PER_CHUNK, pm.MAX_KEYS_PER_CHUNK,
+            pm.MAX_RECORDS_TOTAL, pm.MAX_GENOTYPE_INFO_TOTAL) == (1000, 10000, 500000, 500000)
+
+
+@pytest.mark.parametrize("constant,page", [
+    ("MAX_RECORDS_PER_CHUNK", chunk_page(record_chunks=[[{}] * 4])),
+    ("MAX_KEYS_PER_CHUNK", chunk_page(rsinfo_chunks=[{str(i): {} for i in range(4)}])),
+    ("MAX_RECORDS_TOTAL", chunk_page(record_chunks=[[{}] * 2, [{}] * 2])),
+    ("MAX_GENOTYPE_INFO_TOTAL", chunk_page(rsinfo_chunks=[{"a": {}, "b": {}}],
+                                           othersinfo_chunks=[{"a": {}, "b": {}}])),
+])
+def test_object_limits_fail_decode_and_import_safely(vault, tmp_path, monkeypatch, constant, page):
+    monkeypatch.setattr(pm, constant, 3)
+    path = tmp_path / "object-bomb.html"
+    path.write_text(page)
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and result.warnings == ["import failed: ReportTooLarge"]
+    assert sources.run_info(vault, result.run_id)["errors"] == result.warnings
+    assert vault.execute("SELECT count(*) FROM annotation_snapshot").fetchone()[0] == 0
+
+
+def test_record_limit_stops_before_materializing_excess_objects(tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_RECORDS_PER_CHUNK", 3)
+    original = pm.json.JSONDecoder
+    calls = []
+
+    class CountingDecoder(original):
+        def raw_decode(self, text, pos=0):
+            calls.append(pos)
+            return super().raw_decode(text, pos)
+
+    monkeypatch.setattr(pm.json, "JSONDecoder", CountingDecoder)
+    path = tmp_path / "many.html"
+    path.write_text(chunk_page(record_chunks=[[{}] * 100]))
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    assert len(calls) == 3
+
+
+def test_object_limits_allow_boundaries_and_map_replacements(tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_RECORDS_PER_CHUNK", 2)
+    monkeypatch.setattr(pm, "MAX_KEYS_PER_CHUNK", 2)
+    monkeypatch.setattr(pm, "MAX_RECORDS_TOTAL", 4)
+    monkeypatch.setattr(pm, "MAX_GENOTYPE_INFO_TOTAL", 2)
+    path = tmp_path / "boundary.html"
+    path.write_text(chunk_page(record_chunks=[[{}] * 2, [{}] * 2],
+                               rsinfo_chunks=[{"a": {}, "b": {}}, {"a": {"replacement": 1}}]))
+    decoded = pm.decode_report(path)
+    assert len(decoded.records) == 4 and len(decoded.genotype_info) == 2 and not decoded.warnings
+    assert decoded.genotype_info["rsinfo:a"]["genotypes"] == {"replacement": 1}
+
+
+@pytest.mark.parametrize("field", ["rsnum", "geno", "title", "redirect_from", "genosummary", "magnitude", "repute"])
+@pytest.mark.parametrize("value", [["NEVER_ECHO_INPUT"], {"made_up_key": "NEVER_ECHO_INPUT"}])
+def test_wrong_typed_fields_do_not_abort_other_records(vault, tmp_path, field, value):
+    malformed = {**records()[0], field: value}
+    src = _source(vault, tmp_path, rows=[malformed, records()[2]], maps=({}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.counts["records"] == 2
+    assert result.warnings == [f"record 0: invalid field {field}"]
+    assert "NEVER_ECHO_INPUT" not in str(sources.run_info(vault, result.run_id)["errors"])
+    rows = vault.execute("SELECT * FROM annotation_snapshot ORDER BY ordinal").fetchall()
+    assert len(rows) == 2 and json.loads(rows[0]["record_json"]) == malformed
+    if field == "rsnum":
+        assert rows[0]["kind"] == "other" and rows[0]["marker"] is None
+    if field == "redirect_from":
+        assert result.counts["aliases"] == 0
+
+
+@pytest.mark.parametrize("marker,kind", [("rs123", "snp"), ("i456", "snp"), ("bad123", "other"),
+                                        (123, "other"), (None, "other"), ("rs1junk", "other")])
+def test_marker_validation_and_scalar_coercion(vault, tmp_path, marker, kind):
+    src = _source(vault, tmp_path, rows=[{"rsnum": marker, "title": 17, "geno": 42, "genosummary": True}], maps=({}, {}))
+    assert pm.import_promethease(vault, src).status == "succeeded"
+    row = vault.execute("SELECT * FROM annotation_snapshot").fetchone()
+    assert row["kind"] == kind and row["marker"] == (marker if kind == "snp" else None)
+    assert (row["title"], row["geno"], row["summary"]) == ("17", "42", "True")
+
+
+def test_warning_list_keeps_first_twenty_and_suppressed_count(vault, tmp_path):
+    rows = [{"genosummary": ["NEVER_ECHO_INPUT"]} for _ in range(35)]
+    src = _source(vault, tmp_path, rows=rows, maps=({}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and len(result.warnings) == 21
+    assert result.warnings[:20] == [f"record {i}: invalid field genosummary" for i in range(20)]
+    assert result.warnings[-1] == "15 additional warnings suppressed"
+    assert sources.run_info(vault, result.run_id)["errors"] == result.warnings
+    assert result.as_dict()["warnings"] == result.warnings
+
+
+def test_corrupt_chunk_warnings_are_capped_and_empty_failure_message_survives(vault, tmp_path):
+    path = tmp_path / "corrupt.html"
+    path.write_text("mygenos.push.apply(mygenos,JSON.parse(decompressString('AAAA')));" * 35)
+    decoded = pm.decode_report(path)
+    assert len(decoded.warnings) == 21 and decoded.warnings[-1] == "15 additional warnings suppressed"
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and len(result.warnings) == 21
+    assert result.warnings[-1] == "16 additional warnings suppressed"
+    assert sources.run_info(vault, result.run_id)["errors"][0] == "No records found in the report"
+
+
+def test_non_utf8_page_chrome_warns_but_imports_payload(vault, tmp_path):
+    path = tmp_path / "encoding.html"
+    path.write_bytes(html_report().encode().replace(b"Synthetic report", b"Synthetic caf\xe9"))
+    decoded = pm.decode_report(path)
+    assert decoded.records == records() and decoded.warnings == ["HTML contains non-UTF-8 bytes; replaced"]
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.counts["records"] == 6
+
+
+@pytest.mark.parametrize("field", ["title", "summary", "genosummary", "genobody", "rstext", "topic", "cond",
+                                   "clinvar_diseases", "clinvar_1", "clinvar_future"])
+def test_all_annotation_text_reaches_classifier(field, monkeypatch):
+    captured = []
+    original = pm.categorize
+
+    def capture(**kwargs):
+        captured.append(kwargs["text"])
+        return original(**kwargs)
+
+    monkeypatch.setattr(pm, "categorize", capture)
+    assert pm._category({field: ["<b>Alzheimer disease</b>"]}) == "alzheimers"
+    assert "Alzheimer disease" in captured[0] and "<b>" not in captured[0]
+
+
+@pytest.mark.parametrize("gene", "CYP2C19 CYP2C9 CYP2D6 CYP3A5 CYP3A4 CYP1A2 CYP2B6 VKORC1 SLCO1B1 TPMT NUDT15 DPYD UGT1A1 IFNL3 HLA-A HLA-B G6PD NAT2 ABCG2 RYR1 CACNA1S MT-RNR1".split())
+def test_pgx_genes_default_to_pgx_but_sensitive_matches_win(gene):
+    assert pm._category({"genes": [gene.lower()]}) == "pgx"
+    assert pm._category({"genes": [gene], "clinvar_diseases": ["Alzheimer disease"]}) == "alzheimers"
+
+
+def test_nested_limit_defaults_and_node_accounting():
+    signature = inspect.signature(pm.decode_report)
+    assert signature.parameters["max_inflate"].default == 1 << 20
+    assert signature.parameters["max_total"].default == 128 << 20
+    assert (pm.MAX_NODES_PER_RECORD, pm.MAX_NODES_TOTAL) == (5000, 5000000)
+    value = {"rsnum": "rs1", "popfreq": [{}, None, 1, "x", False, [{}]]}
+    assert pm._node_stats(value) == (10, 3)
+
+
+@pytest.mark.parametrize("mapping", [False, True])
+def test_nested_bombs_hit_default_byte_cap_before_json_allocation(vault, tmp_path, monkeypatch, mapping):
+    # Construct the reviewer's two-million-dict shape as bytes, never Python dicts.
+    nested = b"{}," * 1999999 + b"{}"
+    raw = b'{"rs1":[' + nested + b"]}" if mapping else b'[{"rsnum":"rs1","popfreq":[' + nested + b"]}]"
+    payload = base64.b64encode(zlib.compress(raw)).decode()
+    expression = f"JSON.parse(decompressString('{payload}'))"
+    html = f"var rsinfo=$.extend({{}},{expression});" if mapping else f"mygenos.push.apply(mygenos,{expression});"
+    path = tmp_path / "nested-bomb.html"
+    path.write_text(html)
+
+    class RefuseAllocation:
+        def __init__(self):
+            pytest.fail("oversized chunk reached JSON allocation")
+
+    monkeypatch.setattr(pm.json, "JSONDecoder", RefuseAllocation)
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "failed" and result.warnings == ["import failed: ReportTooLarge"]
+
+
+def test_per_record_node_limit_drops_only_excess_item_and_warns(vault, tmp_path):
+    dropped = {"rsnum": "rs99999111", "popfreq": [{}] * 4998}  # 5,001 nodes
+    boundary = {"rsnum": "rs99999222", "popfreq": [None] * 4997}  # 5,000 nodes
+    src = _source(vault, tmp_path, rows=[dropped, boundary], maps=({}, {}))
+    decoded = pm.decode_report(sources.source_file(vault, src))
+    assert decoded.records == [boundary]
+    assert decoded.warnings == ["record 0: node limit exceeded"]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.counts["records"] == 1
+    assert result.warnings == decoded.warnings
+    assert vault.execute("SELECT marker FROM annotation_snapshot").fetchone()[0] == "rs99999222"
+
+
+def test_nested_genotype_item_is_dropped_and_node_limits_are_read_at_call_time(tmp_path, monkeypatch):
+    path = tmp_path / "nested-map.html"
+    path.write_text(chunk_page(rsinfo_chunks=[{"rs1": [{}] * 5000, "rs2": {"(A;A)": {"mag": 1}}}]))
+    decoded = pm.decode_report(path)
+    assert set(decoded.genotype_info) == {"rsinfo:rs2"}
+    assert decoded.warnings == ["genotype-info record 0: node limit exceeded"]
+    monkeypatch.setattr(pm, "MAX_NODES_PER_RECORD", 2)
+    # The second item has three nodes; it is now over the changed limit too.
+    decoded = pm.decode_report(path)
+    assert decoded.genotype_info == {}
+    assert decoded.warnings[-1] == "genotype-info record 1: node limit exceeded"
+
+
+def test_total_node_limit_includes_records_and_both_genotype_maps(vault, tmp_path, monkeypatch):
+    path = tmp_path / "total-nodes.html"
+    path.write_text(chunk_page(record_chunks=[[{"popfreq": [{}, None, True, 1, "x"]}]],
+                               rsinfo_chunks=[{"rs1": [{}, None, True, 1, "x"]}], othersinfo_chunks=[{"gs1": 0}]))
+    # Eight record nodes, seven rsinfo nodes, two othersinfo nodes, including roots.
+    monkeypatch.setattr(pm, "MAX_NODES_TOTAL", 17)
+    assert not pm.decode_report(path).warnings
+    monkeypatch.setattr(pm, "MAX_NODES_TOTAL", 16)
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+    src = sources.store_source(vault, path, SourceKind.PROMETHEASE)[0]
+    assert pm.import_promethease(vault, src).status == "failed"
+
+
+def test_dropped_items_still_count_toward_total_node_limit(tmp_path, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_NODES_PER_RECORD", 2)
+    monkeypatch.setattr(pm, "MAX_NODES_TOTAL", 5)
+    path = tmp_path / "dropped-nodes.html"
+    path.write_text(chunk_page(record_chunks=[[{"popfreq": [{}, {}]}, {}]]))
+    with pytest.raises(pm.ReportTooLarge):
+        pm.decode_report(path)
+
+
+def test_500_deep_text_import_succeeds_and_warns(vault, tmp_path):
+    topic = "NEVER_ECHO_DEEP_CONTENT"
+    for _ in range(500):
+        topic = [topic]
+    src = _source(vault, tmp_path, rows=[{"rsnum": "rs99999111", "topic": topic,
+                                        "genosummary": "Visible invented lanterns"}], maps=({}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and result.warnings == ["record 0: text depth limit exceeded"]
+    indexed = search.fetch(vault, f"annotation:{src.id}:0", policy=Policy())
+    assert "Visible invented lanterns" in indexed["body"] and "NEVER_ECHO_DEEP_CONTENT" not in indexed["body"]
+
+
+def test_iterative_text_walk_depth_boundary_and_order():
+    value = "visible"
+    for _ in range(32):
+        value = [value]
+    assert pm._string(value) == "visible"
+    assert pm._string([value]) == ""
+    assert pm._string({"a": ["one", None, 0], "b": {"c": "two"}}) == "one 0 two"
+
+
+@pytest.mark.parametrize("marker", ["RS99999111", "Rs99999111", "I99999111"])
+def test_mixed_case_markers_are_stored_lowercase(vault, tmp_path, marker):
+    from caduceus.genome.report import parity
+
+    record = {"rsnum": marker, "geno": "(A;A)", "redirect_from": "RS99999222"}
+    src = _source(vault, tmp_path, rows=[record], maps=({marker: {"(A;A)": {"mag": 1}}}, {}))
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded" and not result.warnings
+    rows = vault.execute("SELECT marker FROM annotation_snapshot ORDER BY ordinal").fetchall()
+    assert [r[0] for r in rows] == [marker.lower(), marker.lower()]
+    assert tuple(vault.execute("SELECT alias, marker FROM marker_alias").fetchone()) == ("rs99999222", marker.lower())
+    assert parity(vault, src.id)["ok"]
+
+
+@pytest.mark.parametrize("raw,mapping", [(b"[{}]x", False), (b'{"a":1}x', True), (b"[{}],", False)])
+def test_trailing_json_garbage_is_refused(tmp_path, raw, mapping):
+    with pytest.raises(ValueError, match="trailing JSON data"):
+        list(pm._chunk_items(raw, mapping=mapping, limit=10))
+    payload = base64.b64encode(zlib.compress(raw)).decode()
+    expression = f"JSON.parse(decompressString('{payload}'))"
+    path = tmp_path / "trailing.html"
+    path.write_text(f"var rsinfo=$.extend({{}},{expression});" if mapping else
+                    f"mygenos.push.apply(mygenos,{expression});")
+    decoded = pm.decode_report(path)
+    assert not decoded.records and not decoded.genotype_info
+    assert decoded.warnings == ["chunk 1: ValueError"]
+
+
+@pytest.mark.private
+def test_private_parity(vault, private_dir):
+    from caduceus.genome.report import parity
+
+    src = sources.store_source(vault, private_dir / "promethease.zip", SourceKind.PROMETHEASE)[0]
+    result = pm.import_promethease(vault, src)
+    assert result.status == "succeeded"
+    checked = parity(vault, src.id)
+    print({name: {"records": checked[name]["records"], "by_kind": checked[name]["by_kind"]}
+           for name in ("decoded", "stored", "rebuilt")})
+    assert checked["ok"]
