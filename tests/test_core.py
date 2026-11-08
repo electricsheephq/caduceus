@@ -143,6 +143,25 @@ def test_categorize_finds_gene_symbols_written_in_text():
     assert categorize(text="Datum: XAPOE1 is not a gene word") is Category.GENERAL
 
 
+@pytest.mark.parametrize("text", [
+    "Post-traumatic stress disorder", "PTSD", "Obsessive-compulsive disorder", "Anorexia nervosa",
+    "Alcohol use disorder, moderate", "Opioid use disorder", "PHQ-9 total score", "Major depressive disorder",
+])
+def test_categorize_mental_health_conditions(text):
+    assert categorize(text=text, default=Category.RECORDS) is Category.MENTAL_HEALTH
+
+
+@pytest.mark.parametrize("text", ["Endometriosis", "Polycystic ovary syndrome", "PCOS", "Erectile dysfunction",
+                                  "Oral contraception", "Ectopic pregnancy"])
+def test_categorize_reproductive_conditions(text):
+    assert categorize(text=text, default=Category.RECORDS) is Category.REPRODUCTIVE
+
+
+def test_categorize_does_not_hide_common_side_effect_words():
+    assert categorize(text="anorexia and nausea were common adverse events", default=Category.RESEARCH) \
+        is Category.RESEARCH
+
+
 def test_jobs_return_results_or_keep_running():
     assert jobs.submit("fast", lambda: 42, wait_s=5) == {"state": "done", "result": 42}
     gate = threading.Event()

@@ -123,8 +123,12 @@ _TEXT_CATEGORY = (
     (re.compile(r"\bcarriers?\b|carrier status", re.I), Category.CARRIER),
     (re.compile(r"(breast|ovarian|colorectal|prostate|pancrea\w*) cancer|lynch syndrome|hereditary cancer", re.I),
      Category.CANCER_RISK),
-    (re.compile(r"schizophreni|bipolar|depressi|autis|adhd|anxiety|psychiatr", re.I), Category.MENTAL_HEALTH),
-    (re.compile(r"infertil|miscarriage|pregnan", re.I), Category.REPRODUCTIVE),
+    (re.compile(r"schizophreni|bipolar|depressi|autis|adhd|anxiety|psychiatr|psychos[ie]s|\bptsd\b|post-?traumatic"
+                r"|\bocd\b|obsessive[- ]compulsive|anorexia nervosa|bulimi|eating disorder|binge[- ]eating"
+                r"|alcohol (?:use disorder|dependence)|substance use|opioid use disorder|addiction|suicid|self-harm"
+                r"|panic disorder|\bphq-?9\b|\bgad-?7\b", re.I), Category.MENTAL_HEALTH),
+    (re.compile(r"infertil|miscarriage|pregnan|endometriosis|\bpcos\b|polycystic ovar|erectile dysfunction"
+                r"|contracepti|\bivf\b|in vitro fertili|ectopic|abortion|menstrua", re.I), Category.REPRODUCTIVE),
 )
 
 
