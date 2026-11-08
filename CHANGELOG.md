@@ -23,3 +23,10 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 - **Research watch:** Europe PMC, LitVar2 and ClinVar. It sends only gene, drug and topic terms, and gives a first top-3 digest, then only new items.
 - **Two automation blueprints:** `research-watch` and `daily-check`.
 - **Skills:** `caduceus-setup`, `caduceus-guide`, `caduceus-research` and `caduceus-report-problem`.
+- **Health records handled with care.**
+  - Results marked entered-in-error or cancelled, and refuted diagnoses, are skipped, and removed if an earlier import stored them.
+  - Corrected results replace the originals.
+  - Stopped medications never get an invented stop date.
+- **Sensitive codes.** Diagnoses are recognised from their codes as well as their text (ICD-10, ICD-9-CM, SNOMED CT, LOINC screening codes), including codes carried as values.
+- **A synthetic demo persona** (`tests/synth/persona.py`): DNA raw data, a variant report and an Apple Health export with health records, for demos and end-to-end tests. It contains no real person's data.
+- **A real Hermes loader test** in CI, plus local-only checks on a maintainer's own files that print totals only.

@@ -110,6 +110,33 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 - **Metric names** are friendly (`weight`, `steps`, `resting_heart_rate`, `sleep_hours`, …) and map to HealthKit identifiers.
 - **`observation_series` points** carry `date`, `value`, `unit`, `reference_range`, `interpretation`, `source` and `category`; callers filter points by `category`. HbA1c is converted to % (NGSP); other mixed units are never pooled in `points`.
 
+**Records semantics:**
+- **Statuses.**
+  - Observations with status `entered-in-error` or `cancelled`, and Conditions verified `entered-in-error` or `refuted`, are skipped.
+  - If an earlier import stored the same resource, it is removed: Observations match by resource id and effective time, Conditions by resource id and code.
+  - A `corrected` or `amended` Observation supersedes stored rows with the same id, code and time.
+- **Medications.**
+  - `completed` and `stopped` with an end date give a start and a stop.
+  - With no end date, the start is kept with `{"status": ..., "current": false}` in its note. No date is ever invented.
+- **Sensitive categories** come from display text first, then from codes in `code`, in components and in `valueCodeableConcept`:
+  - ICD-10 (CM and WHO) and ICD-9-CM ranges;
+  - a curated list of SNOMED CT concepts;
+  - mental-health and pregnancy LOINC codes.
+
+  A code with no system is matched by its shape, so privacy fails closed. The SNOMED list is not exhaustive: unlisted child concepts with no display text are not caught.
+- **Known limits (follow-ups):**
+  - A correction's identity is not scoped by source.
+  - Corrections apply in arrival order, not by `meta.lastUpdated`.
+  - Sleep nights are assigned noon to noon in each sample's own offset, so a large eastward flight can split one night.
+
+**`trend_svg`:**
+- Plots by date.
+- The vertical range spans at least a tenth of the values' size, so noise is not drawn as a swing.
+- Axis numbers are rounded for reading; the first and last dates are labelled.
+- Series of 24 points or fewer show a dot per measurement.
+- No external resources.
+
+
 ## Lane C: knowledge pack and research watch (`caduceus/knowledge/`, `caduceus/research/`, `core/schema/vault/30_research.sql`)
 
 ```python
