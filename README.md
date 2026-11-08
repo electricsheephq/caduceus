@@ -85,7 +85,9 @@ Disclosure — imports, search and reports run locally, and the vault is never u
 whole; tool results (slices of your data) enter the conversation, so the model provider you
 chose sees them; a research watch you turn on sends gene, drug and topic terms, never
 genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
-no telemetry.
+no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
+check it holds no health data, and files it to this repository with `gh` only after you
+approve the draft.
 
 Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is not encrypted at rest; encrypted and local-model levels are planned for v0.4. See [SECURITY.md](SECURITY.md) for the boundaries.
 

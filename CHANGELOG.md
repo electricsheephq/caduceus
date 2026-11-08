@@ -2,7 +2,7 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.0 — 2026-11-08
 
 ### Added
 - **The vault**

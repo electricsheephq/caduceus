@@ -9,7 +9,9 @@ description: >-
   whole; tool results (slices of your data) enter the conversation, so the model provider you
   chose sees them; a research watch you turn on sends gene, drug and topic terms, never
   genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
-  no telemetry.
+  no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
+  check it holds no health data, and files it to this repository with `gh` only after you
+  approve the draft.
 author: Electric Sheep
 manifest_version: 2
 api_version: 1
