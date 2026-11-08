@@ -479,15 +479,19 @@ def trend_tool(ctx, args: dict) -> dict:
             if pivot is None:  # the drug's start is hidden: nothing about it, not even its date
                 return {"metric": metric, **_withheld(hidden)}
         if after_days is None:
-            # By default the after window runs from the start to the latest data (28 to 365 days), so a change that
-            # slows after the first weeks (a plateau) shows in its second half.
-            row = store.samples.execute("SELECT max(day) FROM daily_rollup WHERE metric=? AND day<=?",
-                                        (metric, date.today().isoformat())).fetchone()
-            last = date.fromisoformat(row[0][:10]) if row and row[0] else pivot
-            after_days = min(365, max(28, (last - pivot).days + 1))
+            after_days = default_after_days(store.samples, metric, pivot)
         result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
                        before_days=before_days, after_days=after_days)
         return {**result, "pivot": pivot.isoformat()}
+
+
+def default_after_days(samples, metric: str, pivot: date, today: date | None = None) -> int:
+    """The default after window, shared with the brief: from the start to the latest data on or before today, 28 to 365
+    days, so a change that slows after the first weeks (a plateau) shows in its second half."""
+    row = samples.execute("SELECT max(day) FROM daily_rollup WHERE metric=? AND day<=?",
+                          (metric, (today or date.today()).isoformat())).fetchone()
+    last = date.fromisoformat(row[0][:10]) if row and row[0] else pivot
+    return min(365, max(28, (last - pivot).days + 1))
 
 
 def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:

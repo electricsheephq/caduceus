@@ -188,12 +188,12 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
         if starts and metric == "weight":
             latest = starts[-1]
             pivot = date.fromisoformat(latest["occurred_on"][:10])
-            after_days = max(14, min(180, (today - pivot).days + 1))
-            cmp, _err = _try(_lane(trends_mod.compare_windows), samples, metric, pivot=pivot, before_days=28,
-                             after_days=after_days)
-            if cmp:
-                from .ops import short_drug
+            from .ops import default_after_days, short_drug
 
+            # The same window as caduceus_trend op=compare, so the brief and the chat give the same numbers.
+            cmp, _err = _try(_lane(trends_mod.compare_windows), samples, metric, pivot=pivot, before_days=28,
+                             after_days=default_after_days(samples, metric, pivot, today))
+            if cmp:
                 text = _compare_text(cmp, unit, short_drug(latest["drug"]))
         first_day, last_day = str(cov.get("first_day") or ""), str(cov.get("last_day") or "")
         gaps = sum(1 for g in cov.get("gaps") or []  # only gaps inside the data, not the months before it began

@@ -86,6 +86,19 @@ def test_report_and_brief_are_local_pages(plugin):
     assert "ozempic (semaglutide) 0.5 mg/dose pen start" not in page  # chart labels use the short name
 
 
+def test_brief_and_compare_give_the_same_plateau(plugin):
+    """The chat answer (compare) and the brief describe one after window: the start to the latest data."""
+    from caduceus.brief import _num
+
+    _, call = plugin
+    since = call("caduceus_trend", op="compare", metric="weight", drug="Ozempic")
+    first, second = (half["weekly_slope"] for half in since["after"]["halves"])
+    page = Path(call("caduceus_capture", op="brief")["path"]).read_text(encoding="utf-8")
+    assert f"({since['after']['n_days']} days with data)" in page
+    assert (f"The change per week was {_num(first, 2)} kg in the first half of that period and "
+            f"{_num(second, 2)} kg in the second half.") in page
+
+
 def test_standard_privacy_hides_apoe_everywhere(plugin):
     ctx, call = plugin
     ctx.config["privacy_level"] = "standard"
