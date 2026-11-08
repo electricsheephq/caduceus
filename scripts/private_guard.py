@@ -29,7 +29,7 @@ _PROM_CHUNK = re.compile(rb"decompressString\('")
 def _denylist() -> tuple[set[str], list[re.Pattern]]:
     path = Path(os.environ.get("CADUCEUS_DENYLIST") or Path.home() / ".config" / "caduceus" / "denylist.txt")
     hashes, words = set(), []
-    if path.is_file():
+    if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
             entry = line.strip()
             if not entry or entry.startswith("#"):
