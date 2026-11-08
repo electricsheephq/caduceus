@@ -1,0 +1,932 @@
+{
+  "header": {
+    "type": "esummary",
+    "version": "0.3"
+  },
+  "result": {
+    "uids": [
+      "1703261",
+      "638797"
+    ],
+    "1703261": {
+      "uid": "1703261",
+      "obj_type": "single nucleotide variant",
+      "accession": "VCV001703261",
+      "accession_version": "VCV001703261.1",
+      "title": "NM_000769.4(CYP2C19):c.681G>T (p.Pro227=)",
+      "variation_set": [
+        {
+          "measure_id": "1695652",
+          "variation_xrefs": [
+            {
+              "db_source": "ClinGen",
+              "db_id": "CA470832184"
+            },
+            {
+              "db_source": "dbSNP",
+              "db_id": "4244285"
+            }
+          ],
+          "variation_name": "NM_000769.4(CYP2C19):c.681G>T (p.Pro227=)",
+          "cdna_change": "c.681G>T",
+          "aliases": [],
+          "variation_loc": [
+            {
+              "status": "current",
+              "assembly_name": "GRCh38",
+              "chr": "10",
+              "band": "10q23.33",
+              "start": "94781859",
+              "stop": "94781859",
+              "inner_start": "",
+              "inner_stop": "",
+              "outer_start": "",
+              "outer_stop": "",
+              "display_start": "94781859",
+              "display_stop": "94781859",
+              "assembly_acc_ver": "GCF_000001405.38",
+              "annotation_release": "",
+              "alt": "",
+              "ref": ""
+            },
+            {
+              "status": "previous",
+              "assembly_name": "GRCh37",
+              "chr": "10",
+              "band": "10q23.33",
+              "start": "96541616",
+              "stop": "96541616",
+              "inner_start": "",
+              "inner_stop": "",
+              "outer_start": "",
+              "outer_stop": "",
+              "display_start": "96541616",
+              "display_stop": "96541616",
+              "assembly_acc_ver": "GCF_000001405.25",
+              "annotation_release": "",
+              "alt": "",
+              "ref": ""
+            }
+          ],
+          "allele_freq_set": [],
+          "variant_type": "single nucleotide variant",
+          "canonical_spdi": "NC_000010.11:94781858:G:T",
+          "common_name": ""
+        }
+      ],
+      "supporting_submissions": {
+        "scv": [
+          "SCV002568451"
+        ],
+        "rcv": [
+          "RCV002280383"
+        ]
+      },
+      "germline_classification": {
+        "description": "drug response",
+        "last_evaluated": "1/01/01 00:00",
+        "review_status": "no assertion criteria provided",
+        "fda_recognized_database": "",
+        "trait_set": [
+          {
+            "trait_xrefs": [
+              {
+                "db_source": "MedGen",
+                "db_id": "C0948089"
+              },
+              {
+                "db_source": "MeSH",
+                "db_id": "D054058"
+              },
+              {
+                "db_source": "MONDO",
+                "db_id": "MONDO:0005542"
+              },
+              {
+                "db_source": "Human Phenotype Ontology",
+                "db_id": "HP:0033678"
+              }
+            ],
+            "trait_name": "Acute coronary syndrome"
+          }
+        ]
+      },
+      "clinical_impact_classification": {
+        "description": "",
+        "last_evaluated": "1/01/01 00:00",
+        "review_status": "",
+        "fda_recognized_database": "",
+        "trait_set": []
+      },
+      "oncogenicity_classification": {
+        "description": "",
+        "last_evaluated": "1/01/01 00:00",
+        "review_status": "",
+        "fda_recognized_database": "",
+        "trait_set": []
+      },
+      "record_status": "",
+      "gene_sort": "CYP2C19",
+      "chr_sort": "10",
+      "location_sort": "00000000000094781859",
+      "variation_set_name": "",
+      "variation_set_id": "",
+      "genes": [
+        {
+          "symbol": "CYP2C19",
+          "geneid": "1557",
+          "strand": "+",
+          "source": "submitted"
+        }
+      ],
+      "molecular_consequence_list": [
+        "synonymous variant"
+      ],
+      "protein_change": "",
+      "fda_recognized_database": ""
+    },
+    "638797": {
+      "uid": "638797",
+      "obj_type": "Diplotype",
+      "accession": "VCV000638797",
+      "accession_version": "VCV000638797.3",
+      "title": "CYP2C19*2/*2",
+      "variation_set": [
+        {
+          "measure_id": "31936",
+          "variation_xrefs": [
+            {
+              "db_source": "ClinVar",
+              "db_id": "633856"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633857"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633866"
+            },
+            {
+              "db_source": "ClinPGx Clinical Annotation",
+              "db_id": "655384520"
+            },
+            {
+              "db_source": "ClinPGx Clinical Annotation",
+              "db_id": "982038133"
+            },
+            {
+              "db_source": "ClinPGx Clinical Annotation",
+              "db_id": "982038252"
+            },
+            {
+              "db_source": "ClinPGx Clinical Annotation",
+              "db_id": "982040587"
+            },
+            {
+              "db_source": "ClinGen",
+              "db_id": "CA126959"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000501203"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000556609"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633867"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633868"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633869"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633870"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633901"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633902"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633903"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633904"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633971"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633972"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633973"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000569522"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000569929"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000613418"
+            },
+            {
+              "db_source": "OMIM",
+              "db_id": "124020.0001"
+            },
+            {
+              "db_source": "dbSNP",
+              "db_id": "4244285"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633974"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634006"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634007"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634008"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634009"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634010"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634102"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634103"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634104"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634105"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634237"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634238"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634284"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634285"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634335"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634336"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634359"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634360"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634406"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634407"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "638797"
+            }
+          ],
+          "variation_name": "NM_000769.4(CYP2C19):c.681G>A (p.Pro227=)",
+          "cdna_change": "c.681G>A",
+          "aliases": [
+            "CYP2C19*2",
+            "CYP2C19m1"
+          ],
+          "variation_loc": [
+            {
+              "status": "current",
+              "assembly_name": "GRCh38",
+              "chr": "10",
+              "band": "10q23.33",
+              "start": "94781859",
+              "stop": "94781859",
+              "inner_start": "",
+              "inner_stop": "",
+              "outer_start": "",
+              "outer_stop": "",
+              "display_start": "94781859",
+              "display_stop": "94781859",
+              "assembly_acc_ver": "GCF_000001405.38",
+              "annotation_release": "",
+              "alt": "",
+              "ref": ""
+            },
+            {
+              "status": "previous",
+              "assembly_name": "GRCh37",
+              "chr": "10",
+              "band": "10q23.33",
+              "start": "96541616",
+              "stop": "96541616",
+              "inner_start": "",
+              "inner_stop": "",
+              "outer_start": "",
+              "outer_stop": "",
+              "display_start": "96541616",
+              "display_stop": "96541616",
+              "assembly_acc_ver": "GCF_000001405.25",
+              "annotation_release": "",
+              "alt": "",
+              "ref": ""
+            }
+          ],
+          "allele_freq_set": [
+            {
+              "source": "The Genome Aggregation Database (gnomAD), exomes",
+              "value": "0.15913",
+              "minor_allele": ""
+            },
+            {
+              "source": "Trans-Omics for Precision Medicine (TOPMed)",
+              "value": "0.16025",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD)",
+              "value": "0.16148",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD)",
+              "value": "0.16806",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD), exomes",
+              "value": "0.17640",
+              "minor_allele": ""
+            },
+            {
+              "source": "Exome Aggregation Consortium (ExAC)",
+              "value": "0.18563",
+              "minor_allele": ""
+            },
+            {
+              "source": "NHLBI Exome Sequencing Project (ESP) Exome Variant Server",
+              "value": "0.15413",
+              "minor_allele": ""
+            },
+            {
+              "source": "1000 Genomes Project",
+              "value": "0.22145",
+              "minor_allele": "A"
+            }
+          ],
+          "variant_type": "single nucleotide variant",
+          "canonical_spdi": "NC_000010.11:94781858:G:A",
+          "common_name": ""
+        },
+        {
+          "measure_id": "622287",
+          "variation_xrefs": [
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000569522"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000613302"
+            },
+            {
+              "db_source": "Genetic Testing Registry (GTR)",
+              "db_id": "GTR000613418"
+            },
+            {
+              "db_source": "dbSNP",
+              "db_id": "12769205"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633850"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633856"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633857"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633866"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633867"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633868"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633869"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633870"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633889"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633892"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633895"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633898"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633901"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633902"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633903"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633904"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633968"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633971"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633972"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633973"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633974"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633976"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "633977"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634006"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634007"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634008"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634009"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634010"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634012"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634013"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634019"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634022"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634026"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634028"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634034"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634064"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634102"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634103"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634104"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634105"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634119"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634135"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634154"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634157"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634211"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634213"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634236"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634237"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634238"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634254"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634284"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634285"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634304"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634329"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634335"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634336"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634340"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634341"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634358"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634359"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634360"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634378"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634389"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634390"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634406"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634407"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "634418"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "638786"
+            },
+            {
+              "db_source": "ClinVar",
+              "db_id": "638797"
+            }
+          ],
+          "variation_name": "NM_000769.4(CYP2C19):c.332-23A>G",
+          "cdna_change": "NM_000769.4(CYP2C19):c.332-23A>G",
+          "aliases": [],
+          "variation_loc": [
+            {
+              "status": "current",
+              "assembly_name": "GRCh38",
+              "chr": "10",
+              "band": "10q23.33",
+              "start": "94775367",
+              "stop": "94775367",
+              "inner_start": "",
+              "inner_stop": "",
+              "outer_start": "",
+              "outer_stop": "",
+              "display_start": "94775367",
+              "display_stop": "94775367",
+              "assembly_acc_ver": "GCF_000001405.38",
+              "annotation_release": "",
+              "alt": "",
+              "ref": ""
+            },
+            {
+              "status": "previous",
+              "assembly_name": "GRCh37",
+              "chr": "10",
+              "band": "10q23.33",
+              "start": "96535124",
+              "stop": "96535124",
+              "inner_start": "",
+              "inner_stop": "",
+              "outer_start": "",
+              "outer_stop": "",
+              "display_start": "96535124",
+              "display_stop": "96535124",
+              "assembly_acc_ver": "GCF_000001405.25",
+              "annotation_release": "",
+              "alt": "",
+              "ref": ""
+            }
+          ],
+          "allele_freq_set": [
+            {
+              "source": "NHLBI Exome Sequencing Project (ESP) Exome Variant Server",
+              "value": "0.16193",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD), exomes",
+              "value": "0.16396",
+              "minor_allele": ""
+            },
+            {
+              "source": "Trans-Omics for Precision Medicine (TOPMed)",
+              "value": "0.16675",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD)",
+              "value": "0.16732",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD)",
+              "value": "0.17352",
+              "minor_allele": ""
+            },
+            {
+              "source": "The Genome Aggregation Database (gnomAD), exomes",
+              "value": "0.18047",
+              "minor_allele": ""
+            },
+            {
+              "source": "Exome Aggregation Consortium (ExAC)",
+              "value": "0.18627",
+              "minor_allele": ""
+            },
+            {
+              "source": "1000 Genomes Project",
+              "value": "0.22843",
+              "minor_allele": "G"
+            }
+          ],
+          "variant_type": "single nucleotide variant",
+          "canonical_spdi": "NC_000010.11:94775366:A:G",
+          "common_name": ""
+        }
+      ],
+      "supporting_submissions": {
+        "scv": [
+          "SCV000920971",
+          "SCV000922445",
+          "SCV000922446",
+          "SCV000922926",
+          "SCV000923375"
+        ],
+        "rcv": [
+          "RCV000782448",
+          "RCV000783922",
+          "RCV000783923",
+          "RCV000784403",
+          "RCV000784838"
+        ]
+      },
+      "germline_classification": {
+        "description": "drug response",
+        "last_evaluated": "1/01/01 00:00",
+        "review_status": "practice guideline",
+        "fda_recognized_database": "",
+        "trait_set": [
+          {
+            "trait_xrefs": [
+              {
+                "db_source": "MedGen",
+                "db_id": "CN221263"
+              }
+            ],
+            "trait_name": "Citalopram response"
+          },
+          {
+            "trait_xrefs": [
+              {
+                "db_source": "MedGen",
+                "db_id": "CN221265"
+              }
+            ],
+            "trait_name": "Sertraline response"
+          },
+          {
+            "trait_xrefs": [
+              {
+                "db_source": "MedGen",
+                "db_id": "CN221264"
+              }
+            ],
+            "trait_name": "Escitalopram response"
+          },
+          {
+            "trait_xrefs": [
+              {
+                "db_source": "MedGen",
+                "db_id": "CN077957"
+              }
+            ],
+            "trait_name": "Voriconazole response"
+          },
+          {
+            "trait_xrefs": [
+              {
+                "db_source": "MedGen",
+                "db_id": "CN077970"
+              }
+            ],
+            "trait_name": "Clopidogrel response"
+          }
+        ]
+      },
+      "clinical_impact_classification": {
+        "description": "",
+        "last_evaluated": "1/01/01 00:00",
+        "review_status": "",
+        "fda_recognized_database": "",
+        "trait_set": []
+      },
+      "oncogenicity_classification": {
+        "description": "",
+        "last_evaluated": "1/01/01 00:00",
+        "review_status": "",
+        "fda_recognized_database": "",
+        "trait_set": []
+      },
+      "record_status": "",
+      "gene_sort": "CYP2C19",
+      "chr_sort": "10",
+      "location_sort": "00000000000094781859",
+      "variation_set_name": "",
+      "variation_set_id": "",
+      "genes": [
+        {
+          "symbol": "CYP2C19",
+          "geneid": "1557",
+          "strand": "+",
+          "source": "submitted"
+        },
+        {
+          "symbol": "CYP2C19",
+          "geneid": "1557",
+          "strand": "+",
+          "source": "submitted"
+        }
+      ],
+      "molecular_consequence_list": [
+        "synonymous variant",
+        "intron variant"
+      ],
+      "protein_change": "",
+      "fda_recognized_database": ""
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=GLP1R+AND+FIRST_PDATE%3A%5B2026-10-20+TO+2026-11-08%5D&sort=P_PDATE_D+asc&format=json&resultType=lite&pageSize=10",
+  "hitCount": 14,
+  "request": {
+    "queryString": "GLP1R AND FIRST_PDATE:[2026-10-20 TO 2026-11-08]",
+    "resultType": "lite",
+    "cursorMark": "*",
+    "pageSize": 10,
+    "sort": "P_PDATE_D asc",
+    "synonym": false
+  },
+  "results": [
+    {
+      "id": "PPR1355898",
+      "source": "PPR",
+      "pmid": null,
+      "firstPublicationDate": "2026-11-03"
+    },
+    {
+      "id": "PPR1346450",
+      "source": "PPR",
+      "pmid": null,
+      "firstPublicationDate": "2026-10-20"
+    },
+    {
+      "id": "PPR1346262",
+      "source": "PPR",
+      "pmid": null,
+      "firstPublicationDate": "2026-10-20"
+    },
+    {
+      "id": "42963583",
+      "source": "MED",
+      "pmid": "42963583",
+      "firstPublicationDate": "2026-10-30"
+    },
+    {
+      "id": "42950887",
+      "source": "MED",
+      "pmid": "42950887",
+      "firstPublicationDate": "2026-10-28"
+    },
+    {
+      "id": "42941702",
+      "source": "MED",
+      "pmid": "42941702",
+      "firstPublicationDate": "2026-10-21"
+    },
+    {
+      "id": "42934248",
+      "source": "MED",
+      "pmid": "42934248",
+      "firstPublicationDate": "2026-10-26"
+    },
+    {
+      "id": "42913639",
+      "source": "MED",
+      "pmid": "42913639",
+      "firstPublicationDate": "2026-10-22"
+    }
+  ],
+  "ascending_dates": false
+}

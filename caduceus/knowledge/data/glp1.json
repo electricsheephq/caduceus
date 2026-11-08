@@ -1,0 +1,176 @@
+{
+  "version": "2026.11.0",
+  "note": "Research only; no CPIC guideline exists for GLP-1 RAs. Most response variation is non-genetic. No dosing or drug-choice inference.",
+  "metabolism": {
+    "statement": "Ozempic and Mounjaro are cleared by proteolysis and beta-oxidation, not CYP enzymes.",
+    "sources": [
+      "https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/209637s025lbl.pdf",
+      "https://pi.lilly.com/us/mounjaro-uspi.pdf"
+    ]
+  },
+  "entries": [
+    {
+      "id": "glp1-rs10305420",
+      "gene": "GLP1R",
+      "drugs": [
+        "semaglutide",
+        "tirzepatide"
+      ],
+      "markers": [
+        {
+          "rsid": "rs10305420",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "Pro7Leu",
+          "function": "small population weight-loss association",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs10305420"
+        }
+      ],
+      "allele_name": "Pro7Leu",
+      "function": "small population weight-loss association",
+      "phenotype_rules": {
+        "0": "no listed effect allele",
+        "1": "one effect allele",
+        "2": "two effect alleles"
+      },
+      "finding": "Each rs10305420 T allele was associated with about 0.76 kg more self-reported weight loss on semaglutide or tirzepatide in a population study.",
+      "evidence": "research",
+      "sources": [
+        {
+          "title": "Genetic predictors of GLP1 receptor agonist weight loss and side effects.",
+          "journal": "Nature",
+          "year": 2026,
+          "pmid": "41951734",
+          "doi": "10.1038/s41586-026-10330-z",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41951734"
+        }
+      ],
+      "limits": "Self-reported outcomes in 27,885 survey respondents (78.3% European ancestry, 82.4% female). A population average does not predict an individual result. Research only; no CPIC guideline exists for GLP-1 RAs. Most response variation is non-genetic. No dosing or drug-choice inference.",
+      "chip_reliability": "limited",
+      "facts": {
+        "weight_loss_kg_per_T": 0.76,
+        "reported_change_95ci_kg": [
+          -1.27,
+          -0.34
+        ],
+        "p": 2.9e-10,
+        "drug_interaction_p": 0.02,
+        "interaction": "weakly significant",
+        "replication": "All of Us",
+        "non_genetic_variance_percent": 21.4,
+        "combined_model_variance_percent": 25
+      }
+    },
+    {
+      "id": "glp1-rs1800437",
+      "gene": "GIPR",
+      "drugs": [
+        "tirzepatide"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1800437",
+          "effect": "C",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "Glu354Gln",
+          "function": "vomiting association on tirzepatide only",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800437"
+        }
+      ],
+      "allele_name": "Glu354Gln",
+      "function": "vomiting association on tirzepatide only",
+      "phenotype_rules": {
+        "0": "no listed effect allele",
+        "1": "one effect allele",
+        "2": "two effect alleles"
+      },
+      "finding": "The rs1800437 C (Gln354) allele was associated with vomiting on tirzepatide only; the study found no evidence of this effect in semaglutide users and no efficacy effect.",
+      "evidence": "research",
+      "sources": [
+        {
+          "title": "Genetic predictors of GLP1 receptor agonist weight loss and side effects.",
+          "journal": "Nature",
+          "year": 2026,
+          "pmid": "41951734",
+          "doi": "10.1038/s41586-026-10330-z",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41951734"
+        }
+      ],
+      "limits": "Self-reported side effects. The reported G-allele OR was 0.546; C-allele OR approximately 1.83 is an inversion, not a number printed in the paper. Absence is not evidence of safety. Research only; no CPIC guideline exists for GLP-1 RAs. Most response variation is non-genetic. No dosing or drug-choice inference.",
+      "chip_reliability": "limited",
+      "facts": {
+        "reported_allele": "G",
+        "reported_odds_ratio": 0.546,
+        "inverted_C_odds_ratio_approx": 1.83,
+        "p": 5.1e-09,
+        "efficacy_effect": false,
+        "semaglutide_effect": "no evidence"
+      }
+    },
+    {
+      "id": "glp1-rs6923761",
+      "gene": "GLP1R",
+      "drugs": [
+        "semaglutide",
+        "liraglutide",
+        "dulaglutide",
+        "exenatide",
+        "lixisenatide"
+      ],
+      "markers": [
+        {
+          "rsid": "rs6923761",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "Gly168Ser",
+          "function": "small pooled HbA1c response association; non-replication",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs6923761"
+        }
+      ],
+      "allele_name": "Gly168Ser",
+      "function": "small pooled HbA1c response association; non-replication",
+      "phenotype_rules": {
+        "0": "no listed effect allele",
+        "1": "one effect allele",
+        "2": "two effect alleles"
+      },
+      "finding": "Each rs6923761 A (Ser168) allele was associated with 0.08 percentage points smaller HbA1c reduction at six months on pooled GLP-1 RAs, not a weight effect or a semaglutide-specific result. A study of 210 oral semaglutide users found no significant association.",
+      "evidence": "research",
+      "sources": [
+        {
+          "title": "Pharmacogenomics of GLP-1 receptor agonists: a genome-wide analysis of observational data and large randomised controlled trials.",
+          "journal": "Lancet Diabetes Endocrinol",
+          "year": 2023,
+          "pmid": "36528349",
+          "doi": "10.1016/s2213-8587(22)00340-0",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36528349"
+        },
+        {
+          "title": "Influence of GLP1 receptor rs6923761 and rs761387 genetic variants on oral semaglutide response in patients with type 2 diabetes.",
+          "journal": "Acta Diabetol",
+          "year": 2026,
+          "pmid": "41307691",
+          "doi": "10.1007/s00592-025-02626-9",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41307691"
+        }
+      ],
+      "limits": "The pooled study included 4,571 people with type 2 diabetes and did not test semaglutide specifically or measure weight. Oral semaglutide non-replication: no significant HbA1c, BMI or blood-pressure association in 210 people. Tirzepatide-specific response was not established. Research only; no CPIC guideline exists for GLP-1 RAs. Most response variation is non-genetic. No dosing or drug-choice inference.",
+      "chip_reliability": "limited",
+      "facts": {
+        "HbA1c_percentage_points_smaller_reduction_per_A": 0.08,
+        "ci95": [
+          0.04,
+          0.12
+        ],
+        "mmol_mol": 0.9,
+        "months": 6,
+        "p": 6e-05,
+        "pooled_n": 4571,
+        "oral_semaglutide_nonreplication_n": 210
+      }
+    }
+  ]
+}

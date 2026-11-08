@@ -1,0 +1,5041 @@
+{
+  "version": "2026.11.0",
+  "provenance": {
+    "retrieved": "2026-11-08",
+    "pairs": "https://api.cpicpgx.org/v1/pair_view",
+    "alleles": "https://api.cpicpgx.org/v1/allele",
+    "strand": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&rettype=json&retmode=text"
+  },
+  "watch": {
+    "genes": [
+      "ABCG2",
+      "APOE",
+      "CACNA1S",
+      "CYP2B6",
+      "CYP2C19",
+      "CYP2C9",
+      "CYP2D6",
+      "CYP3A5",
+      "CYP4F2",
+      "DPYD",
+      "G6PD",
+      "GIPR",
+      "GLP1R",
+      "HLA-A",
+      "HLA-B",
+      "IFNL3",
+      "MT-RNR1",
+      "NUDT15",
+      "RYR1",
+      "SLCO1B1",
+      "TPMT",
+      "UGT1A1",
+      "VKORC1"
+    ],
+    "rsids": [
+      "rs10305420",
+      "rs1057910",
+      "rs1142345",
+      "rs116855232",
+      "rs12248560",
+      "rs12979860",
+      "rs1799853",
+      "rs1800437",
+      "rs1800460",
+      "rs1800462",
+      "rs2108622",
+      "rs2231142",
+      "rs2395029",
+      "rs267606617",
+      "rs3745274",
+      "rs3918290",
+      "rs4149056",
+      "rs4244285",
+      "rs429358",
+      "rs4986893",
+      "rs55886062",
+      "rs67376798",
+      "rs6923761",
+      "rs7412",
+      "rs75017182",
+      "rs776746",
+      "rs887829",
+      "rs9923231"
+    ],
+    "drugs": [],
+    "topics": [
+      "pharmacogenetics",
+      "drug response"
+    ]
+  },
+  "entries": [
+    {
+      "id": "slco1b1-atorvastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "atorvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 1556299
+    },
+    {
+      "id": "dpyd-capecitabine",
+      "gene": "DPYD",
+      "drugs": [
+        "capecitabine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs3918290",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2A",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs3918290"
+        },
+        {
+          "rsid": "rs55886062",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*13",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs55886062"
+        },
+        {
+          "rsid": "rs67376798",
+          "effect": "A",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.2846A>T",
+          "function": "decreased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs67376798"
+        },
+        {
+          "rsid": "rs75017182",
+          "effect": "C",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "HapB3 splice variant",
+          "function": "decreased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs75017182"
+        }
+      ],
+      "allele_name": "*2A, *13, c.2846A>T, HapB3 splice variant",
+      "function": "no function; decreased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with reduced DPD function and fluoropyrimidine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Dihydropyrimidine Dehydrogenase Genotype and Fluoropyrimidine Dosing: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29152729",
+          "doi": "10.1002/cpt.911",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29152729"
+        }
+      ],
+      "guideline": {
+        "title": "DPYD and Fluoropyrimidines",
+        "year": 2018,
+        "pmid": "29152729",
+        "url": "https://www.clinpgx.org/guideline/PA166251462"
+      },
+      "limits": "Four variants cover only part of DPD deficiency. Absence does not establish normal DPD function or drug safety.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110086
+    },
+    {
+      "id": "cyp2c9-celecoxib",
+      "gene": "CYP2C9",
+      "drugs": [
+        "celecoxib"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110089
+    },
+    {
+      "id": "cyp2c19-citalopram",
+      "gene": "CYP2C19",
+      "drugs": [
+        "citalopram"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110090
+    },
+    {
+      "id": "slco1b1-fluvastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "fluvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 1556301
+    },
+    {
+      "id": "mt-rnr1-netilmicin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "netilmicin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 3004620
+    },
+    {
+      "id": "cyp2d6-nortriptyline",
+      "gene": "CYP2D6",
+      "drugs": [
+        "nortriptyline"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110117
+    },
+    {
+      "id": "mt-rnr1-paromomycin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "paromomycin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 826284
+    },
+    {
+      "id": "mt-rnr1-ribostamycin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "ribostamycin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 3004621
+    },
+    {
+      "id": "nudt15-thioguanine",
+      "gene": "NUDT15",
+      "drugs": [
+        "thioguanine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs116855232",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2/*3 component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs116855232"
+        }
+      ],
+      "allele_name": "*2/*3 component",
+      "function": "no function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with low NUDT15 function and thiopurine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41618934",
+          "doi": "10.1002/cpt.70209",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41618934"
+        }
+      ],
+      "guideline": {
+        "title": "TPMT, NUDT15 and Thiopurines",
+        "year": 2026,
+        "pmid": "41618934",
+        "url": "https://www.clinpgx.org/guideline/PA166251442"
+      },
+      "limits": "The p.Arg139Cys marker does not resolve all NUDT15 alleles or distinguish *2 from *3.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110143
+    },
+    {
+      "id": "cyp2c19-voriconazole",
+      "gene": "CYP2C19",
+      "drugs": [
+        "voriconazole"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guidelines for CYP2C19 and Voriconazole Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27981572",
+          "doi": "10.1002/cpt.583",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27981572"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C19 and Voriconazole",
+        "year": 2017,
+        "pmid": "27981572",
+        "url": "https://www.clinpgx.org/guideline/PA166251456"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110147
+    },
+    {
+      "id": "cyp2d6-vortioxetine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "vortioxetine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110168
+    },
+    {
+      "id": "vkorc1-warfarin",
+      "gene": "VKORC1",
+      "drugs": [
+        "warfarin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs9923231",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "−1639A",
+          "function": "lower expression",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs9923231"
+        }
+      ],
+      "allele_name": "−1639A",
+      "function": "lower expression",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The plus-strand T allele corresponds to −1639A, associated with lower VKORC1 expression and warfarin sensitivity.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Pharmacogenetics-Guided Warfarin Dosing: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "28198005",
+          "doi": "10.1002/cpt.668",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/28198005"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+        "year": 2017,
+        "pmid": "28198005",
+        "url": "https://www.clinpgx.org/guideline/PA166251465"
+      },
+      "limits": "rs9923231 is plus-strand C>T; T corresponds to promoter −1639A. This alone is not a warfarin dose model.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110150
+    },
+    {
+      "id": "cyp2c19-clomipramine",
+      "gene": "CYP2C19",
+      "drugs": [
+        "clomipramine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110180
+    },
+    {
+      "id": "cyp2d6-clomipramine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "clomipramine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110181
+    },
+    {
+      "id": "cyp2d6-fluvoxamine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "fluvoxamine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110189
+    },
+    {
+      "id": "cyp2c19-imipramine",
+      "gene": "CYP2C19",
+      "drugs": [
+        "imipramine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110194
+    },
+    {
+      "id": "ugt1a1-atazanavir",
+      "gene": "UGT1A1",
+      "drugs": [
+        "atazanavir"
+      ],
+      "markers": [
+        {
+          "rsid": "rs887829",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*80; proxy for *28",
+          "function": "lower expression proxy",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs887829"
+        }
+      ],
+      "allele_name": "*80; proxy for *28",
+      "function": "lower expression proxy",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs887829 T allele is a limited proxy for reduced UGT1A1 expression and atazanavir-associated bilirubin elevation.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for UGT1A1 and Atazanavir Prescribing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2016,
+          "pmid": "26417955",
+          "doi": "10.1002/cpt.269",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/26417955"
+        }
+      ],
+      "guideline": {
+        "title": "UGT1A1 and Atazanavir",
+        "year": 2016,
+        "pmid": "26417955",
+        "url": "https://www.clinpgx.org/guideline/PA166251453"
+      },
+      "limits": "rs887829 is a linkage proxy for *28, not a direct repeat count; linkage varies by ancestry and *6 is not covered.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110082
+    },
+    {
+      "id": "cyp2d6-atomoxetine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "atomoxetine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for Cytochrome P450 (CYP)2D6 Genotype and Atomoxetine Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30801677",
+          "doi": "10.1002/cpt.1409",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30801677"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6 and Atomoxetine",
+        "year": 2019,
+        "pmid": "30801677",
+        "url": "https://www.clinpgx.org/guideline/PA166251459"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110083
+    },
+    {
+      "id": "cyp2d6-codeine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "codeine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for CYP2D6, OPRM1, and COMT Genotypes and Select Opioid Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "33387367",
+          "doi": "10.1002/cpt.2149",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/33387367"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, OPRM1, COMT, and Opioids",
+        "year": 2021,
+        "pmid": "33387367",
+        "url": "https://www.clinpgx.org/guideline/PA166251454"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110092
+    },
+    {
+      "id": "mt-rnr1-dibekacin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "dibekacin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 3004618
+    },
+    {
+      "id": "cyp2c19-escitalopram",
+      "gene": "CYP2C19",
+      "drugs": [
+        "escitalopram"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110098
+    },
+    {
+      "id": "dpyd-fluorouracil",
+      "gene": "DPYD",
+      "drugs": [
+        "fluorouracil"
+      ],
+      "markers": [
+        {
+          "rsid": "rs3918290",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2A",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs3918290"
+        },
+        {
+          "rsid": "rs55886062",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*13",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs55886062"
+        },
+        {
+          "rsid": "rs67376798",
+          "effect": "A",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.2846A>T",
+          "function": "decreased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs67376798"
+        },
+        {
+          "rsid": "rs75017182",
+          "effect": "C",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "HapB3 splice variant",
+          "function": "decreased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs75017182"
+        }
+      ],
+      "allele_name": "*2A, *13, c.2846A>T, HapB3 splice variant",
+      "function": "no function; decreased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with reduced DPD function and fluoropyrimidine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Dihydropyrimidine Dehydrogenase Genotype and Fluoropyrimidine Dosing: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29152729",
+          "doi": "10.1002/cpt.911",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29152729"
+        }
+      ],
+      "guideline": {
+        "title": "DPYD and Fluoropyrimidines",
+        "year": 2018,
+        "pmid": "29152729",
+        "url": "https://www.clinpgx.org/guideline/PA166251462"
+      },
+      "limits": "Four variants cover only part of DPD deficiency. Absence does not establish normal DPD function or drug safety.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110099
+    },
+    {
+      "id": "cyp2c9-flurbiprofen",
+      "gene": "CYP2C9",
+      "drugs": [
+        "flurbiprofen"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110100
+    },
+    {
+      "id": "cyp2c9-fluvastatin",
+      "gene": "CYP2C9",
+      "drugs": [
+        "fluvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 1556302
+    },
+    {
+      "id": "ryr1-isoflurane",
+      "gene": "RYR1",
+      "drugs": [
+        "isoflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110108
+    },
+    {
+      "id": "mt-rnr1-kanamycin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "kanamycin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110159
+    },
+    {
+      "id": "cyp2c9-lornoxicam",
+      "gene": "CYP2C9",
+      "drugs": [
+        "lornoxicam"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110065
+    },
+    {
+      "id": "slco1b1-lovastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "lovastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 1556300
+    },
+    {
+      "id": "cyp2c9-meloxicam",
+      "gene": "CYP2C9",
+      "drugs": [
+        "meloxicam"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110067
+    },
+    {
+      "id": "tpmt-mercaptopurine",
+      "gene": "TPMT",
+      "drugs": [
+        "mercaptopurine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1800462",
+          "effect": "G",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800462"
+        },
+        {
+          "rsid": "rs1800460",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*3A/*3B component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800460"
+        },
+        {
+          "rsid": "rs1142345",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "*3A/*3C component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1142345"
+        }
+      ],
+      "allele_name": "*2, *3A/*3B component, *3A/*3C component",
+      "function": "no function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with low TPMT function and thiopurine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41618934",
+          "doi": "10.1002/cpt.70209",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41618934"
+        }
+      ],
+      "guideline": {
+        "title": "TPMT, NUDT15 and Thiopurines",
+        "year": 2026,
+        "pmid": "41618934",
+        "url": "https://www.clinpgx.org/guideline/PA166251442"
+      },
+      "limits": "Chip markers do not resolve all TPMT alleles or phase, including *3A versus *3B/*3C. Clinical confirmation is needed.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110114
+    },
+    {
+      "id": "ryr1-methoxyflurane",
+      "gene": "RYR1",
+      "drugs": [
+        "methoxyflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110116
+    },
+    {
+      "id": "mt-rnr1-neomycin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "neomycin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 3004619
+    },
+    {
+      "id": "cyp2c19-omeprazole",
+      "gene": "CYP2C19",
+      "drugs": [
+        "omeprazole"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C19 and Proton Pump Inhibitor Dosing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32770672",
+          "doi": "10.1002/cpt.2015",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32770672"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C19 and Proton Pump Inhibitors",
+        "year": 2021,
+        "pmid": "32770672",
+        "url": "https://www.clinpgx.org/guideline/PA166251441"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110118
+    },
+    {
+      "id": "cyp2c19-pantoprazole",
+      "gene": "CYP2C19",
+      "drugs": [
+        "pantoprazole"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C19 and Proton Pump Inhibitor Dosing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32770672",
+          "doi": "10.1002/cpt.2015",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32770672"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C19 and Proton Pump Inhibitors",
+        "year": 2021,
+        "pmid": "32770672",
+        "url": "https://www.clinpgx.org/guideline/PA166251441"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110121
+    },
+    {
+      "id": "cyp2d6-paroxetine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "paroxetine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110122
+    },
+    {
+      "id": "cyp2c9-phenytoin",
+      "gene": "CYP2C9",
+      "drugs": [
+        "phenytoin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32779747",
+          "doi": "10.1002/cpt.2008",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32779747"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, HLA-B and Phenytoin",
+        "year": 2021,
+        "pmid": "32779747",
+        "url": "https://www.clinpgx.org/guideline/PA166251461"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110127
+    },
+    {
+      "id": "cyp2c9-piroxicam",
+      "gene": "CYP2C9",
+      "drugs": [
+        "piroxicam"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110071
+    },
+    {
+      "id": "slco1b1-pitavastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "pitavastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 1556298
+    },
+    {
+      "id": "mt-rnr1-plazomicin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "plazomicin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 826285
+    },
+    {
+      "id": "slco1b1-pravastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "pravastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110381
+    },
+    {
+      "id": "slco1b1-rosuvastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "rosuvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110391
+    },
+    {
+      "id": "cyp2c19-sertraline",
+      "gene": "CYP2C19",
+      "drugs": [
+        "sertraline"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110216
+    },
+    {
+      "id": "ryr1-sevoflurane",
+      "gene": "RYR1",
+      "drugs": [
+        "sevoflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110134
+    },
+    {
+      "id": "slco1b1-simvastatin",
+      "gene": "SLCO1B1",
+      "drugs": [
+        "simvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4149056",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "c.521T>C",
+          "function": "decreased transport function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4149056"
+        }
+      ],
+      "allele_name": "c.521T>C",
+      "function": "decreased transport function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs4149056 C allele is associated with decreased transport and statin-associated muscle effects; magnitude differs by statin.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "rs4149056 is a functional marker, not a complete SLCO1B1 haplotype test; other genes affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110135
+    },
+    {
+      "id": "mt-rnr1-streptomycin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "streptomycin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110162
+    },
+    {
+      "id": "ryr1-succinylcholine",
+      "gene": "RYR1",
+      "drugs": [
+        "succinylcholine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110138
+    },
+    {
+      "id": "cyp3a5-tacrolimus",
+      "gene": "CYP3A5",
+      "drugs": [
+        "tacrolimus"
+      ],
+      "markers": [
+        {
+          "rsid": "rs776746",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*1-compatible marker",
+          "function": "CYP3A5 expression marker",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs776746"
+        }
+      ],
+      "allele_name": "*1-compatible marker",
+      "function": "CYP3A5 expression marker",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The rs776746 T allele is compatible with CYP3A5 expression. CPIC tacrolimus guidance addresses expressers; the prescriber manages any dosing decisions.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guidelines for CYP3A5 Genotype and Tacrolimus Dosing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2015,
+          "pmid": "25801146",
+          "doi": "10.1002/cpt.113",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/25801146"
+        }
+      ],
+      "guideline": {
+        "title": "CYP3A5 and Tacrolimus",
+        "year": 2015,
+        "pmid": "25801146",
+        "url": "https://www.clinpgx.org/guideline/PA166251451"
+      },
+      "limits": "Only the *3 site is assessed. T is compatible with *1 here, but *6, *7 and other alleles are not assessed; a complete phenotype requires dedicated testing.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110139
+    },
+    {
+      "id": "cyp2d6-tamoxifen",
+      "gene": "CYP2D6",
+      "drugs": [
+        "tamoxifen"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6 and Tamoxifen Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29385237",
+          "doi": "10.1002/cpt.1007",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29385237"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6 and Tamoxifen",
+        "year": 2018,
+        "pmid": "29385237",
+        "url": "https://www.clinpgx.org/guideline/PA166251458"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110141
+    },
+    {
+      "id": "cyp2c9-tenoxicam",
+      "gene": "CYP2C9",
+      "drugs": [
+        "tenoxicam"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110072
+    },
+    {
+      "id": "mt-rnr1-tobramycin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "tobramycin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110164
+    },
+    {
+      "id": "cyp2d6-tramadol",
+      "gene": "CYP2D6",
+      "drugs": [
+        "tramadol"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for CYP2D6, OPRM1, and COMT Genotypes and Select Opioid Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "33387367",
+          "doi": "10.1002/cpt.2149",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/33387367"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, OPRM1, COMT, and Opioids",
+        "year": 2021,
+        "pmid": "33387367",
+        "url": "https://www.clinpgx.org/guideline/PA166251454"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110145
+    },
+    {
+      "id": "cyp2c19-doxepin",
+      "gene": "CYP2C19",
+      "drugs": [
+        "doxepin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110186
+    },
+    {
+      "id": "cyp2d6-metoprolol",
+      "gene": "CYP2D6",
+      "drugs": [
+        "metoprolol"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2D6, ADRB1, ADRB2, ADRA2C, GRK4, and GRK5 Genotypes and Beta-Blocker Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2024,
+          "pmid": "38951961",
+          "doi": "10.1002/cpt.3351",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/38951961"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, ADRB1, ADRB2, ADRA2C, GRK4, and GRK5 and Beta-Blockers",
+        "year": 2024,
+        "pmid": "38951961",
+        "url": "https://www.clinpgx.org/guideline/PA166343383"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110276
+    },
+    {
+      "id": "hla-b-allopurinol",
+      "gene": "HLA-B",
+      "drugs": [
+        "allopurinol"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for human leukocyte antigen B (HLA-B) genotype and allopurinol dosing: 2015 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2016,
+          "pmid": "26094938",
+          "doi": "10.1002/cpt.161",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/26094938"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-B and Allopurinol",
+        "year": 2016,
+        "pmid": "26094938",
+        "url": "https://www.clinpgx.org/guideline/PA166251446"
+      },
+      "limits": "Not assessed: HLA-B*58:01 needs a dedicated HLA test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110079,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "cyp2c19-amitriptyline",
+      "gene": "CYP2C19",
+      "drugs": [
+        "amitriptyline"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110080
+    },
+    {
+      "id": "tpmt-azathioprine",
+      "gene": "TPMT",
+      "drugs": [
+        "azathioprine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1800462",
+          "effect": "G",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800462"
+        },
+        {
+          "rsid": "rs1800460",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*3A/*3B component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800460"
+        },
+        {
+          "rsid": "rs1142345",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "*3A/*3C component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1142345"
+        }
+      ],
+      "allele_name": "*2, *3A/*3B component, *3A/*3C component",
+      "function": "no function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with low TPMT function and thiopurine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41618934",
+          "doi": "10.1002/cpt.70209",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41618934"
+        }
+      ],
+      "guideline": {
+        "title": "TPMT, NUDT15 and Thiopurines",
+        "year": 2026,
+        "pmid": "41618934",
+        "url": "https://www.clinpgx.org/guideline/PA166251442"
+      },
+      "limits": "Chip markers do not resolve all TPMT alleles or phase, including *3A versus *3B/*3C. Clinical confirmation is needed.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110085
+    },
+    {
+      "id": "ryr1-enflurane",
+      "gene": "RYR1",
+      "drugs": [
+        "enflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110097
+    },
+    {
+      "id": "cyp2c9-fosphenytoin",
+      "gene": "CYP2C9",
+      "drugs": [
+        "fosphenytoin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32779747",
+          "doi": "10.1002/cpt.2008",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32779747"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, HLA-B and Phenytoin",
+        "year": 2021,
+        "pmid": "32779747",
+        "url": "https://www.clinpgx.org/guideline/PA166251461"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110101
+    },
+    {
+      "id": "mt-rnr1-gentamicin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "gentamicin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110157
+    },
+    {
+      "id": "ryr1-halothane",
+      "gene": "RYR1",
+      "drugs": [
+        "halothane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110104
+    },
+    {
+      "id": "cyp2c9-ibuprofen",
+      "gene": "CYP2C9",
+      "drugs": [
+        "ibuprofen"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline (CPIC) for CYP2C9 and Nonsteroidal Anti-Inflammatory Drugs.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2020,
+          "pmid": "32189324",
+          "doi": "10.1002/cpt.1830",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32189324"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9 and NSAIDs",
+        "year": 2020,
+        "pmid": "32189324",
+        "url": "https://www.clinpgx.org/guideline/PA166251464"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110063
+    },
+    {
+      "id": "cyp2c19-lansoprazole",
+      "gene": "CYP2C19",
+      "drugs": [
+        "lansoprazole"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C19 and Proton Pump Inhibitor Dosing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32770672",
+          "doi": "10.1002/cpt.2015",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32770672"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C19 and Proton Pump Inhibitors",
+        "year": 2021,
+        "pmid": "32770672",
+        "url": "https://www.clinpgx.org/guideline/PA166251441"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110110
+    },
+    {
+      "id": "cyp2c9-warfarin",
+      "gene": "CYP2C9",
+      "drugs": [
+        "warfarin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1799853",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "decreased function; activity 0.5",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1799853"
+        },
+        {
+          "rsid": "rs1057910",
+          "effect": "C",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function; activity 0",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1057910"
+        }
+      ],
+      "allele_name": "*2, *3",
+      "function": "decreased function; activity 0.5; no function; activity 0",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A reduced/no-function CYP2C9 marker was observed; the panel-limited activity score may be lower.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Pharmacogenetics-Guided Warfarin Dosing: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "28198005",
+          "doi": "10.1002/cpt.668",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/28198005"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+        "year": 2017,
+        "pmid": "28198005",
+        "url": "https://www.clinpgx.org/guideline/PA166251465"
+      },
+      "limits": "Only *2 and *3 are covered; *5, *6, *8, *11 and other alleles are not assessed. Activity is panel-limited.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110148
+    },
+    {
+      "id": "cyp2d6-desipramine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "desipramine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110183
+    },
+    {
+      "id": "cyp2c19-dexlansoprazole",
+      "gene": "CYP2C19",
+      "drugs": [
+        "dexlansoprazole"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C19 and Proton Pump Inhibitor Dosing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32770672",
+          "doi": "10.1002/cpt.2015",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32770672"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C19 and Proton Pump Inhibitors",
+        "year": 2021,
+        "pmid": "32770672",
+        "url": "https://www.clinpgx.org/guideline/PA166251441"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110184
+    },
+    {
+      "id": "cyp2d6-doxepin",
+      "gene": "CYP2D6",
+      "drugs": [
+        "doxepin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110187
+    },
+    {
+      "id": "cyp2d6-imipramine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "imipramine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110195
+    },
+    {
+      "id": "cyp2c19-trimipramine",
+      "gene": "CYP2C19",
+      "drugs": [
+        "trimipramine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110223
+    },
+    {
+      "id": "cyp2d6-trimipramine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "trimipramine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110224
+    },
+    {
+      "id": "cyp2d6-venlafaxine",
+      "gene": "CYP2D6",
+      "drugs": [
+        "venlafaxine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110167
+    },
+    {
+      "id": "cyp2c19-clopidogrel",
+      "gene": "CYP2C19",
+      "drugs": [
+        "clopidogrel"
+      ],
+      "markers": [
+        {
+          "rsid": "rs4244285",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4244285"
+        },
+        {
+          "rsid": "rs4986893",
+          "effect": "A",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*3",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs4986893"
+        },
+        {
+          "rsid": "rs12248560",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*17",
+          "function": "increased function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12248560"
+        }
+      ],
+      "allele_name": "*2, *3, *17",
+      "function": "no function; increased function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with altered CYP2C19 function was observed. The implications differ by drug and diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for CYP2C19 Genotype and Clopidogrel Therapy: 2022 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35034351",
+          "doi": "10.1002/cpt.2526",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35034351"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C19 and Clopidogrel",
+        "year": 2022,
+        "pmid": "35034351",
+        "url": "https://www.clinpgx.org/guideline/PA166251443"
+      },
+      "limits": "Only *2, *3 and *17 are covered. Phase, rare alleles and structural variation are not established.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110091
+    },
+    {
+      "id": "ryr1-desflurane",
+      "gene": "RYR1",
+      "drugs": [
+        "desflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "Not assessed: a chip cannot exclude malignant hyperthermia susceptibility; a dedicated test is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110094
+    },
+    {
+      "id": "cyp2d6-hydrocodone",
+      "gene": "CYP2D6",
+      "drugs": [
+        "hydrocodone"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for CYP2D6, OPRM1, and COMT Genotypes and Select Opioid Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "33387367",
+          "doi": "10.1002/cpt.2149",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/33387367"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, OPRM1, COMT, and Opioids",
+        "year": 2021,
+        "pmid": "33387367",
+        "url": "https://www.clinpgx.org/guideline/PA166251454"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110193
+    },
+    {
+      "id": "mt-rnr1-amikacin",
+      "gene": "MT-RNR1",
+      "drugs": [
+        "amikacin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs267606617",
+          "effect": "G",
+          "other": "A",
+          "strand": "+",
+          "allele_name": "m.1555A>G",
+          "function": "increased aminoglycoside hearing-loss susceptibility",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs267606617"
+        }
+      ],
+      "allele_name": "m.1555A>G",
+      "function": "increased aminoglycoside hearing-loss susceptibility",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "The m.1555A>G marker is associated with aminoglycoside-related hearing-loss susceptibility.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for the Use of Aminoglycosides Based on MT-RNR1 Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "34032273",
+          "doi": "10.1002/cpt.2309",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/34032273"
+        }
+      ],
+      "guideline": {
+        "title": "MT-RNR1 and Aminoglycosides",
+        "year": 2022,
+        "pmid": "34032273",
+        "url": "https://www.clinpgx.org/guideline/PA166251466"
+      },
+      "limits": "A chip cannot quantify low-level mitochondrial heteroplasmy; a negative result does not rule out hearing-loss risk.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110151
+    },
+    {
+      "id": "nudt15-azathioprine",
+      "gene": "NUDT15",
+      "drugs": [
+        "azathioprine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs116855232",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2/*3 component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs116855232"
+        }
+      ],
+      "allele_name": "*2/*3 component",
+      "function": "no function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with low NUDT15 function and thiopurine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41618934",
+          "doi": "10.1002/cpt.70209",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41618934"
+        }
+      ],
+      "guideline": {
+        "title": "TPMT, NUDT15 and Thiopurines",
+        "year": 2026,
+        "pmid": "41618934",
+        "url": "https://www.clinpgx.org/guideline/PA166251442"
+      },
+      "limits": "The p.Arg139Cys marker does not resolve all NUDT15 alleles or distinguish *2 from *3.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110084
+    },
+    {
+      "id": "cyp2d6-tropisetron",
+      "gene": "CYP2D6",
+      "drugs": [
+        "tropisetron"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6 Genotype and Use of 5-HT&lt;sub&gt;3&lt;/sub&gt; Receptor Antagonists: 2026 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41979467",
+          "doi": "10.1002/cpt.70291",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41979467"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6 and Ondansetron and Tropisetron",
+        "year": 2026,
+        "pmid": "41979467",
+        "url": "https://www.clinpgx.org/guideline/PA166251457"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110146
+    },
+    {
+      "id": "hla-b-abacavir",
+      "gene": "HLA-B",
+      "drugs": [
+        "abacavir"
+      ],
+      "markers": [
+        {
+          "rsid": "rs2395029",
+          "effect": "G",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "HLA-B*57:01 tag",
+          "function": "linkage proxy",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs2395029"
+        }
+      ],
+      "allele_name": "HLA-B*57:01 tag",
+      "function": "linkage proxy",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed: HLA-B*57:01 screening needs a dedicated HLA test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guidelines for HLA-B genotype and abacavir dosing.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2012,
+          "pmid": "22378157",
+          "doi": "10.1038/clpt.2011.355",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/22378157"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-B and Abacavir",
+        "year": 2012,
+        "pmid": "22378157",
+        "url": "https://www.clinpgx.org/guideline/PA166251444"
+      },
+      "limits": "rs2395029 is an ancestry-dependent linkage proxy, not HLA-B*57:01 screening. Abacavir requires dedicated HLA-B*57:01 screening; a proxy-negative chip result cannot establish safety.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110078,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "cyp2d6-amitriptyline",
+      "gene": "CYP2D6",
+      "drugs": [
+        "amitriptyline"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical pharmacogenetics implementation consortium guideline (CPIC) for CYP2D6 and CYP2C19 genotypes and dosing of tricyclic antidepressants: 2016 update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "27997040",
+          "doi": "10.1002/cpt.597",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/27997040"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19 and Tricyclic Antidepressants",
+        "year": 2017,
+        "pmid": "27997040",
+        "url": "https://www.clinpgx.org/guideline/PA166251445"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110081
+    },
+    {
+      "id": "nudt15-mercaptopurine",
+      "gene": "NUDT15",
+      "drugs": [
+        "mercaptopurine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs116855232",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2/*3 component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs116855232"
+        }
+      ],
+      "allele_name": "*2/*3 component",
+      "function": "no function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with low NUDT15 function and thiopurine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41618934",
+          "doi": "10.1002/cpt.70209",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41618934"
+        }
+      ],
+      "guideline": {
+        "title": "TPMT, NUDT15 and Thiopurines",
+        "year": 2026,
+        "pmid": "41618934",
+        "url": "https://www.clinpgx.org/guideline/PA166251442"
+      },
+      "limits": "The p.Arg139Cys marker does not resolve all NUDT15 alleles or distinguish *2 from *3.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110113
+    },
+    {
+      "id": "cyp2d6-ondansetron",
+      "gene": "CYP2D6",
+      "drugs": [
+        "ondansetron"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "Not assessed on a chip.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6 Genotype and Use of 5-HT&lt;sub&gt;3&lt;/sub&gt; Receptor Antagonists: 2026 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41979467",
+          "doi": "10.1002/cpt.70291",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41979467"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6 and Ondansetron and Tropisetron",
+        "year": 2026,
+        "pmid": "41979467",
+        "url": "https://www.clinpgx.org/guideline/PA166251457"
+      },
+      "limits": "Not assessed: copy number, hybrid alleles and phase need a dedicated test.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110119
+    },
+    {
+      "id": "tpmt-thioguanine",
+      "gene": "TPMT",
+      "drugs": [
+        "thioguanine"
+      ],
+      "markers": [
+        {
+          "rsid": "rs1800462",
+          "effect": "G",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*2",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800462"
+        },
+        {
+          "rsid": "rs1800460",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*3A/*3B component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1800460"
+        },
+        {
+          "rsid": "rs1142345",
+          "effect": "C",
+          "other": "T",
+          "strand": "+",
+          "allele_name": "*3A/*3C component",
+          "function": "no function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs1142345"
+        }
+      ],
+      "allele_name": "*2, *3A/*3B component, *3A/*3C component",
+      "function": "no function",
+      "phenotype_rules": {
+        "rule": "Count effect alleles at called markers; a flag is not a full clinical phenotype. See derive() for supported panel-limited diplotypes.",
+        "0": "no listed effect allele detected; other variants unassessed",
+        "1": "one or more listed effect alleles detected",
+        "2": "two or more listed effect alleles detected"
+      },
+      "finding": "A marker associated with low TPMT function and thiopurine toxicity susceptibility was observed.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Thiopurine Dosing Based on TPMT and NUDT15 Genotypes: 2025 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2026,
+          "pmid": "41618934",
+          "doi": "10.1002/cpt.70209",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/41618934"
+        }
+      ],
+      "guideline": {
+        "title": "TPMT, NUDT15 and Thiopurines",
+        "year": 2026,
+        "pmid": "41618934",
+        "url": "https://www.clinpgx.org/guideline/PA166251442"
+      },
+      "limits": "Chip markers do not resolve all TPMT alleles or phase, including *3A versus *3B/*3C. Clinical confirmation is needed.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110144
+    },
+    {
+      "id": "ifnl3-peginterferon",
+      "gene": "IFNL3",
+      "drugs": [
+        "peginterferon alfa-2a",
+        "peginterferon alfa-2b"
+      ],
+      "markers": [
+        {
+          "rsid": "rs12979860",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "rs12979860 T",
+          "function": "lower response association with historical interferon regimens",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs12979860"
+        }
+      ],
+      "allele_name": "rs12979860 T",
+      "function": "lower response association with historical interferon regimens",
+      "phenotype_rules": {
+        "0": "CC marker pattern",
+        "1": "CT marker pattern",
+        "2": "TT marker pattern"
+      },
+      "finding": "The rs12979860 T allele has a historical association with lower response to interferon-based hepatitis C regimens.",
+      "evidence": "CPIC retired",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for IFNL3 (IL28B) genotype and PEG interferon-α-based regimens.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2014,
+          "pmid": "24096968",
+          "doi": "10.1038/clpt.2013.203",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/24096968"
+        }
+      ],
+      "guideline": {
+        "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) guidelines for IFNL3 (IL28B) genotype and PEG interferon-α-based regimens.",
+        "year": 2014,
+        "pmid": "24096968",
+        "url": "https://www.clinpgx.org/guideline/PA166251455",
+        "status": "retired"
+      },
+      "limits": "The current CPIC API lists this guideline as Retired under IFNL4. This is not guidance for current direct-acting antiviral regimens.",
+      "chip_reliability": "limited"
+    },
+    {
+      "id": "hla-b-carbamazepine",
+      "gene": "HLA-B",
+      "drugs": [
+        "carbamazepine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29392710",
+          "doi": "10.1002/cpt.1004",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29392710"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+        "year": 2018,
+        "pmid": "29392710",
+        "url": "https://www.clinpgx.org/guideline/PA166251448"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110088,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-b-oxcarbazepine",
+      "gene": "HLA-B",
+      "drugs": [
+        "oxcarbazepine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29392710",
+          "doi": "10.1002/cpt.1004",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29392710"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+        "year": 2018,
+        "pmid": "29392710",
+        "url": "https://www.clinpgx.org/guideline/PA166251448"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110120,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-b-phenytoin",
+      "gene": "HLA-B",
+      "drugs": [
+        "phenytoin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32779747",
+          "doi": "10.1002/cpt.2008",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32779747"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, HLA-B and Phenytoin",
+        "year": 2021,
+        "pmid": "32779747",
+        "url": "https://www.clinpgx.org/guideline/PA166251461"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110128,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-b-fosphenytoin",
+      "gene": "HLA-B",
+      "drugs": [
+        "fosphenytoin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2C9 and HLA-B Genotypes and Phenytoin Dosing: 2020 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2021,
+          "pmid": "32779747",
+          "doi": "10.1002/cpt.2008",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/32779747"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, HLA-B and Phenytoin",
+        "year": 2021,
+        "pmid": "32779747",
+        "url": "https://www.clinpgx.org/guideline/PA166251461"
+      },
+      "limits": "HLA-B*15:02 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110102,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "hla-a-carbamazepine",
+      "gene": "HLA-A",
+      "drugs": [
+        "carbamazepine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: HLA typing needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium Guideline for HLA Genotype and Use of Carbamazepine and Oxcarbazepine: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2018,
+          "pmid": "29392710",
+          "doi": "10.1002/cpt.1004",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/29392710"
+        }
+      ],
+      "guideline": {
+        "title": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+        "year": 2018,
+        "pmid": "29392710",
+        "url": "https://www.clinpgx.org/guideline/PA166251448"
+      },
+      "limits": "HLA-A*31:01 cannot be reliably established or excluded by this chip panel.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110087,
+      "not_assessed_reason": "HLA typing needs a dedicated test"
+    },
+    {
+      "id": "cacna1s-desflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "desflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110093,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cyp2b6-efavirenz",
+      "gene": "CYP2B6",
+      "drugs": [
+        "efavirenz"
+      ],
+      "markers": [
+        {
+          "rsid": "rs3745274",
+          "effect": "T",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*6/*9 component (c.516G>T)",
+          "function": "decreased CYP2B6 function marker",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs3745274"
+        }
+      ],
+      "allele_name": "*6/*9 component (c.516G>T)",
+      "function": "decreased CYP2B6 function marker",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "A CYP2B6 decreased-function marker was observed; effects on efavirenz or sertraline response depend on the complete diplotype.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2B6 and Efavirenz-Containing Antiretroviral Therapy.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "31006110",
+          "doi": "10.1002/cpt.1477",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/31006110"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2B6 and efavirenz",
+        "year": 2019,
+        "pmid": "31006110",
+        "url": "https://www.clinpgx.org/guideline/PA166251463"
+      },
+      "limits": "rs3745274 alone does not distinguish *6 from *9 or cover all CYP2B6 alleles. This is not a complete phenotype or dosing call.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110095
+    },
+    {
+      "id": "cacna1s-halothane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "halothane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110103,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cyp4f2-warfarin",
+      "gene": "CYP4F2",
+      "drugs": [
+        "warfarin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs2108622",
+          "effect": "T",
+          "other": "C",
+          "strand": "+",
+          "allele_name": "*3 (V433M)",
+          "function": "reduced vitamin K oxidation",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs2108622"
+        }
+      ],
+      "allele_name": "*3 (V433M)",
+      "function": "reduced vitamin K oxidation",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "The CYP4F2 *3 marker was observed; it contributes a small part of variation in warfarin response.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for Pharmacogenetics-Guided Warfarin Dosing: 2017 Update.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2017,
+          "pmid": "28198005",
+          "doi": "10.1002/cpt.668",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/28198005"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+        "year": 2017,
+        "pmid": "28198005",
+        "url": "https://www.clinpgx.org/guideline/PA166251465"
+      },
+      "limits": "Ancestry and other genes affect the association. This single marker is not a warfarin dose model.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110149
+    },
+    {
+      "id": "cacna1s-methoxyflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "methoxyflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110115,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "g6pd-methylene-blue",
+      "gene": "G6PD",
+      "drugs": [
+        "methylene blue"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110201,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-pegloticase",
+      "gene": "G6PD",
+      "drugs": [
+        "pegloticase"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110207,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-primaquine",
+      "gene": "G6PD",
+      "drugs": [
+        "primaquine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110211,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-rasburicase",
+      "gene": "G6PD",
+      "drugs": [
+        "rasburicase"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110131,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "abcg2-rosuvastatin",
+      "gene": "ABCG2",
+      "drugs": [
+        "rosuvastatin"
+      ],
+      "markers": [
+        {
+          "rsid": "rs2231142",
+          "effect": "T",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "c.421C>A (Q141K)",
+          "function": "decreased ABCG2 function",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs2231142"
+        }
+      ],
+      "allele_name": "c.421C>A (Q141K)",
+      "function": "decreased ABCG2 function",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "The rs2231142 T allele is associated with decreased ABCG2 function and altered rosuvastatin exposure.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "The Clinical Pharmacogenetics Implementation Consortium Guideline for SLCO1B1, ABCG2, and CYP2C9 genotypes and Statin-Associated Musculoskeletal Symptoms.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2022,
+          "pmid": "35152405",
+          "doi": "10.1002/cpt.2557",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/35152405"
+        }
+      ],
+      "guideline": {
+        "title": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+        "year": 2022,
+        "pmid": "35152405",
+        "url": "https://www.clinpgx.org/guideline/PA166264281"
+      },
+      "limits": "This single marker is not a complete ABCG2 test. Other genes and non-genetic factors also affect statin response.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 110215
+    },
+    {
+      "id": "cacna1s-sevoflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "sevoflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110133,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cacna1s-succinylcholine",
+      "gene": "CACNA1S",
+      "drugs": [
+        "succinylcholine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110137,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "g6pd-tafenoquine",
+      "gene": "G6PD",
+      "drugs": [
+        "tafenoquine"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110140,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "g6pd-toluidine-blue",
+      "gene": "G6PD",
+      "drugs": [
+        "toluidine blue"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 2452949,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "cacna1s-enflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "enflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110096,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "cacna1s-isoflurane",
+      "gene": "CACNA1S",
+      "drugs": [
+        "isoflurane"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: malignant hyperthermia susceptibility needs a dedicated test.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for the Use of Potent Volatile Anesthetic Agents and Succinylcholine in the Context of RYR1 or CACNA1S Genotypes.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2019,
+          "pmid": "30499100",
+          "doi": "10.1002/cpt.1319",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/30499100"
+        }
+      ],
+      "guideline": {
+        "title": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+        "year": 2019,
+        "pmid": "30499100",
+        "url": "https://www.clinpgx.org/guideline/PA166251460"
+      },
+      "limits": "A chip cannot exclude CACNA1S-related malignant hyperthermia susceptibility; dedicated clinical testing is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110107,
+      "not_assessed_reason": "malignant hyperthermia susceptibility needs a dedicated test"
+    },
+    {
+      "id": "g6pd-nitrofurantoin",
+      "gene": "G6PD",
+      "drugs": [
+        "nitrofurantoin"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110205,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    },
+    {
+      "id": "cyp2b6-sertraline",
+      "gene": "CYP2B6",
+      "drugs": [
+        "sertraline"
+      ],
+      "markers": [
+        {
+          "rsid": "rs3745274",
+          "effect": "T",
+          "other": "G",
+          "strand": "+",
+          "allele_name": "*6/*9 component (c.516G>T)",
+          "function": "decreased CYP2B6 function marker",
+          "source_url": "https://www.ncbi.nlm.nih.gov/snp/rs3745274"
+        }
+      ],
+      "allele_name": "*6/*9 component (c.516G>T)",
+      "function": "decreased CYP2B6 function marker",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "A CYP2B6 decreased-function marker was observed; effects on efavirenz or sertraline response depend on the complete diplotype.",
+      "evidence": "CPIC B",
+      "sources": [
+        {
+          "title": "Clinical Pharmacogenetics Implementation Consortium (CPIC) Guideline for CYP2D6, CYP2C19, CYP2B6, SLC6A4, and HTR2A Genotypes and Serotonin Reuptake Inhibitor Antidepressants.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "37032427",
+          "doi": "10.1002/cpt.2903",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/37032427"
+        }
+      ],
+      "guideline": {
+        "title": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+        "year": 2023,
+        "pmid": "37032427",
+        "url": "https://www.clinpgx.org/guideline/PA166251452"
+      },
+      "limits": "rs3745274 alone does not distinguish *6 from *9 or cover all CYP2B6 alleles. This is not a complete phenotype or dosing call.",
+      "chip_reliability": "limited",
+      "cpic_pair_id": 3122076
+    },
+    {
+      "id": "g6pd-dapsone",
+      "gene": "G6PD",
+      "drugs": [
+        "dapsone"
+      ],
+      "markers": [],
+      "allele_name": "dedicated test required",
+      "function": "not assessed",
+      "phenotype_rules": {
+        "rule": "A listed marker is informational, not a complete clinical phenotype."
+      },
+      "finding": "Not assessed: G6PD status requires a dedicated assessment.",
+      "evidence": "CPIC A",
+      "sources": [
+        {
+          "title": "Expanded Clinical Pharmacogenetics Implementation Consortium Guideline for Medication Use in the Context of G6PD Genotype.",
+          "journal": "Clin Pharmacol Ther",
+          "year": 2023,
+          "pmid": "36049896",
+          "doi": "10.1002/cpt.2735",
+          "url": "https://www.ncbi.nlm.nih.gov/pubmed/36049896"
+        }
+      ],
+      "guideline": {
+        "title": "G6PD",
+        "year": 2023,
+        "pmid": "36049896",
+        "url": "https://www.clinpgx.org/guideline/PA166251450"
+      },
+      "limits": "A limited chip panel cannot establish G6PD enzyme activity or exclude deficiency. X-linked variation and mosaicism complicate genotype interpretation; a dedicated G6PD assessment is needed.",
+      "chip_reliability": "unreliable",
+      "cpic_pair_id": 110182,
+      "not_assessed_reason": "G6PD status requires a dedicated assessment"
+    }
+  ]
+}

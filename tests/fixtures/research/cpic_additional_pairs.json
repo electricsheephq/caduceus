@@ -1,0 +1,353 @@
+[
+  {
+    "pairid": 110087,
+    "drugid": "RxNorm:2002",
+    "drugname": "carbamazepine",
+    "genesymbol": "HLA-A",
+    "guidelinename": "HLA-A, HLA-B and Carbamazepine and Oxcarbazepine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251448",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "23695185",
+      "29392710"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110093,
+    "drugid": "RxNorm:27340",
+    "drugname": "desflurane",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110095,
+    "drugid": "RxNorm:195085",
+    "drugname": "efavirenz",
+    "genesymbol": "CYP2B6",
+    "guidelinename": "CYP2B6 and efavirenz",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251463",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Informative PGx",
+    "pmids": [
+      "31006110"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110103,
+    "drugid": "RxNorm:5095",
+    "drugname": "halothane",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110149,
+    "drugid": "RxNorm:11289",
+    "drugname": "warfarin",
+    "genesymbol": "CYP4F2",
+    "guidelinename": "CYP2C9, VKORC1, CYP4F2 and Warfarin",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251465",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "21900891",
+      "28198005"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110115,
+    "drugid": "RxNorm:6857",
+    "drugname": "methoxyflurane",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110201,
+    "drugid": "RxNorm:6878",
+    "drugname": "methylene blue",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": "3",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110207,
+    "drugid": "RxNorm:1011650",
+    "drugname": "pegloticase",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": "3",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110211,
+    "drugid": "RxNorm:8687",
+    "drugname": "primaquine",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": "3",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110131,
+    "drugid": "RxNorm:283821",
+    "drugname": "rasburicase",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "24787449",
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110215,
+    "drugid": "RxNorm:301542",
+    "drugname": "rosuvastatin",
+    "genesymbol": "ABCG2",
+    "guidelinename": "SLCO1B1, ABCG2, CYP2C9, and Statins",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166264281",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "35152405"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110133,
+    "drugid": "RxNorm:36453",
+    "drugname": "sevoflurane",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110137,
+    "drugid": "RxNorm:10154",
+    "drugname": "succinylcholine",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110140,
+    "drugid": "RxNorm:2054023",
+    "drugname": "tafenoquine",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": "Testing Required",
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 2452949,
+    "drugid": "RxNorm:10638",
+    "drugname": "toluidine blue",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": null,
+    "pgxtesting": null,
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110096,
+    "drugid": "RxNorm:3920",
+    "drugname": "enflurane",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110107,
+    "drugid": "RxNorm:6026",
+    "drugname": "isoflurane",
+    "genesymbol": "CACNA1S",
+    "guidelinename": "RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251460",
+    "cpiclevel": "A",
+    "clinpgxlevel": "1A",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "30499100"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110205,
+    "drugid": "RxNorm:7454",
+    "drugname": "nitrofurantoin",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": "3",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110209,
+    "drugid": "RxNorm:8150",
+    "drugname": "phenprocoumon",
+    "genesymbol": "CYP4F2",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": "3",
+    "pgxtesting": null,
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  },
+  {
+    "pairid": 3122076,
+    "drugid": "RxNorm:36437",
+    "drugname": "sertraline",
+    "genesymbol": "CYP2B6",
+    "guidelinename": "CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251452",
+    "cpiclevel": "B",
+    "clinpgxlevel": "1A",
+    "pgxtesting": null,
+    "pmids": [
+      "37032427"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110182,
+    "drugid": "RxNorm:3108",
+    "drugname": "dapsone",
+    "genesymbol": "G6PD",
+    "guidelinename": "G6PD",
+    "guidelineurl": "https://www.clinpgx.org/guideline/PA166251450",
+    "cpiclevel": "A",
+    "clinpgxlevel": "4",
+    "pgxtesting": "Actionable PGx",
+    "pmids": [
+      "36049896"
+    ],
+    "usedforrecommendation": "Yes",
+    "provisional": false
+  },
+  {
+    "pairid": 110170,
+    "drugid": "RxNorm:154",
+    "drugname": "acenocoumarol",
+    "genesymbol": "CYP4F2",
+    "guidelinename": null,
+    "guidelineurl": null,
+    "cpiclevel": "B",
+    "clinpgxlevel": "2A",
+    "pgxtesting": null,
+    "pmids": null,
+    "usedforrecommendation": "n/a",
+    "provisional": true
+  }
+]

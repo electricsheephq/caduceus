@@ -1,0 +1,608 @@
+[
+  {
+    "rsid": "rs4244285",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94781858,
+        "deleted_sequence": "G",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94781858,
+        "deleted_sequence": "G",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94781858,
+        "deleted_sequence": "G",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94781858,
+        "deleted_sequence": "G",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=4244285&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs4986893",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94780652,
+        "deleted_sequence": "G",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94780652,
+        "deleted_sequence": "G",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94780652,
+        "deleted_sequence": "G",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=4986893&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs12248560",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94761899,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94761899,
+        "deleted_sequence": "C",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94761899,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=12248560&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs1799853",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94942289,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94942289,
+        "deleted_sequence": "C",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94942289,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=1799853&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs1057910",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94981295,
+        "deleted_sequence": "A",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94981295,
+        "deleted_sequence": "A",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000010.11",
+        "position": 94981295,
+        "deleted_sequence": "A",
+        "inserted_sequence": "G"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=1057910&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs9923231",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000016.10",
+        "position": 31096367,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000016.10",
+        "position": 31096367,
+        "deleted_sequence": "C",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000016.10",
+        "position": 31096367,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000016.10",
+        "position": 31096367,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=9923231&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs4149056",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000012.12",
+        "position": 21178614,
+        "deleted_sequence": "T",
+        "inserted_sequence": "T"
+      },
+      {
+        "seq_id": "NC_000012.12",
+        "position": 21178614,
+        "deleted_sequence": "T",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000012.12",
+        "position": 21178614,
+        "deleted_sequence": "T",
+        "inserted_sequence": "C"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=4149056&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs1800460",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18138996,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18138996,
+        "deleted_sequence": "C",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18138996,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18138996,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=1800460&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs1142345",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18130686,
+        "deleted_sequence": "T",
+        "inserted_sequence": "T"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18130686,
+        "deleted_sequence": "T",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18130686,
+        "deleted_sequence": "T",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18130686,
+        "deleted_sequence": "T",
+        "inserted_sequence": "G"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=1142345&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs1800462",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18143723,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 18143723,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=1800462&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs116855232",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000013.11",
+        "position": 48045718,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000013.11",
+        "position": 48045718,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=116855232&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs3918290",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97450057,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97450057,
+        "deleted_sequence": "C",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97450057,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97450057,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=3918290&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs55886062",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97515786,
+        "deleted_sequence": "A",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97515786,
+        "deleted_sequence": "A",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97515786,
+        "deleted_sequence": "A",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=55886062&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs67376798",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97082390,
+        "deleted_sequence": "T",
+        "inserted_sequence": "T"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97082390,
+        "deleted_sequence": "T",
+        "inserted_sequence": "A"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=67376798&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs75017182",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97579892,
+        "deleted_sequence": "G",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97579892,
+        "deleted_sequence": "G",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97579892,
+        "deleted_sequence": "G",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000001.11",
+        "position": 97579892,
+        "deleted_sequence": "G",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=75017182&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs776746",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000007.14",
+        "position": 99672915,
+        "deleted_sequence": "T",
+        "inserted_sequence": "T"
+      },
+      {
+        "seq_id": "NC_000007.14",
+        "position": 99672915,
+        "deleted_sequence": "T",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000007.14",
+        "position": 99672915,
+        "deleted_sequence": "T",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000007.14",
+        "position": 99672915,
+        "deleted_sequence": "T",
+        "inserted_sequence": "G"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=776746&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs12979860",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000019.10",
+        "position": 39248146,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000019.10",
+        "position": 39248146,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000019.10",
+        "position": 39248146,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=12979860&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs887829",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000002.12",
+        "position": 233759923,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000002.12",
+        "position": 233759923,
+        "deleted_sequence": "C",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000002.12",
+        "position": 233759923,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000002.12",
+        "position": 233759923,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=887829&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs267606617",
+    "plus_placements": [
+      {
+        "seq_id": "NC_012920.1",
+        "position": 1554,
+        "deleted_sequence": "A",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_012920.1",
+        "position": 1554,
+        "deleted_sequence": "A",
+        "inserted_sequence": "G"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=267606617&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs2395029",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000006.12",
+        "position": 31464002,
+        "deleted_sequence": "T",
+        "inserted_sequence": "T"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 31464002,
+        "deleted_sequence": "T",
+        "inserted_sequence": "G"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=2395029&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs429358",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000019.10",
+        "position": 44908683,
+        "deleted_sequence": "T",
+        "inserted_sequence": "T"
+      },
+      {
+        "seq_id": "NC_000019.10",
+        "position": 44908683,
+        "deleted_sequence": "T",
+        "inserted_sequence": "C"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=429358&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs7412",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000019.10",
+        "position": 44908821,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000019.10",
+        "position": 44908821,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=7412&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs6923761",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000006.12",
+        "position": 39066295,
+        "deleted_sequence": "G",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 39066295,
+        "deleted_sequence": "G",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 39066295,
+        "deleted_sequence": "G",
+        "inserted_sequence": "C"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=6923761&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs10305420",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000006.12",
+        "position": 39048859,
+        "deleted_sequence": "C",
+        "inserted_sequence": "C"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 39048859,
+        "deleted_sequence": "C",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000006.12",
+        "position": 39048859,
+        "deleted_sequence": "C",
+        "inserted_sequence": "T"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=10305420&rettype=json&retmode=text"
+  },
+  {
+    "rsid": "rs1800437",
+    "plus_placements": [
+      {
+        "seq_id": "NC_000019.10",
+        "position": 45678133,
+        "deleted_sequence": "G",
+        "inserted_sequence": "G"
+      },
+      {
+        "seq_id": "NC_000019.10",
+        "position": 45678133,
+        "deleted_sequence": "G",
+        "inserted_sequence": "A"
+      },
+      {
+        "seq_id": "NC_000019.10",
+        "position": 45678133,
+        "deleted_sequence": "G",
+        "inserted_sequence": "C"
+      }
+    ],
+    "source": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=snp&id=1800437&rettype=json&retmode=text"
+  }
+]

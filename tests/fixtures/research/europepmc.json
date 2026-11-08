@@ -1,0 +1,126 @@
+{
+  "version": "6.9",
+  "hitCount": 3,
+  "request": {
+    "queryString": "EXT_ID:41951734 OR EXT_ID:36528349 OR EXT_ID:41307691",
+    "resultType": "lite",
+    "cursorMark": "*",
+    "pageSize": 3,
+    "sort": "",
+    "synonym": false
+  },
+  "resultList": {
+    "result": [
+      {
+        "id": "41951734",
+        "source": "MED",
+        "pmid": "41951734",
+        "pmcid": "PMC13190316",
+        "fullTextIdList": {
+          "fullTextId": [
+            "PMC13190316"
+          ]
+        },
+        "doi": "10.1038/s41586-026-10330-z",
+        "title": "Genetic predictors of GLP1 receptor agonist weight loss and side effects.",
+        "authorString": "Su QJ, Ashenhurst JR, Xu W, Tran V, Ryanne Wu R, Weldon CH, Shi J, Hicks B, 23andMe Research Team, Abul-Husn NS, Aslibekyan S, Holmes MV, Koelsch BL, Auton A.",
+        "journalTitle": "Nature",
+        "issue": "8115",
+        "journalVolume": "653",
+        "pubYear": "2026",
+        "journalIssn": "0028-0836; 1476-4687; ",
+        "pageInfo": "770-775",
+        "pubType": "research-article; journal article",
+        "isOpenAccess": "Y",
+        "inEPMC": "Y",
+        "inPMC": "Y",
+        "citedByCount": 25,
+        "hasReferences": "Y",
+        "hasTextMinedTerms": "Y",
+        "hasDbCrossReferences": "N",
+        "hasPDF": "Y",
+        "hasBook": "N",
+        "hasSuppl": "Y",
+        "hasLabsLinks": "Y",
+        "hasTMAccessionNumbers": "Y",
+        "tmAccessionTypeList": {
+          "accessionType": [
+            "refsnp"
+          ]
+        },
+        "firstPublicationDate": "2026-04-08",
+        "firstIndexDate": "2026-04-10"
+      },
+      {
+        "id": "41307691",
+        "source": "MED",
+        "pmid": "41307691",
+        "pmcid": "PMC12957030",
+        "fullTextIdList": {
+          "fullTextId": [
+            "PMC12957030"
+          ]
+        },
+        "doi": "10.1007/s00592-025-02626-9",
+        "title": "Influence of GLP1 receptor rs6923761 and rs761387 genetic variants on oral semaglutide response in patients with type 2 diabetes.",
+        "authorString": "Candido R, Toffoli B, Baccichetto G, Marchese F, Carpen\u00e8 S, Gaiotti S, Fabris B, Bernardi S.",
+        "journalTitle": "Acta Diabetol",
+        "issue": "2",
+        "journalVolume": "63",
+        "pubYear": "2026",
+        "journalIssn": "0940-5429; 1432-5233; ",
+        "pageInfo": "303-311",
+        "pubType": "research-article; journal article",
+        "isOpenAccess": "Y",
+        "inEPMC": "Y",
+        "inPMC": "Y",
+        "citedByCount": 3,
+        "hasReferences": "Y",
+        "hasTextMinedTerms": "Y",
+        "hasDbCrossReferences": "N",
+        "hasPDF": "Y",
+        "hasBook": "N",
+        "hasSuppl": "Y",
+        "hasLabsLinks": "Y",
+        "hasTMAccessionNumbers": "Y",
+        "tmAccessionTypeList": {
+          "accessionType": [
+            "refsnp",
+            "doi"
+          ]
+        },
+        "firstPublicationDate": "2025-11-27",
+        "firstIndexDate": "2025-11-27"
+      },
+      {
+        "id": "36528349",
+        "source": "MED",
+        "pmid": "36528349",
+        "doi": "10.1016/s2213-8587(22)00340-0",
+        "title": "Pharmacogenomics of GLP-1 receptor agonists: a genome-wide analysis of observational data and large randomised controlled trials.",
+        "authorString": "Dawed AY, Mari A, Brown A, McDonald TJ, Li L, Wang S, Hong MG, Sharma S, Robertson NR, Mahajan A, Wang X, Walker M, Gough S, Hart LM', Zhou K, Forgie I, Ruetten H, Pavo I, Bhatnagar P, Jones AG, Pearson ER, DIRECT consortium.",
+        "journalTitle": "Lancet Diabetes Endocrinol",
+        "issue": "1",
+        "journalVolume": "11",
+        "pubYear": "2023",
+        "journalIssn": "2213-8587; 2213-8595; ",
+        "pageInfo": "33-41",
+        "pubType": "research support, non-u.s. gov't; journal article; observational study",
+        "isOpenAccess": "N",
+        "inEPMC": "N",
+        "inPMC": "N",
+        "citedByCount": 100,
+        "hasReferences": "Y",
+        "hasTextMinedTerms": "Y",
+        "hasDbCrossReferences": "N",
+        "hasPDF": "N",
+        "hasBook": "N",
+        "hasSuppl": "N",
+        "hasLabsLinks": "Y",
+        "hasTMAccessionNumbers": "N",
+        "firstPublicationDate": "2023-01-01",
+        "firstIndexDate": "2022-12-23"
+      }
+    ]
+  }
+}

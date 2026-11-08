@@ -1,0 +1,35 @@
+[
+  {
+    "id": 777404,
+    "version": 108,
+    "name": "15631G>T",
+    "chromosomelocation": "g.41006936G>T",
+    "genelocation": "g.20638G>T",
+    "proteinlocation": "p.Q172H, splice defect",
+    "genesymbol": "CYP2B6",
+    "dbsnpid": "rs3745274",
+    "position": 41006936
+  },
+  {
+    "id": 1508723,
+    "version": 88,
+    "name": "421C>A",
+    "chromosomelocation": "g.88131171G>T",
+    "genelocation": "g.105152C>A",
+    "proteinlocation": "Q141K",
+    "genesymbol": "ABCG2",
+    "dbsnpid": "rs2231142",
+    "position": 88131171
+  },
+  {
+    "id": 778237,
+    "version": 108,
+    "name": "17991G>A",
+    "chromosomelocation": "g.15879621C>T",
+    "genelocation": "g.23454G>A",
+    "proteinlocation": "p.V433M",
+    "genesymbol": "CYP4F2",
+    "dbsnpid": "rs2108622",
+    "position": 15879621
+  }
+]
