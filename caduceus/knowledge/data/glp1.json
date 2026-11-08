@@ -58,8 +58,8 @@
         "drug_interaction_p": 0.02,
         "interaction": "weakly significant",
         "replication": "All of Us",
-        "non_genetic_variance_percent": 21.4,
-        "combined_model_variance_percent": 25
+        "variance_explained_by_non_genetic_factors_percent": 21.4,
+        "variance_explained_by_non_genetic_and_genetic_factors_percent": 25
       }
     },
     {
