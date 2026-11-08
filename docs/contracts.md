@@ -59,13 +59,22 @@ def parity(conn, source_id, *, report_path=None) -> dict
 - `metadata: dict`, `chunks: int`, `warnings: list`.
 
 **`import_promethease`:**
-- **`annotation_snapshot` rows:** one per record, with `ordinal` = its position, `kind` `snp` or `genoset`, and `record_json` verbatim.
+- **`annotation_snapshot` rows:** one per kept record, with `ordinal` = its position among the kept records (file order), `kind` `snp` or `genoset`, and `record_json` verbatim. Genotype-info rows follow the records. Warnings name a record by its position in the file, which differs from the stored ordinal once an earlier record was dropped.
 - **The genotype maps** (`rsinfo`, `othersinfo`) go in as `kind="genotype_info"` rows.
 - **Aliases:** `marker_alias` from `redirect_from`.
 - **Search:** the records are indexed (kind `annotation`).
 - **Categories:** each record gets a `policy.categorize` category.
 
-**Decode limits:** per-chunk and total inflated bytes, items per chunk, keys per dict chunk, nodes per record and nodes in total. Real reports are far below every limit: about 3.4k chunks, under 20 KB each, 21 MB in total. Exceeding a total raises `ReportTooLarge`; an oversized record is dropped with a warning.
+**Decode limits:**
+- **Inflated bytes:** 1 MiB per chunk and 128 MiB in total.
+- **Counts:** items per chunk, keys per dict chunk, 5,000 JSON nodes per record and 5,000,000 in total.
+- **Text depth:** 32 levels.
+
+Exceeding a total raises `ReportTooLarge`.
+
+An item over the per-record node limit, or with text deeper than 32 levels, is dropped with a warning. Text the classifier cannot reach is never stored or published.
+
+The owner's real report (counts only): 3,416 chunks of under 20 KB each, 21 MB inflated, 1.83M nodes, at most 134 per record, at most 4 levels deep, and decode at about 216 MB RSS. The node cap is set above that real total. A crafted file that stays within every cap peaks near 400 MB.
 
 **`build_report`:**
 - **Output:** writes one self-contained HTML **variant report**, in its own design, with no external resources.
