@@ -54,6 +54,10 @@ def test_why_isnt_my_ozempic_working(plugin):
     weight = call("caduceus_trend", op="compare", metric="weight", drug="Ozempic", after_days=84)
     assert weight["pivot"] == persona.START.isoformat()
     assert weight["after"]["mean"] < weight["before"]["mean"] - 1.5
+    since = call("caduceus_trend", op="compare", metric="weight", drug="Ozempic")  # the window runs to the latest data
+    assert since["after"]["last"]["day"] == persona.LAST_DAY.isoformat()
+    first, second = since["after"]["halves"]
+    assert first["weekly_slope"] < -0.2 and abs(second["weekly_slope"]) < 0.1   # the loss, then the plateau
     a1c = call("caduceus_trend", op="labs", lab="A1c")
     assert [p["value"] for p in a1c["points"]] == [8.1, 8.4, 7.9, 7.8] and a1c["unit"] == "%"
 
