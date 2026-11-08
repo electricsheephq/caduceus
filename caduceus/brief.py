@@ -10,6 +10,7 @@ import html
 import json
 import math
 import os
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -344,7 +345,12 @@ def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"health-brief-{today.isoformat()}.html"
-    part = path.with_name(path.name + ".part")
-    part.write_text(page, encoding="utf-8")
-    os.replace(part, path)
+    fd, part = tempfile.mkstemp(dir=out_dir, prefix=path.name + ".", suffix=".part")  # never shared by two writers
+    os.close(fd)
+    try:
+        Path(part).write_text(page, encoding="utf-8")
+        os.replace(part, path)
+    finally:
+        if os.path.exists(part):
+            os.unlink(part)
     return path

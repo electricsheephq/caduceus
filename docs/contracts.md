@@ -114,16 +114,18 @@ def trend_svg(points, *, unit, title, markers=()) -> str
   - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
 **Records semantics:**
-- **Identity.** A resource is named by its Bundle entry's absolute `fullUrl` when there is one (ids repeat across providers), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
+- **Identity.** A resource is named by its Bundle entry's `fullUrl` when there is one, absolute URL or `urn:uuid` alike (ids repeat across providers and bundles), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
 - **Statuses.**
   - Observations with status `entered-in-error` or `cancelled`, Conditions verified `entered-in-error` or `refuted`, and medications `entered-in-error` or `cancelled`, are skipped.
   - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. A row that another resource still asserts is kept, without the withdrawn identity.
-  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time.
-- **Panels.** Each component row stores only its own component, so a sibling's code or value never sits under another row's category.
+  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value; the copies' resources are listed in `_caduceus.superseded_ids`, so their stale re-sends are ignored, and a later retraction of the correction removes it.
+- **Panels.** Each component row stores only its own component, without the panel's own value, interpretation, reference range or notes, so neither a sibling's nor the panel's content sits under another row's category. No row of a panel keeps the narrative (`text`), which describes every part.
 - **Medications.**
   - `completed` and `stopped` with an end date give a start and a stop.
   - With no end date, the start is kept with `{"status": ..., "current": false}` in its note. No date is ever invented.
-  - A later import of the same medication and date updates the stored status. A row's category never loosens: the stricter of the old and new category is kept.
+  - A later import of the same medication and date updates the stored status.
+  - A row's category never loosens. A sensitive row keeps its category even when a later import describes it under another sensitive category; it then keeps its stored text, and only its status moves (conditions too). A user's own record does the same: details that point at another sensitive category are not applied.
+  - When a confirmed medication's category is hidden, the reply is `{"saved": true, ...the details just given, "note"}`: nothing stored earlier (dose, brand, previous dose, whether it already existed) comes back.
   - `medication_event.category` holds each row's category (`policy.medication_category` for the user's own records and for imports).
 - **Sensitive categories** come from display text first, then from codes in `code`, in components and in `valueCodeableConcept`:
   - ICD-10 (CM and WHO) and ICD-9-CM ranges, written with or without the dot: mental health and pregnancy, plus Alzheimer's disease and the dementias (G30, F00–F03; 290, 294.1, 331.0), genetic susceptibility to and family history of cancer (Z15, Z80; V84.0, V16) and carrier status (Z14, Z84.81; V83);
@@ -132,7 +134,9 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 
   A code with no system is matched by its shape, so privacy fails closed. The SNOMED list is not exhaustive: unlisted child concepts with no display text are not caught.
 - **Known limits (follow-ups):**
-  - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time.
+  - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time (medication retractions also check the drug and start).
+  - A resource imported with a `fullUrl` and retracted without one (or the reverse) is not matched: identities are compared as given.
+  - Schema columns added after a vault was created are added on open (`db._migrate_vault`); `medication_event.category` is backfilled from the drug names.
   - Corrections and status updates apply in arrival order, not by `meta.lastUpdated`.
   - Sleep nights are assigned noon to noon in each sample's own offset, so a large eastward flight can split one night.
 

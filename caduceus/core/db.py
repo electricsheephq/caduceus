@@ -42,6 +42,7 @@ def open_vault(path=None) -> sqlite3.Connection:
 
     conn = connect(path or vault_path())
     apply_schema(conn, "vault")
+    _migrate_vault(conn)
     with write_txn(conn):
         conn.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', ?)", (SCHEMA_VERSION,))
         conn.execute(
@@ -49,6 +50,25 @@ def open_vault(path=None) -> sqlite3.Connection:
             "VALUES (1, 'me', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
         )
     return conn
+
+
+def _migrate_vault(conn: sqlite3.Connection) -> None:
+    """Columns added after a vault was created. CREATE TABLE IF NOT EXISTS never adds them to an existing table."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}
+    if "category" in columns:
+        return
+    from .policy import SENSITIVE, medication_category
+
+    sensitive = {c.value for c in SENSITIVE}
+    with write_txn(conn):
+        conn.execute("ALTER TABLE medication_event ADD COLUMN category TEXT NOT NULL DEFAULT 'medication'")
+        for row in conn.execute("SELECT id, drug, brand, source FROM medication_event").fetchall():
+            category = medication_category(" ".join(str(x) for x in (row[1], row[2]) if x)).value
+            ref = f"user:{row[0]}" if row[3] == "user" else str(row[0])
+            indexed = conn.execute("SELECT category FROM search_doc WHERE kind='medication' AND ref=?", (ref,)).fetchone()
+            if category not in sensitive and indexed and indexed[0] in sensitive:
+                category = indexed[0]  # the index already filed it under a sensitive category: the stricter wins
+            conn.execute("UPDATE medication_event SET category=? WHERE id=?", (category, row[0]))
 
 
 def open_samples(path=None) -> sqlite3.Connection:

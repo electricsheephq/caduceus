@@ -587,3 +587,39 @@ def test_a_medication_keeps_its_sensitive_category(vault, tmp_path):
 def test_right_not_to_know_codes_without_text(vault, tmp_path, resource, expected):
     import_fhir(vault, _source(vault, tmp_path / "c.json", resource))
     assert vault.execute("SELECT category FROM condition").fetchone()[0] == expected
+
+
+def test_a_medication_retraction_must_name_the_same_drug(vault, tmp_path):
+    metformin = {**_warfarin(), "id": "1", "medicationCodeableConcept": {"text": "Metformin 500 mg tablet"}}
+    lisinopril = {**_warfarin("entered-in-error"), "id": "1", "medicationCodeableConcept": {"text": "Lisinopril 10 mg"}}
+    import_fhir(vault, _source(vault, tmp_path / "a.json", metformin))  # one provider's single-resource file
+    import_fhir(vault, _source(vault, tmp_path / "b.json", lisinopril))  # another provider reusing the id
+    assert [r[0] for r in vault.execute("SELECT drug FROM medication_event")] == ["metformin 500 mg tablet"]
+
+
+def test_distinct_urn_full_urls_are_distinct_resources(vault, tmp_path):
+    a, b = "urn:uuid:00000000-0000-4000-8000-00000000000a", "urn:uuid:00000000-0000-4000-8000-00000000000b"
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls((a, _glucose("1", 111)), (b, _glucose("1", 222)))))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 111, status="entered-in-error")))))
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [222]
+
+
+def test_a_correction_is_asserted_only_by_the_resource_that_made_it(vault, tmp_path):
+    a, b = "https://a.example/fhir/Observation/1", "https://b.example/fhir/Observation/2"
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls((a, _glucose("1", 100)), (b, _glucose("2", 100)))))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 200, status="corrected")))))
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [200]
+    import_fhir(vault, _source(vault, tmp_path / "3.json", _bundle_urls((b, _glucose("2", 100)))))  # a stale copy
+    assert [p["value"] for p in observation_series(vault, "glucose")["points"]] == [200]
+    document = json.loads(vault.execute("SELECT raw_json FROM observation").fetchone()[0])
+    assert document["_caduceus"]["resource_ids"] == [a] and document["_caduceus"]["superseded_ids"] == [b]
+    import_fhir(vault, _source(vault, tmp_path / "4.json", _bundle_urls((a, _glucose("1", 200, status="entered-in-error")))))
+    assert observation_series(vault, "glucose")["points"] == []
+
+
+def test_a_later_correction_from_a_superseded_resource_keeps_the_first(vault, tmp_path):
+    a, b = "https://a.example/fhir/Observation/1", "https://b.example/fhir/Observation/2"
+    import_fhir(vault, _source(vault, tmp_path / "1.json", _bundle_urls((a, _glucose("1", 100)), (b, _glucose("2", 100)))))
+    import_fhir(vault, _source(vault, tmp_path / "2.json", _bundle_urls((a, _glucose("1", 200, status="corrected")))))
+    import_fhir(vault, _source(vault, tmp_path / "3.json", _bundle_urls((b, _glucose("2", 150, status="corrected")))))
+    assert sorted(p["value"] for p in observation_series(vault, "glucose")["points"]) == [150, 200]

@@ -151,3 +151,40 @@ def test_a_watch_result_is_delivered_once(plugin, monkeypatch):
     outer = call("caduceus_capture", op="watch_run")
     titles = [item["title"] for result in (outer, nested[0]) for item in result.get("new_items", [])]
     assert sorted(titles) == ["first", "second"]
+
+
+def test_booleans_are_not_numbers(plugin):
+    _, call, _ = plugin
+    error = call("caduceus_trend", op="compare", metric="weight", pivot="2026-05-01", before_days=True)["error"]
+    assert "before_days must be a whole number" in error
+
+
+def test_watch_results_respect_a_hidden_research_category(plugin):
+    import importlib
+
+    from caduceus.core.policy import Policy
+
+    ops = importlib.import_module(load_plugin_package().__name__ + ".caduceus.ops")
+    result = {"new_items": [{"title": "Invented APOE paper", "category": "alzheimers"},
+                            {"title": "Invented GLP1R paper", "category": "research"}]}
+    filtered = ops._filter_watch(result, Policy(hidden=frozenset({"research"})))
+    assert filtered["new_items"] == [] and filtered["withheld"] == 2
+
+
+def test_concurrent_reports_and_briefs_never_share_a_temporary_file(plugin):
+    import threading
+
+    _, call, _ = plugin
+    errors = []
+
+    def brief():
+        result = call("caduceus_capture", op="brief")
+        if "error" in result:
+            errors.append(result["error"])
+
+    threads = [threading.Thread(target=brief) for _ in range(12)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []

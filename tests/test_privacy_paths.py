@@ -91,7 +91,7 @@ def test_hiding_medications_hides_every_medication(tmp_path):
 
 def test_a_recorded_medication_gets_its_own_category(standard):
     saved = standard("caduceus_capture", op="medication", drug="sertraline", date="2026-01-05", confirm=True)
-    assert saved["recorded"] is True and "mental_health" in saved["note"]
+    assert saved["saved"] is True and "mental_health" in saved["note"]
     assert standard("caduceus_search", query="sertraline")["results"] == []
 
 
@@ -109,3 +109,79 @@ def test_hidden_medications_never_become_research_search_terms(standard, tmp_pat
     monkeypatch.setattr(watch, "run_watch", fake_run)
     standard("caduceus_capture", op="watch_run")
     assert "semaglutide" in seen["drugs"] and "sertraline" not in seen["drugs"]
+
+
+def test_a_hidden_medication_reply_never_shows_what_was_stored(standard):
+    standard("caduceus_capture", op="medication", drug="sertraline", date="2026-01-05", dose="50 mg",
+             brand="ZZSTOREDBRANDX", confirm=True)
+    replay = standard("caduceus_capture", op="medication", drug="sertraline", date="2026-01-05", confirm=True)
+    update = standard("caduceus_capture", op="medication", drug="sertraline", date="2026-01-05", dose="100 mg",
+                      confirm=True)
+    for reply in (replay, update):
+        text = json.dumps(reply)
+        assert reply["saved"] is True and "50 mg" not in text and "ZZSTOREDBRANDX" not in text
+        assert not {"recorded", "already_recorded", "updated", "previous_dose"} & set(reply)
+    unlocked = _plugin({})  # the same vault at the open level: the update was stored
+    found = unlocked("caduceus_search", query="sertraline")["results"]
+    assert len(found) == 1 and "100 mg" in unlocked("caduceus_search", ref=found[0]["ref"])["body"]
+
+
+def test_a_panel_component_keeps_none_of_the_panels_own_content(standard, tmp_path):
+    panel = {"resourceType": "Observation", "id": "p2", "status": "final", "effectiveDateTime": "2024-03-01",
+             "text": {"status": "generated", "div": "<div>ZZNARRATIVEX glucose 99</div>"},
+             "code": {"coding": [{"system": "http://loinc.org", "code": "24323-8", "display": "Synthetic panel"}]},
+             "valueCodeableConcept": {"text": "ZZPARENTX major depression"},
+             "interpretation": [{"text": "ZZINTERPX"}], "note": [{"text": "ZZNOTEX"}],
+             "component": [{"code": {"coding": [{"system": "http://loinc.org", "code": "2345-7", "display": "Glucose"}]},
+                            "valueQuantity": {"value": 99, "unit": "mg/dL"}}]}
+    _import(standard, tmp_path, "panel.json", panel)
+    found = standard("caduceus_search", query="Glucose")["results"]
+    assert len(found) == 1
+    body = standard("caduceus_search", ref=found[0]["ref"])["body"]
+    assert '"value":99' in body
+    for leak in ("ZZPARENTX", "ZZNARRATIVEX", "ZZINTERPX", "ZZNOTEX"):
+        assert leak not in body
+    parent = standard("caduceus_search", query="ZZPARENTX")
+    assert parent["results"] == [] and parent["withheld"] == 1
+    assert standard("caduceus_search", query="ZZNARRATIVEX")["results"] == []
+
+
+@pytest.fixture
+def reproductive_unlocked():
+    return _plugin({"privacy_level": "standard", "unlocked_categories": ["reproductive"]})
+
+
+def test_a_sensitive_record_never_moves_to_another_sensitive_category(reproductive_unlocked, tmp_path):
+    call = reproductive_unlocked
+    medication = _statement("m1", "Synthdrug 5 mg tablet")
+    medication["medicationCodeableConcept"]["coding"] = [{"display": "Synthdrug for major depression"}]
+    condition = {"resourceType": "Condition", "id": "c1", "onsetDateTime": "2024-01-01",
+                 "clinicalStatus": {"coding": [{"code": "active"}]},
+                 "code": {"text": "Synthetic condition", "coding": [{"display": "major depression"}]}}
+    _import(call, tmp_path, "first.json", medication, condition)
+    medication = json.loads(json.dumps(medication))
+    medication["status"] = "stopped"
+    medication["medicationCodeableConcept"]["coding"] = [{"display": "Synthdrug in pregnancy"}]
+    condition = json.loads(json.dumps(condition))
+    condition["clinicalStatus"] = {"coding": [{"code": "resolved"}]}
+    condition["code"]["coding"] = [{"display": "pregnancy related"}]
+    _import(call, tmp_path, "second.json", medication, condition)
+    for query in ("synthdrug", "Synthetic condition", "pregnancy"):
+        assert call("caduceus_search", query=query)["results"] == [], query
+    unlocked = _plugin({})
+    for query, status in (("synthdrug", '"status":"stopped"'), ("Synthetic condition", '"resolved"')):
+        found = unlocked("caduceus_search", query=query)["results"]
+        assert len(found) == 1 and found[0]["category"] == "mental_health"
+        body = unlocked("caduceus_search", ref=found[0]["ref"])["body"]
+        assert "pregnancy" not in body and status in body  # the status moved; the other category's text did not
+
+
+def test_a_recorded_medication_never_moves_to_another_sensitive_category(reproductive_unlocked):
+    call = reproductive_unlocked
+    call("caduceus_capture", op="medication", drug="sertraline", date="2026-01-05", brand="ZZBRANDX", confirm=True)
+    reply = call("caduceus_capture", op="medication", drug="sertraline", date="2026-01-05",
+                 brand="ZZBRANDX pregnancy pack", confirm=True)
+    assert "mental_health" in reply["note"]
+    assert call("caduceus_search", query="sertraline")["results"] == []
+    found = _plugin({})("caduceus_search", query="sertraline")["results"]
+    assert len(found) == 1 and found[0]["category"] == "mental_health" and "pregnancy" not in found[0]["title"]

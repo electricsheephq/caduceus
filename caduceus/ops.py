@@ -95,6 +95,8 @@ def _int(args: dict, key: str, default: int, low: int, high: int) -> int:
     value = args.get(key)
     if value in (None, ""):
         return default
+    if isinstance(value, bool):
+        raise ToolError(f"{key} must be a whole number")
     try:
         number = int(value)
         if isinstance(value, float) and value != number:
@@ -588,7 +590,7 @@ def _medication(ctx, args: dict) -> dict:
         vault = store.vault
         row = vault.execute("SELECT id, brand, dose, category FROM medication_event WHERE drug=? AND event=? "
                             "AND occurred_on=? AND source='user'", (generic, event, when.isoformat())).fetchone()
-        outcome, previous_dose = "recorded", None
+        outcome, previous_dose, conflict = "recorded", None, False
         if row is None:
             cur = vault.execute(
                 "INSERT INTO medication_event(drug, brand, event, dose, occurred_on, source, note, category, created_at) "
@@ -597,14 +599,16 @@ def _medication(ctx, args: dict) -> dict:
             ref = cur.lastrowid
         else:
             ref, outcome = row["id"], "already_recorded"
-            changed = {k: v for k, v in (("dose", dose), ("brand", brand)) if v and v != row[k]}
+            if row["category"] in {c.value for c in SENSITIVE}:
+                # A sensitive record keeps its category, and details that point at another one never join it.
+                conflict = category in SENSITIVE and category.value != row["category"]
+                category = Category(row["category"])
+            changed = {} if conflict else {k: v for k, v in (("dose", dose), ("brand", brand)) if v and v != row[k]}
             if changed:  # the user confirmed new details for the same event: the record follows them
                 previous_dose, outcome = row["dose"], "updated"
                 vault.execute("UPDATE medication_event SET " + ", ".join(f"{k}=?" for k in changed) + " WHERE id=?",
                               (*changed.values(), ref))
-            if row["category"] in {c.value for c in SENSITIVE} and category not in SENSITIVE:
-                category = Category(row["category"])
-            elif category.value != row["category"]:
+            if category.value != row["category"]:
                 vault.execute("UPDATE medication_event SET category=? WHERE id=?", (category.value, ref))
         stored = vault.execute("SELECT brand, dose FROM medication_event WHERE id=?", (ref,)).fetchone()
         words = _EVENT_WORDS[event]
@@ -616,13 +620,15 @@ def _medication(ctx, args: dict) -> dict:
         if outcome != "already_recorded":
             vault.execute("INSERT INTO audit_event(ts, actor, action, detail_json) VALUES (?,?,?,?)",
                           (now, "agent", f"medication_{outcome}", json.dumps(preview)))
+    if not medication_visible(policy_for(ctx), category):
+        return {"saved": True, **preview,
+                "note": (f"Recorded. Your privacy settings hide {category.value} items, so this medication and "
+                         "anything already stored about it stay out of searches, the brief and this reply until the "
+                         "user unlocks it with /caduceus.")}
     out = {"recorded": outcome == "recorded", "already_recorded": outcome == "already_recorded",
            "updated": outcome == "updated", **preview, "brand": stored["brand"], "dose": stored["dose"]}
     if previous_dose is not None:
         out["previous_dose"] = previous_dose
-    if not medication_visible(policy_for(ctx), category):
-        out["note"] = (f"Saved. Your privacy settings hide {category.value} items, so this medication will not "
-                       "appear in searches or the brief until the user unlocks it with /caduceus.")
     return out
 
 
@@ -649,7 +655,7 @@ _WATCH_PENDING: list[dict] = []   # holders for runs that finished after their t
 
 def _filter_watch(result: dict, policy) -> dict:
     items = list(result.get("new_items") or [])
-    shown = [i for i in items if allowed(policy, i.get("category", Category.RESEARCH))]
+    shown = [i for i in items if visible(policy, i.get("category", Category.RESEARCH), kind="research")]
     return {**result, "new_items": shown, **_withheld(len(items) - len(shown))}
 
 

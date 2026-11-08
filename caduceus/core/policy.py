@@ -125,13 +125,14 @@ _TEXT_CATEGORY = (
      Category.CANCER_RISK),
     # "ST depression" (an ECG finding) and other non-psychiatric uses of the word are not mental health.
     (re.compile(r"schizo(?:phreni|affective|id\b|typal)|bipolar|dysthymi|autis|adhd|attention[- ]deficit|anxiety"
-                r"|(?<!\bst )(?<!\bst-)(?<!\bpr )(?<!segment )(?<!respiratory )(?<!marrow )(?<!\bcns )depress(?:i|ed mood)"
+                r"|(?<!\bst )(?<!\bst-)(?<!-t )(?<!\bpr )(?<!segment )(?<!wave )(?<!respiratory )(?<!marrow )(?<!\bcns )"
+                r"depress(?:i(?!on of (?:the )?st\b)|ed mood)"
                 r"|psychiatr|psychos[ie]s|psychotic|\bptsd\b|post-?traumatic|\bocd\b|obsessive[- ]compulsive"
                 r"|anorexia nervosa|bulimi|eating disorder|binge[- ]eating|substance use|addiction|suicid|self-harm"
                 r"|(?:alcohol|opioid|cannabis|cocaine|stimulant|substance|drug) (?:use disorder|dependence|abuse)"
                 r"|panic disorder|\bphq-?9\b|\bgad-?7\b", re.I), Category.MENTAL_HEALTH),
     (re.compile(r"infertil|miscarriage|pregnan|endometriosis|\bpcos\b|polycystic ovar|erectile dysfunction"
-                r"|contracepti|\bivf\b|in vitro fertili|ectopic|abortion|menstrua", re.I), Category.REPRODUCTIVE),
+                r"|contracepti|\bivf\b|in vitro fertili|abortion|menstrua", re.I), Category.REPRODUCTIVE),
 )
 
 
@@ -185,7 +186,8 @@ _MEDICATION_DRUGS = (
                 r"|lumateperone|lithium|atomoxetine|viloxazine|methylphenidate|dexmethylphenidate|lisdexamfetamine"
                 r"|amphetamine|dextroamphetamine|buprenorphine|disulfiram|acamprosate|zoloft|lexapro|prozac|paxil"
                 r"|celexa|effexor|cymbalta|wellbutrin|abilify|seroquel|zyprexa|risperdal|latuda|vraylar|rexulti"
-                r"|adderall|vyvanse|ritalin|concerta|strattera|suboxone|trintellix)\b", re.I), Category.MENTAL_HEALTH),
+                r"|adderall|vyvanse|ritalin|concerta|strattera|suboxone|trintellix|alprazolam|lorazepam|clonazepam"
+                r"|diazepam|buspirone|xanax|ativan|klonopin|valium)\b", re.I), Category.MENTAL_HEALTH),
     (re.compile(r"\b(?:levonorgestrel|norethindrone|norgestimate|norgestrel|desogestrel|drospirenone|etonogestrel"
                 r"|norelgestromin|segesterone|medroxyprogesterone|ulipristal|mifepristone|misoprostol|clomiphene"
                 r"|sildenafil|tadalafil|vardenafil|avanafil|plan b|nexplanon|mirena|kyleena|skyla|liletta"

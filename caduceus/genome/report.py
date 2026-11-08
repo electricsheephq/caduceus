@@ -137,9 +137,15 @@ def build_report(conn, out_dir, *, policy, source_id=None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     date = datetime.now(timezone.utc).date().isoformat()
     path = out_dir / f"variant-report-{source.sha256[:8]}-{date}.html"
-    part = path.with_name(path.name + ".part")  # a failed write never replaces a complete report
-    part.write_text(html, encoding="utf-8")
-    os.replace(part, path)
+    # A failed write never replaces a complete report, and two writers never share a temporary file.
+    fd, part = tempfile.mkstemp(dir=out_dir, prefix=path.name + ".", suffix=".part")
+    os.close(fd)
+    try:
+        Path(part).write_text(html, encoding="utf-8")
+        os.replace(part, path)
+    finally:
+        if os.path.exists(part):
+            os.unlink(part)
     return path
 
 

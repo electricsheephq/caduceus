@@ -263,3 +263,53 @@ def test_concurrent_copies_of_a_new_file_all_succeed(data_dir, tmp_path):
     stored = list((data_dir / "sources").rglob("*"))
     assert not [p for p in stored if p.name.endswith(".part")]
     assert [p.read_bytes() == path.read_bytes() for p in stored if p.is_file()] == [True]
+
+
+def test_an_older_vault_gains_the_medication_category_column(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript("""CREATE TABLE medication_event (id INTEGER PRIMARY KEY, subject_id INTEGER NOT NULL DEFAULT 1,
+        drug TEXT NOT NULL, brand TEXT, event TEXT NOT NULL, dose TEXT, occurred_on TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'user', source_id INTEGER, note TEXT, created_at TEXT NOT NULL,
+        UNIQUE (drug, event, occurred_on, source));
+        INSERT INTO medication_event(drug, event, occurred_on, created_at) VALUES ('sertraline', 'start', '2026-01-05', 'x');
+        INSERT INTO medication_event(drug, event, occurred_on, created_at) VALUES ('metformin', 'start', '2023-09-20', 'x');""")
+    old.commit()
+    old.close()
+    conn = open_vault(path)
+    try:
+        rows = dict(conn.execute("SELECT drug, category FROM medication_event").fetchall())
+    finally:
+        conn.close()
+    assert rows == {"sertraline": "mental_health", "metformin": "medication"}
+
+
+def test_an_older_vault_keeps_a_sensitive_category_its_index_already_had(tmp_path):
+    path = tmp_path / "old.db"
+    conn = open_vault(path)
+    with write_txn(conn):
+        cur = conn.execute("INSERT INTO medication_event(drug, event, occurred_on, source, created_at) "
+                           "VALUES ('synthdrug 5 mg tablet', 'start', '2024-02-01', 'fhir', 'x')")
+        search.index_doc(conn, kind="medication", ref=str(cur.lastrowid), title="synthdrug 5 mg tablet",
+                         body="Synthdrug for major depression", category=Category.MENTAL_HEALTH)
+        conn.execute("ALTER TABLE medication_event DROP COLUMN category")  # the shape before the column existed
+    conn.close()
+    conn = open_vault(path)
+    try:
+        assert conn.execute("SELECT category FROM medication_event").fetchone()[0] == "mental_health"
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("text", ["ST-T wave depression", "Depression of ST segment", "Ventricular ectopic beats"])
+def test_cardiology_words_stay_ordinary_records(text):
+    assert categorize(text=text, default=Category.RECORDS) is Category.RECORDS
+
+
+@pytest.mark.parametrize("drug", ["alprazolam 0.5 mg", "Xanax", "lorazepam", "buspirone 10 mg"])
+def test_anxiety_medications_are_mental_health(drug):
+    from caduceus.core.policy import medication_category
+
+    assert medication_category(drug) is Category.MENTAL_HEALTH
