@@ -1,0 +1,9 @@
+# Keep blank issues available for questions and feature requests.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security or privacy problem privately
+    url: https://github.com/electricsheephq/caduceus/security/advisories/new
+    about: Hidden results shown, data leaving your machine, or anything that exposes a secret. Please don't open a public issue.
+  - name: Problem in Hermes Agent itself
+    url: https://github.com/NousResearch/hermes-agent/issues
+    about: Bugs in Hermes core, not in this plugin, belong upstream.

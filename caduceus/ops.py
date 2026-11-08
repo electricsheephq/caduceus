@@ -230,10 +230,34 @@ def _pack_rsids(pack) -> list[str]:
     return sorted(seen)
 
 
-def _pack_calls(store):
-    """The knowledge pack, and the user's calls for every marker it knows (matched locally)."""
+def _pack_calls(vault):
+    """The knowledge pack, and the user's calls for every marker it knows plus APOE (matched locally)."""
     pack = _pack()
-    return pack, _get_calls(store.vault, _pack_rsids(pack))
+    return pack, _get_calls(vault, sorted(set(_pack_rsids(pack)) | set(_SENSITIVE_MARKERS)))
+
+
+def _pgx(pack, drug: str, calls, policy) -> dict:
+    """Gene–drug entries for *drug*, filtered by the policy, with the user's own genotypes beside each marker."""
+    result = _need("knowledge.pack", "pgx_check")(pack, drug, calls)
+    entries = list(result.get("entries") or [])
+    shown = [e for e in entries if allowed(policy, e.get("category", Category.PGX))]
+    for entry in shown:
+        mine = {}
+        for marker in entry.get("markers") or ():
+            rsid = marker.get("rsid") if isinstance(marker, dict) else None
+            call = calls.get(rsid) if rsid else None
+            if call is not None:
+                mine[rsid] = call.genotype if call.genotype else call.state.value
+        entry["your_genotypes"] = mine
+    return {**result, "entries": shown, **_withheld(len(entries) - len(shown))}
+
+
+def _lane(fn, *args, **kwargs):
+    """Call a lane function; its ValueErrors are input problems (an unknown metric, a bad window)."""
+    try:
+        return fn(*args, **kwargs)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 _GENOME_OPS = ("lookup", "gene", "pgx", "derived", "summary", "filter", "report")
@@ -264,10 +288,10 @@ def genome_tool(ctx, args: dict) -> dict:
                 raise ToolError("give a drug name")
             if not allowed(policy, Category.PGX):
                 return {"drug": drug, **_withheld(1)}
-            pack, calls = _pack_calls(store)
-            return _need("knowledge.pack", "pgx_check")(pack, drug, calls)
+            pack, calls = _pack_calls(store.vault)
+            return _pgx(pack, drug, calls, policy)
         if op == "derived":
-            pack, calls = _pack_calls(store)
+            pack, calls = _pack_calls(store.vault)
             derived = _need("knowledge.pack", "derive")(pack, calls)
             shown = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
             return {"derived": shown, "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(derived) - len(shown))}
@@ -341,35 +365,44 @@ def trend_tool(ctx, args: dict) -> dict:
     policy = policy_for(ctx)
     with _Store() as store:
         if op == "labs":
-            if not allowed(policy, Category.RECORDS):
-                return _withheld(1)
             lab = str(args.get("lab") or "").strip()
             if not lab:
                 raise ToolError("give a lab name or LOINC code, e.g. HbA1c")
-            return _need("health.trends", "observation_series")(
-                store.vault, lab, start=_date(args.get("start"), "start"), end=_date(args.get("end"), "end"))
+            return lab_series(store.vault, lab, policy, start=_date(args.get("start"), "start"),
+                              end=_date(args.get("end"), "end"))
         if not allowed(policy, Category.WELLNESS):
             return _withheld(1)
         if op == "metrics":
-            return {"metrics": _need("health.trends", "metrics")(store.samples)}
+            return {"metrics": _lane(_need("health.trends", "metrics"), store.samples)}
         if op == "check":
-            return _need("health.trends", "daily_check")(store.samples)
+            return _lane(_need("health.trends", "daily_check"), store.samples)
         metric = str(args.get("metric") or "").strip()
         if not metric:
             raise ToolError("give a metric, e.g. weight; op=metrics lists them")
         if op == "series":
-            return _need("health.trends", "trend")(
-                store.samples, metric, start=_date(args.get("start"), "start"), end=_date(args.get("end"), "end"),
-                bucket=args.get("bucket") or "week")
+            return _lane(_need("health.trends", "trend"), store.samples, metric,
+                         start=_date(args.get("start"), "start"), end=_date(args.get("end"), "end"),
+                         bucket=args.get("bucket") or "week")
         pivot = _date(args.get("pivot"), "pivot")
         if pivot is None:
             if not args.get("drug"):
                 raise ToolError("give a pivot date or a drug whose start date is recorded")
             pivot = _drug_start(store.vault, str(args["drug"]))
-        result = _need("health.trends", "compare_windows")(
-            store.samples, metric, pivot=pivot, before_days=int(args.get("before_days") or 28),
-            after_days=int(args.get("after_days") or 28))
+        result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
+                       before_days=int(args.get("before_days") or 28), after_days=int(args.get("after_days") or 28))
         return {**result, "pivot": pivot.isoformat()}
+
+
+def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:
+    """A lab result over time, with points the policy hides removed and counted (shared with the brief)."""
+    result = _lane(_need("health.fhir", "observation_series"), vault, lab, start=start, end=end)
+    points = list(result.get("points") or [])
+    shown = [p for p in points if allowed(policy, p.get("category", Category.RECORDS))]
+    units = sorted({p["unit"] for p in shown if p.get("unit")})
+    out = {**result, "points": shown, "unit": units[0] if len(units) == 1 else units}
+    if not points:
+        out["note"] = "No results for this lab. Import records (FHIR JSON or an Apple Health export with Health Records)."
+    return {**out, **_withheld(len(points) - len(shown))}
 
 
 # ---------------------------------------------------------------- caduceus_capture: import
