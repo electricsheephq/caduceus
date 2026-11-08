@@ -19,8 +19,11 @@ from .trends import recompute_rollups
 PARSER = "apple_health"
 PARSER_VERSION = "1"
 BATCH = 10_000
-MAX_MEMBER = 2 << 30
-MAX_TOTAL = 4 << 30
+MAX_MEMBER = 8 << 30
+MAX_TOTAL = 16 << 30
+REPRODUCTIVE = frozenset({"MenstrualFlow", "IntermenstrualBleeding", "OvulationTestResult",
+                         "CervicalMucusQuality", "SexualActivity", "Contraceptive", "Pregnancy",
+                         "Lactation", "PregnancyTestResult", "ProgesteroneTestResult"})
 
 
 class UnsafeXml(ValueError):
@@ -67,10 +70,15 @@ def _sample(attrs, source_id):
     except (TypeError, ValueError):
         value = None
     kind, source = attrs["type"], attrs.get("sourceName", "Unknown")
+    if not kind:
+        raise ValueError("missing sample type")
     if kind == "HKCategoryTypeIdentifierSleepAnalysis":
         offset, day = end_offset, end_day
     key = _key([kind, source, start, end, value if value is not None else text])
-    return (source_id, kind, source, attrs.get("unit"), start, end, offset, day, value, text, key)
+    short_type = kind.rsplit("Identifier", 1)[-1]
+    category = ("reproductive" if short_type in REPRODUCTIVE else
+                "mental_health" if kind.endswith("StateOfMind") or "Mood" in kind else "wellness")
+    return (source_id, kind, source, attrs.get("unit"), start, end, offset, day, value, text, key, category)
 
 
 def _flush(samples, pending, counts):
@@ -80,27 +88,35 @@ def _flush(samples, pending, counts):
         before = samples.total_changes
         samples.executemany(
             "INSERT OR IGNORE INTO sample(source_id,type,source_name,unit,start_utc,end_utc,tz_offset_min,local_day,"
-            "value,value_text,dedupe_key) VALUES (?,?,?,?,?,?,?,?,?,?,?)", pending)
+            "value,value_text,dedupe_key,category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", pending)
         counts["samples"] += samples.total_changes - before
     pending.clear()
 
 
-def _xml(samples, vault, stream, source_id, run_id, counts, cancel):
+def _xml(samples, vault, stream, source_id, run_id, counts, cancel, warnings):
     prefix = stream.read(64 << 10)
     if b"<!ENTITY" in prefix.upper() or b"\x00" in prefix:
         raise UnsafeXml("XML entity declaration or unsupported encoding")
     stream.seek(0)
-    stack, pending = [], []
+    stack, pending, positions = [], [], []
+    position = 0
     for event, elem in ET.iterparse(_XmlStream(stream), events=("start", "end")):
         if event == "start":
+            position += 1
             stack.append(elem)
+            positions.append(position)
             continue
         if cancel is not None and counts["records"] % 1000 == 0 and cancel.is_set():
             _flush(samples, pending, counts)
             return
         if elem.tag == "Record":
-            pending.append(_sample(elem.attrib, source_id))
             counts["records"] += 1
+            try:
+                pending.append(_sample(elem.attrib, source_id))
+            except (KeyError, TypeError, ValueError, OverflowError):
+                counts["skipped"] += 1
+                if counts["skipped"] <= 5:
+                    warnings.append(f"Skipped malformed Record at element position {positions[-1]}")
             if len(pending) >= BATCH:
                 _flush(samples, pending, counts)
                 sources.update_progress(vault, run_id, counts)
@@ -127,6 +143,7 @@ def _xml(samples, vault, stream, source_id, run_id, counts, cancel):
         elif elem.tag == "Me":
             counts["me_skipped"] += 1
         stack.pop()
+        positions.pop()
         # Retain only the small workout subtree until its statistics are stored.
         if not any(parent.tag == "Workout" for parent in stack):
             if stack:
@@ -142,7 +159,7 @@ def _safe_members(archive):
         path = PurePosixPath(name)
         if path.is_absolute() or ".." in path.parts or "\\" in name or ":" in name or item.is_dir():
             continue
-        if item.file_size > MAX_MEMBER or item.file_size > max(1, item.compress_size) * 2000:
+        if item.file_size > MAX_MEMBER or item.file_size > max(1, item.compress_size) * 200:
             raise ValueError("zip member exceeds inflate limit")
         total += item.file_size
         if total > MAX_TOTAL:
@@ -155,8 +172,8 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
     run = sources.begin_import(vault, src, PARSER, PARSER_VERSION)
     if run is None:
         return ImportResult("skipped", source_id=src.id)
-    counts = {"records": 0, "samples": 0, "workouts": 0, "activity_summaries": 0, "me_skipped": 0}
-    status, errors = "succeeded", []
+    counts = {"records": 0, "samples": 0, "workouts": 0, "activity_summaries": 0, "me_skipped": 0, "skipped": 0}
+    status, errors, warnings = "succeeded", [], []
     try:
         if cancel is not None and cancel.is_set():
             status = "cancelled"
@@ -167,7 +184,7 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
                 if len(exports) != 1:
                     raise ValueError("zip must contain exactly one safe export.xml")
                 with archive.open(exports[0]) as stream:
-                    _xml(samples, vault, stream, src.id, run.id, counts, cancel)
+                    _xml(samples, vault, stream, src.id, run.id, counts, cancel, warnings)
                 for member in members:
                     if cancel is not None and cancel.is_set():
                         break
@@ -189,5 +206,6 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
         status = "failed"
         # Input values may be personal: report the error class, not parser excerpts.
         errors = [f"{type(exc).__name__}: Apple Health import failed"]
-    sources.finish_import(vault, run.id, counts=counts, status=status, errors=errors)
-    return ImportResult(status, run.id, src.id, counts, errors)
+    warnings += fhir.warning_messages(counts) + errors
+    sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
+    return ImportResult(status, run.id, src.id, counts, warnings)

@@ -19,6 +19,7 @@ def clinical_bundle():
     } for i, (code, value, day) in enumerate([
         ("4548-4", 8.2, "2024-02-01"), ("17856-6", 6.5, "2024-06-01")])]
     medication = {"resourceType": "MedicationStatement", "id": "synthetic-med-1",
+                  "status": "active",
                   "medicationCodeableConcept": {"text": "Semaglutide"},
                   "effectivePeriod": {"start": PIVOT}}
     condition = {"resourceType": "Condition", "id": "synthetic-condition-1",
@@ -84,6 +85,6 @@ def make_export(path, *, days=210, extra_records=0, entity=False, zip_slip=False
             put('</HealthData>')
         archive.writestr("apple_health_export/clinical-records/synthetic.json", json.dumps(clinical_bundle()))
         if zip_slip:
-            archive.writestr("../evil", "synthetic traversal marker")
-            archive.writestr("../export.xml", "<not-health/>")
+            archive.writestr("../evil/export.xml", "<HealthData>"+
+                             record("StepCount", 999999, base, source="Evil")+"</HealthData>")
     return path

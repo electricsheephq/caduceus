@@ -38,7 +38,7 @@ def test_import_dates_dedupe_sources_sleep_and_workouts(samples, vault, tmp_path
     assert stats[0]["sum"] == "100"
     assert samples.execute("SELECT count(*) FROM activity_summary").fetchone()[0] == 1
     assert vault.execute("SELECT count(*) FROM observation").fetchone()[0] == 2
-    assert not (tmp_path.parent / "evil").exists()
+    assert samples.execute("SELECT count(*) FROM sample WHERE source_name='Evil'").fetchone()[0] == 0
     assert apple.import_apple_health(samples, vault, src).status == "skipped"
 
 
@@ -99,3 +99,69 @@ def test_million_records_under_one_minute(samples, vault, tmp_path):
     assert result.status == "succeeded", result.warnings
     assert result.counts["samples"] == 1_000_000
     assert elapsed < 60, f"million-record import exceeded 60s: {elapsed:.1f}s"
+
+
+@pytest.mark.parametrize("kind,category", [
+    ("MenstrualFlow", "reproductive"), ("IntermenstrualBleeding", "reproductive"),
+    ("OvulationTestResult", "reproductive"), ("CervicalMucusQuality", "reproductive"),
+    ("SexualActivity", "reproductive"), ("Contraceptive", "reproductive"),
+    ("Pregnancy", "reproductive"), ("Lactation", "reproductive"),
+    ("PregnancyTestResult", "reproductive"), ("ProgesteroneTestResult", "reproductive"),
+    ("StateOfMind", "mental_health"), ("HKStateOfMind", "mental_health"),
+    ("MoodChange", "mental_health"), ("SyntheticMoodRating", "mental_health")])
+def test_sensitive_sample_categories(samples, vault, tmp_path, kind, category):
+    from caduceus.core.policy import Policy, allowed
+    path = tmp_path / "sensitive.zip"
+    sample_type = kind if kind.startswith("HK") else "HKCategoryTypeIdentifier"+kind
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("export.xml", '<HealthData><Record type="'+sample_type+
+                         '" value="1" startDate="2024-01-01 12:00:00 +0000"/></HealthData>')
+    assert apple.import_apple_health(samples, vault, _source(vault, path)).status == "succeeded"
+    stored = samples.execute("SELECT category FROM sample").fetchone()[0]
+    assert stored == category and not allowed(Policy(level="standard"), stored)
+
+
+def test_malformed_records_skip_with_bounded_position_warnings(samples, vault, tmp_path):
+    path = tmp_path / "malformed-records.zip"
+    malformed = [
+        '<Record startDate="2024-01-01 12:00:00 +0000" value="synthetic-sensitive-value"/>',
+        '<Record type="HKQuantityTypeIdentifierStepCount"/>',
+        '<Record type="HKQuantityTypeIdentifierStepCount" startDate="2024-01-01 12:00:00"/>',
+    ] + ['<Record/>']*4
+    valid = '<Record type="HKQuantityTypeIdentifierStepCount" sourceName="Good" value="12" unit="count" startDate="2024-01-01 12:00:00 +0000"/>'
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("export.xml", "<HealthData>"+"".join(malformed)+valid+"</HealthData>")
+    result = apple.import_apple_health(samples, vault, _source(vault, path))
+    assert result.status == "succeeded"
+    assert result.counts["records"] == 8 and result.counts["samples"] == 1 and result.counts["skipped"] == 7
+    assert len(result.warnings) == 5
+    assert [int(w.rsplit(" ", 1)[-1]) for w in result.warnings] == [2, 3, 4, 5, 6]
+    assert all("synthetic-sensitive-value" not in w for w in result.warnings)
+    assert trend(samples, "steps", bucket="day")["points"][0]["value"] == 12
+
+
+def test_archive_caps_and_compression_ratio(samples, vault, tmp_path):
+    assert apple.MAX_MEMBER == 8 << 30 and apple.MAX_TOTAL == 16 << 30
+    def info(name, size):
+        item = zipfile.ZipInfo(name)
+        item.file_size, item.compress_size = size, max(1, size//100)
+        return item
+    class Archive:
+        def __init__(self, members):
+            self.members = members
+        def infolist(self):
+            return self.members
+    members = [info("a.xml", 8 << 30), info("b.xml", 8 << 30)]
+    assert len(apple._safe_members(Archive(members))) == 2
+    with pytest.raises(ValueError, match="total inflate"):
+        apple._safe_members(Archive(members+[info("c.xml", 1)]))
+    with pytest.raises(ValueError, match="member"):
+        apple._safe_members(Archive([info("a.xml", (8 << 30)+1)]))
+    path = tmp_path / "ratio.zip"
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("export.xml", b"0"*300000)
+    with zipfile.ZipFile(path) as archive:
+        with pytest.raises(ValueError, match="inflate limit"):
+            apple._safe_members(archive)
+    result = apple.import_apple_health(samples, vault, _source(vault, path))
+    assert result.status == "failed" and "ValueError" in result.warnings[0]
