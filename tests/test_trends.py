@@ -204,3 +204,37 @@ def test_encoded_mmol_glucose_conversion(samples, vault, tmp_path):
     src = sources.store_source(vault, path, "apple_health")[0]
     assert import_apple_health(samples, vault, src).status == "succeeded"
     assert trend(samples, "blood_glucose")["points"][0]["value"] == pytest.approx(90.08)
+
+
+def _round2_sleep(samples, vault, tmp_path, intervals):
+    import zipfile
+    from datetime import datetime
+    from tests.synth.apple import record
+    body = "".join(record("SleepAnalysis", "HKCategoryValueSleepAnalysisAsleepCore",
+                          datetime.fromisoformat(start), datetime.fromisoformat(end), source="Watch", unit="")
+                   for start, end in intervals)
+    path = tmp_path / "round2-sleep.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("export.xml", "<HealthData>"+body+"</HealthData>")
+    src = sources.store_source(vault, path, "apple_health")[0]
+    result = import_apple_health(samples, vault, src)
+    assert result.status == "succeeded", result.warnings
+    return result, trend(samples, "sleep_hours", bucket="day")["points"]
+
+
+@pytest.mark.parametrize("offset", ["-07:00", "+09:00"])
+def test_round2_noon_nights_join_midnight_fragments(samples, vault, tmp_path, offset):
+    _, points = _round2_sleep(samples, vault, tmp_path, [
+        ("2024-05-01T21:00:00"+offset, "2024-05-01T23:50:00"+offset),
+        ("2024-05-02T00:10:00"+offset, "2024-05-02T07:00:00"+offset)])
+    assert [p["day"] for p in points] == ["2024-05-02"]
+    assert points[0]["value"] == pytest.approx(9+2/3)
+
+
+def test_round2_sleep_noon_partition_and_clip_warning(samples, vault, tmp_path):
+    result, points = _round2_sleep(samples, vault, tmp_path, [
+        ("2024-04-29T22:00:00-07:00", "2024-05-02T06:00:00-07:00")])
+    assert [(p["day"], p["value"]) for p in points] == [
+        ("2024-04-30", 14), ("2024-05-01", 20), ("2024-05-02", 18)]
+    assert any("clipped" in w and "20" in w for w in result.warnings)
+    assert result.counts["sleep_nights_clipped"] == 1

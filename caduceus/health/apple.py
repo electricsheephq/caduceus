@@ -23,7 +23,9 @@ MAX_MEMBER = 8 << 30
 MAX_TOTAL = 16 << 30
 REPRODUCTIVE = frozenset({"MenstrualFlow", "IntermenstrualBleeding", "OvulationTestResult",
                          "CervicalMucusQuality", "SexualActivity", "Contraceptive", "Pregnancy",
-                         "Lactation", "PregnancyTestResult", "ProgesteroneTestResult"})
+                         "Lactation", "PregnancyTestResult", "ProgesteroneTestResult",
+                         "InfrequentMenstrualCycles", "IrregularMenstrualCycles", "ProlongedMenstrualPeriods",
+                         "PersistentIntermenstrualBleeding", "BasalBodyTemperature"})
 
 
 class UnsafeXml(ValueError):
@@ -123,8 +125,19 @@ def _xml(samples, vault, stream, source_id, run_id, counts, cancel, warnings):
         elif elem.tag == "Workout":
             attrs = elem.attrib
             stats = [dict(child.attrib) for child in elem if child.tag == "WorkoutStatistics"]
-            start = _date(attrs["startDate"])[0]
-            end = _date(attrs["endDate"])[0]
+            try:
+                start = _date(attrs["startDate"])[0]
+                end = _date(attrs["endDate"])[0]
+            except (KeyError, TypeError, ValueError, OverflowError):
+                counts["skipped"] += 1
+                if counts["skipped"] <= 5:
+                    warnings.append(f"Skipped malformed Workout at element position {positions[-1]}")
+                stack.pop()
+                positions.pop()
+                if stack:
+                    stack[-1].remove(elem)
+                elem.clear()
+                continue
             key = _key([attrs.get("workoutActivityType"), attrs.get("sourceName"), start, end])
             with write_txn(samples):
                 cur = samples.execute(
@@ -201,7 +214,12 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
                             counts[key] = counts.get(key, 0) + value
             if cancel is not None and cancel.is_set():
                 status = "cancelled"
-            recompute_rollups(samples)
+            sleep_warnings = recompute_rollups(samples)
+            if sleep_warnings:
+                warnings.extend(sleep_warnings)
+                counts["sleep_nights_clipped"] = len(sleep_warnings)
+    except fhir.UndatedMedicationStop:
+        status, errors = "failed", [fhir.UNDATED_STOP_MESSAGE]
     except Exception as exc:
         status = "failed"
         # Input values may be personal: report the error class, not parser excerpts.
