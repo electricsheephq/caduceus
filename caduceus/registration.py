@@ -27,8 +27,8 @@ def register(ctx):
         )
     ctx.register_command(
         name="caduceus", handler=lambda raw: tools.command(ctx, raw),
-        description="Caduceus health and DNA vault: status, privacy, imports, report",
-        args_hint="[status|privacy [open|standard]|imports|help]",
+        description="Caduceus health and DNA vault: status, privacy settings, imports",
+        args_hint="[status|privacy [open|standard]|hide|show|unlock|lock <category>|imports|help]",
     )
     skill = getattr(ctx, "register_skill", None)
     if callable(skill):

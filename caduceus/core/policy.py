@@ -111,8 +111,15 @@ _GENE_CATEGORY = {
         Category.CANCER_RISK,
     ),
 }
+# Gene symbols written inside text (a genoset title such as "APOE e4/e4" carries no gene list). Matched as
+# whole, case-sensitive words. APC is left out: "APC resistance" is the Factor V Leiden phrase, not the gene.
+_GENE_WORD = re.compile(
+    r"(?<![A-Za-z0-9])(" + "|".join(sorted((g for g in _GENE_CATEGORY if g != "APC"), key=len, reverse=True))
+    + r")(?![A-Za-z0-9])"
+)
 _TEXT_CATEGORY = (
-    (re.compile(r"alzheimer|dementia", re.I), Category.ALZHEIMERS),
+    (re.compile(r"alzheimer|dementia|\bapo-?e(?:[234]|\b)", re.I), Category.ALZHEIMERS),
+    (re.compile(r"\bbrca[12]?\b", re.I), Category.CANCER_RISK),
     (re.compile(r"\bcarriers?\b|carrier status", re.I), Category.CARRIER),
     (re.compile(r"(breast|ovarian|colorectal|prostate|pancrea\w*) cancer|lynch syndrome|hereditary cancer", re.I),
      Category.CANCER_RISK),
@@ -127,7 +134,11 @@ def categorize(*, genes: Iterable[str] = (), text: str = "", default: Category =
         cat = _GENE_CATEGORY.get(str(gene).strip().upper())
         if cat is not None:
             return cat
-    for pattern, cat in _TEXT_CATEGORY:
-        if text and pattern.search(text):
-            return cat
+    if text:
+        match = _GENE_WORD.search(text)
+        if match:
+            return _GENE_CATEGORY[match.group(1)]
+        for pattern, cat in _TEXT_CATEGORY:
+            if pattern.search(text):
+                return cat
     return default

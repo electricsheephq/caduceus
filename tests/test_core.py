@@ -132,6 +132,17 @@ def test_categorize_prefers_sensitive():
     assert categorize(text="Faster caffeine metabolism", default=Category.TRAIT) is Category.TRAIT
 
 
+def test_categorize_finds_gene_symbols_written_in_text():
+    assert categorize(text="APOE e4/e4 genotype") is Category.ALZHEIMERS
+    assert categorize(text="Two copies of ApoE4") is Category.ALZHEIMERS
+    assert categorize(text="BRCA1 pathogenic variant") is Category.CANCER_RISK
+    assert categorize(text="a BRCA mutation was reported") is Category.CANCER_RISK
+    assert categorize(text="TP53 variant of uncertain significance") is Category.CANCER_RISK
+    assert categorize(text="APC resistance (factor V Leiden)", default=Category.GENERAL) is Category.GENERAL
+    assert categorize(text="paper on GLP1R and weight") is Category.GENERAL       # not a sensitive gene
+    assert categorize(text="Datum: XAPOE1 is not a gene word") is Category.GENERAL
+
+
 def test_jobs_return_results_or_keep_running():
     assert jobs.submit("fast", lambda: 42, wait_s=5) == {"state": "done", "result": 42}
     gate = threading.Event()
