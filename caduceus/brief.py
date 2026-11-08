@@ -183,7 +183,9 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
                 from .ops import short_drug
 
                 text = _compare_text(cmp, unit, short_drug(latest["drug"]))
-        gaps = len(cov.get("gaps") or [])
+        first_day, last_day = str(cov.get("first_day") or ""), str(cov.get("last_day") or "")
+        gaps = sum(1 for g in cov.get("gaps") or []  # only gaps inside the data, not the months before it began
+                   if first_day <= str(g.get("start", "")) and str(g.get("end", "")) <= last_day)
         blocks.append(
             f"<div class='panel'><h3>{_e(label)}</h3><div class='chart'>{svg}</div>{text}"
             f"<p class='note'>{_e(cov.get('days_with_data'))} days with data from {_e(cov.get('first_day'))} to "

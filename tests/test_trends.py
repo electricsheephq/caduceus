@@ -106,7 +106,7 @@ def test_svg_xml_escape_and_marker_position():
     assert root.attrib["viewBox"] == "0 0 720 260"
     assert "<script>" not in svg and "&lt;script&gt;" in svg
     assert "&lt;medicine&gt;&amp;" in svg
-    assert "M375.00,40" in svg and "outside" not in svg
+    assert "M397.50,40" in svg and "outside" not in svg
     assert "http" not in svg.replace("http://www.w3.org/2000/svg", "")
     ET.fromstring(trend_svg([], unit="kg", title="No samples"))
     ET.fromstring(trend_svg([points[0]], unit="kg", title="One sample"))
@@ -238,3 +238,15 @@ def test_round2_sleep_noon_partition_and_clip_warning(samples, vault, tmp_path):
         ("2024-04-30", 14), ("2024-05-01", 20), ("2024-05-02", 18)]
     assert any("clipped" in w and "20" in w for w in result.warnings)
     assert result.counts["sleep_nights_clipped"] == 1
+
+
+def test_axis_numbers_are_readable_and_noise_is_not_magnified():
+    from caduceus.health.trends import _tick
+
+    assert [_tick(v) for v in (7969.86, 104.267, 99.78, 68.5714, 7.19048, 8.4, 168.0, 0.95)] == [
+        "7,970", "104.3", "99.8", "68.6", "7.19", "8.4", "168", "0.95"]
+    svg = trend_svg([{"day": "2024-01-01", "value": 7.2}, {"day": "2024-01-08", "value": 7.8}], unit="h", title="Sleep")
+    ticks = [float(t.text.split()[0]) for t in ET.fromstring(svg).iter("{http://www.w3.org/2000/svg}text")
+             if t.text and t.text.endswith(" h")]
+    assert max(ticks) - min(ticks) >= 0.75 - 0.01      # at least a tenth of the values' size
+    assert "1 Jan 2024" in svg and "8 Jan 2024" in svg and svg.count("<circle") == 2

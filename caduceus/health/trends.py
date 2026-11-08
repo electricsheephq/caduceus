@@ -275,8 +275,22 @@ def daily_check(samples, *, thresholds=None, today=None) -> dict:
             "calc_version": CALC_VERSION}
 
 
+def _tick(value: float) -> str:
+    """An axis number people can read: 7,970 or 104.3 or 7.19, never 7969.86 or 104.267."""
+    size = abs(value)
+    text = f"{value:,.0f}" if size >= 1000 else f"{value:.1f}" if size >= 10 else f"{value:.2f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _when(ordinal: int) -> str:
+    day = date.fromordinal(ordinal)
+    return f"{day.day} {day.strftime('%b %Y')}"
+
+
 def trend_svg(points, *, unit, title, markers=()) -> str:
-    """Small self-contained time plot. Labels are text, never markup."""
+    """Small self-contained time plot, positioned by date. Labels are text, never markup.
+
+    The vertical range spans at least a tenth of the values' size, so day-to-day noise is not drawn as a swing."""
     values = []
     for point in points:
         try:
@@ -287,21 +301,38 @@ def trend_svg(points, *, unit, title, markers=()) -> str:
         if day is not None and math.isfinite(value):
             values.append((day.toordinal(), value))
     values.sort()
-    low = min((v for _, v in values), default=0)
-    high = max((v for _, v in values), default=0)
+    low = min((v for _, v in values), default=0.0)
+    high = max((v for _, v in values), default=0.0)
+    span = max(high - low, abs(low + high) / 2 * 0.1, 1e-9)
+    middle = (low + high) / 2
+    low, high = middle - span * 0.55, middle + span * 0.55
     first = values[0][0] if values else 0
     last = values[-1][0] if values else 0
+    left, right, top, bottom = 95.0, 700.0, 45.0, 200.0
+
     def x(day):
-        return 65 + 620*(day-first)/max(1, last-first)
+        return left + (right - left) * (day - first) / max(1, last - first)
+
     def y(value):
-        return 210 - 155*(value-low)/(high-low) if high != low else 132.5
-    parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260" role="img">',
-             '<title>'+_xml_text(title)+'</title>', '<rect width="720" height="260" fill="white"/>',
-             '<text x="20" y="24">'+_xml_text(title)+'</text>',
-             '<text x="5" y="52">'+_xml_text(f"{high:g} {unit}")+'</text>',
-             '<text x="5" y="225">'+_xml_text(f"{low:g} {unit}")+'</text>']
-    path = " ".join(("M" if i == 0 else "L")+f"{x(d):.2f},{y(v):.2f}" for i, (d,v) in enumerate(values))
-    parts.append('<path d="'+path+'" fill="none" stroke="#226699" stroke-width="2"/>')
+        return bottom - (bottom - top) * (value - low) / (high - low)
+
+    label = 'font-size="13" fill="#555"'
+    parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260" role="img" '
+             'font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif">',
+             '<title>' + _xml_text(title) + '</title>', '<rect width="720" height="260" fill="white"/>',
+             '<text x="20" y="24" font-size="15" font-weight="600" fill="#222">' + _xml_text(title) + '</text>']
+    if values:
+        for value in (high, low):
+            parts.append(f'<path d="M{left:.0f},{y(value):.2f} L{right:.0f},{y(value):.2f}" stroke="#e4e4e0"/>')
+            parts.append(f'<text x="{left - 8:.0f}" y="{y(value) + 4:.2f}" text-anchor="end" {label}>'
+                         + _xml_text(f"{_tick(value)} {unit}".strip()) + '</text>')
+        parts.append(f'<text x="{left:.0f}" y="250" {label}>' + _xml_text(_when(first)) + '</text>')
+        if last != first:
+            parts.append(f'<text x="{right:.0f}" y="250" text-anchor="end" {label}>' + _xml_text(_when(last)) + '</text>')
+    path = " ".join(("M" if i == 0 else "L") + f"{x(d):.2f},{y(v):.2f}" for i, (d, v) in enumerate(values))
+    parts.append('<path d="' + path + '" fill="none" stroke="#226699" stroke-width="2"/>')
+    if len(values) <= 24:  # sparse series (lab results): show each measurement
+        parts += [f'<circle cx="{x(d):.2f}" cy="{y(v):.2f}" r="3.5" fill="#226699"/>' for d, v in values]
     for marker in markers:
         parsed = _day(marker.get("day") or marker.get("date"))
         if parsed is None:
@@ -309,8 +340,10 @@ def trend_svg(points, *, unit, title, markers=()) -> str:
         day = parsed.toordinal()
         if values and first <= day <= last:
             xpos = x(day)
-            parts.append(f'<path d="M{xpos:.2f},40 L{xpos:.2f},225" stroke="#777" stroke-dasharray="4 3"/>')
-            parts.append(f'<text x="{xpos:.2f}" y="245">'+_xml_text(marker.get("label", ""))+'</text>')
+            anchor = ' text-anchor="end"' if xpos > right - 120 else ""
+            parts.append(f'<path d="M{xpos:.2f},40 L{xpos:.2f},{bottom + 5:.0f}" stroke="#777" stroke-dasharray="4 3"/>')
+            parts.append(f'<text x="{xpos + (-4 if anchor else 4):.2f}" y="222"{anchor} font-size="13" fill="#333">'
+                         + _xml_text(marker.get("label", "")) + '</text>')
     parts.append('</svg>')
     return "".join(parts)
 
