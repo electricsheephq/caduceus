@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+# Never commit vaults, real exports or local private fixtures.
+*.db
+*.db-wal
+*.db-shm
+/private/
+/out/
+tests/.generated/
+/SPEC.md
+/LANE_REPORT.md

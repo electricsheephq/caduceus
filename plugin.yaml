@@ -1,0 +1,47 @@
+name: caduceus
+version: "0.1.0"
+description: >-
+  Caduceus: Personalized Health & DNA AI. A private, searchable memory of your DNA raw data,
+  your Promethease report, Apple Health and health records, kept in SQLite on your own machine,
+  with gene-drug checks, trends, a rebuilt variant report and a research watch for new studies
+  about your genes. Information with limits, not medical advice.
+  Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
+  whole; tool results (slices of your data) enter the conversation, so the model provider you
+  chose sees them; a research watch you turn on sends gene, drug and topic terms, never
+  genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
+  no telemetry.
+author: Electric Sheep
+manifest_version: 2
+api_version: 1
+kind: standalone
+requires_hermes: ">=0.23.0"
+license: Apache-2.0
+homepage: https://github.com/electricsheephq/caduceus
+config_schema:
+  privacy_level:
+    type: str
+    default: "open"
+    label: "Privacy level"
+    description: "open: every category is shown unless you hide it. standard: Alzheimer's risk, cancer predisposition, carrier status, mental health and reproductive topics stay hidden until you unlock them."
+    choices: ["open", "standard"]
+  hidden_categories:
+    type: list
+    default: []
+    label: "Hidden categories"
+    description: "Never shown at any level. Any of: alzheimers, cancer_risk, carrier, mental_health, reproductive, pgx, trait, wellness, records, medication, research."
+  unlocked_categories:
+    type: list
+    default: []
+    label: "Unlocked categories"
+    description: "Sensitive categories you chose to see at the standard level."
+  research_watch:
+    type: bool
+    default: true
+    label: "Research watch"
+    description: "Let research-watch runs query Europe PMC and NCBI with gene, drug and topic terms. Genotypes are never sent."
+  research_topics:
+    type: list
+    default: []
+    label: "Extra research topics"
+    description: "Topics to watch besides your genes and medications, for example 'GLP-1 receptor agonist response'."
+provides_tools: [caduceus_search, caduceus_genome, caduceus_trend, caduceus_capture]
