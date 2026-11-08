@@ -185,3 +185,21 @@ def test_a_recorded_medication_never_moves_to_another_sensitive_category(reprodu
     assert call("caduceus_search", query="sertraline")["results"] == []
     found = _plugin({})("caduceus_search", query="sertraline")["results"]
     assert len(found) == 1 and found[0]["category"] == "mental_health" and "pregnancy" not in found[0]["title"]
+
+
+def test_a_kept_category_covers_the_resources_other_events(reproductive_unlocked, tmp_path):
+    call = reproductive_unlocked
+    first = _statement("mx", "Synthdrug 7 mg tablet")
+    first["medicationCodeableConcept"]["coding"] = [{"display": "Synthdrug for major depression"}]
+    _import(call, tmp_path, "first.json", first)
+    second = json.loads(json.dumps(first))
+    second["status"] = "stopped"
+    second["effectivePeriod"]["end"] = "2024-06-01"
+    second["medicationCodeableConcept"]["coding"] = [{"display": "Synthdrug for pregnancy prevention"}]
+    _import(call, tmp_path, "second.json", second)
+    assert call("caduceus_search", query="synthdrug")["results"] == []
+    unlocked = _plugin({})
+    found = unlocked("caduceus_search", query="synthdrug")["results"]
+    assert len(found) == 2 and {f["category"] for f in found} == {"mental_health"}
+    for item in found:
+        assert "pregnancy" not in unlocked("caduceus_search", ref=item["ref"])["body"]

@@ -54,13 +54,17 @@ def open_vault(path=None) -> sqlite3.Connection:
 
 def _migrate_vault(conn: sqlite3.Connection) -> None:
     """Columns added after a vault was created. CREATE TABLE IF NOT EXISTS never adds them to an existing table."""
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}
-    if "category" in columns:
+    def has_column():
+        return "category" in {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}
+
+    if has_column():
         return
     from .policy import SENSITIVE, medication_category
 
     sensitive = {c.value for c in SENSITIVE}
     with write_txn(conn):
+        if has_column():  # another connection migrated it while this one waited for the lock
+            return
         conn.execute("ALTER TABLE medication_event ADD COLUMN category TEXT NOT NULL DEFAULT 'medication'")
         for row in conn.execute("SELECT id, drug, brand, source FROM medication_event").fetchall():
             category = medication_category(" ".join(str(x) for x in (row[1], row[2]) if x)).value

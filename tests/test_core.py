@@ -303,6 +303,29 @@ def test_an_older_vault_keeps_a_sensitive_category_its_index_already_had(tmp_pat
         conn.close()
 
 
+def test_concurrent_opens_of_an_older_vault_migrate_once(tmp_path):
+    path = tmp_path / "old.db"
+    conn = open_vault(path)
+    with write_txn(conn):
+        conn.execute("ALTER TABLE medication_event DROP COLUMN category")
+    conn.close()
+    errors, barrier = [], threading.Barrier(8)
+
+    def open_once():
+        barrier.wait()
+        try:
+            open_vault(path).close()
+        except Exception as exc:  # noqa: BLE001 - the test collects every failure
+            errors.append(repr(exc))
+
+    threads = [threading.Thread(target=open_once) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+
+
 @pytest.mark.parametrize("text", ["ST-T wave depression", "Depression of ST segment", "Ventricular ectopic beats"])
 def test_cardiology_words_stay_ordinary_records(text):
     assert categorize(text=text, default=Category.RECORDS) is Category.RECORDS

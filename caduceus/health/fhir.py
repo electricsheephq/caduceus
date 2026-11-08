@@ -200,18 +200,23 @@ def _stricter(new, stored):
 
 
 def _restatus(vault, kind, ref, fields, metadata):
-    """Update only the status fields of a stored search document, keeping its text, title and category."""
+    """Update only the status fields of a stored search document, keeping its text, title and category.
+
+    Returns the stored document without its metadata, or None when there is none."""
     row = vault.execute("SELECT body FROM search_doc WHERE kind=? AND ref=?", (kind, str(ref))).fetchone()
     if row is None:
-        return
+        return None
     try:
         document = json.loads(row["body"])
     except ValueError:
-        return
+        return None
+    if not isinstance(document, dict):
+        return None
     document.update(fields)
     document.setdefault("_caduceus", {}).update(metadata)
     vault.execute("UPDATE search_doc SET body=? WHERE kind=? AND ref=?",
                   (json.dumps(document, sort_keys=True, separators=(",", ":")), kind, str(ref)))
+    return {key: value for key, value in document.items() if key != "_caduceus"}
 
 
 def _skip(counts, kind, reason):
@@ -238,10 +243,14 @@ def _medications(vault, resource, source_id, name, counts=None, full_url=None):
     identity = _identity(resource, full_url)
     scope = {"full_url": full_url} if full_url else {}
     inserted = 0
+    held = None  # (category, stored text) once a conflict keeps a row's text: this resource's other events use it too
     for event, when, precision in events:
         when = when[:10] if precision == "timestamp" else when
         metadata = {"date_precision": precision, "status": status, "current": status == "active"}
-        body = _raw(resource, precision, event=event, current=metadata["current"], **scope)
+        if held is not None:
+            category = held[0]
+        document = resource if held is None else {**held[1], "status": status}
+        body = _raw(document, precision, event=event, current=metadata["current"], **scope)
         row = vault.execute("SELECT id, note, category FROM medication_event WHERE drug=? AND event=? AND occurred_on=? "
                             "AND source='fhir'", (name, event, when)).fetchone()
         if row is None:
@@ -264,8 +273,10 @@ def _medications(vault, resource, source_id, name, counts=None, full_url=None):
             if counts is not None:
                 counts["medication_updated"] = counts.get("medication_updated", 0) + 1
             if conflict:  # the stored text stays under its own category; only the status moves
-                _restatus(vault, "medication", row["id"], {"status": status},
-                          {"current": metadata["current"]})
+                stored = _restatus(vault, "medication", row["id"], {"status": status},
+                                   {"current": metadata["current"]})
+                held = (kept, stored or {"resourceType": resource.get("resourceType"),
+                                         "medicationCodeableConcept": {"text": name}})
                 continue
             ref, category = row["id"], kept
         search.index_doc(vault, kind="medication", ref=str(ref), title=name, body=body, category=category, ts=when)

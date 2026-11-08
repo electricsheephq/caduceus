@@ -124,7 +124,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
   - `completed` and `stopped` with an end date give a start and a stop.
   - With no end date, the start is kept with `{"status": ..., "current": false}` in its note. No date is ever invented.
   - A later import of the same medication and date updates the stored status.
-  - A row's category never loosens. A sensitive row keeps its category even when a later import describes it under another sensitive category; it then keeps its stored text, and only its status moves (conditions too). A user's own record does the same: details that point at another sensitive category are not applied.
+  - A row's category never loosens. A sensitive row keeps its category even when a later import describes it under another sensitive category; it then keeps its stored text, and only its status moves (conditions too). The same resource's other events (a new stop) take the kept category and the stored text. A user's own record does the same: details that point at another sensitive category are not applied.
   - When a confirmed medication's category is hidden, the reply is `{"saved": true, ...the details just given, "note"}`: nothing stored earlier (dose, brand, previous dose, whether it already existed) comes back.
   - `medication_event.category` holds each row's category (`policy.medication_category` for the user's own records and for imports).
 - **Sensitive categories** come from display text first, then from codes in `code`, in components and in `valueCodeableConcept`:
@@ -136,6 +136,9 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 - **Known limits (follow-ups):**
   - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time (medication retractions also check the drug and start).
   - A resource imported with a `fullUrl` and retracted without one (or the reverse) is not matched: identities are compared as given.
+  - An exporter that writes a new `urn:uuid` for the same resource in every export makes corrections and retractions miss across exports. A missed match is preferred to deleting another resource's row.
+  - Once a correction has replaced a resource's identical copy, that resource's later non-correction values for the same code and time are ignored as stale. A correction from it is stored.
+  - The drug lists fail closed. Drugs with ordinary uses (diazepam for vertigo, clonazepam for seizures, methadone for pain, sildenafil for pulmonary hypertension) are filed under the sensitive category, so they show only once that category is unlocked.
   - Schema columns added after a vault was created are added on open (`db._migrate_vault`); `medication_event.category` is backfilled from the drug names.
   - Corrections and status updates apply in arrival order, not by `meta.lastUpdated`.
   - Sleep nights are assigned noon to noon in each sample's own offset, so a large eastward flight can split one night.
