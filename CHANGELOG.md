@@ -2,6 +2,30 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.2 — 2026-11-10
+
+### Added
+- **A gene–drug profile in the DNA summary.** With or without a variant report, `caduceus_genome op=summary` lists:
+  - the genes where you carry an effect allele, with the medicines that published guidance covers for them;
+  - the derived calls.
+
+  A flag means guidance exists if the medicine is ever prescribed; "no flag" does not mean normal. Your privacy settings apply as everywhere else.
+- **A check that a vault holds one person.** When you import a second DNA file, Caduceus compares it with the earlier ones on shared markers and says plainly whether it looks like the same person. While the vault holds more than one person's DNA, results carry a warning.
+- **Listing your medications.** `caduceus_search` with `kinds=["medication"]` and no query lists your recorded medications, newest first.
+
+### Changed
+- **Answers stay careful even when the agent skips the guide skill.**
+  - Trend comparisons, trends about a medication, and search results that include a medication carry a short instruction for the agent. It says this is information with limits, not medical advice, and never to suggest starting, stopping or changing a medication or its dose; for any medication decision, talk to the prescriber.
+  - A comparison around a medication's start points to the gene–drug check for that medicine, and the tool descriptions carry the same rules.
+- **Trends say where your data ends.** Results give your data's full date range and say when the window you asked for stops before it.
+- **Search results say they are filtered** by your words, and how to list everything of one kind. A misspelt kind is an error that names the valid kinds, never an empty list.
+
+### Fixed
+- **Apple Health exports from iPhones set to other languages now import.** The export is found by its content, not its file name: Spanish and Brazilian Portuguese phones write `exportar.xml`, and Norwegian and Danish phones write `eksport.xml`. An unzipped export XML imports too.
+- **Gene lookups work without a variant report.** `op=gene` answers from the built-in knowledge pack's markers.
+- **The demo recovers from a crash** between saving its files (#3).
+- **Unrecognised files:** the message now says that whole-genome VCF files are not supported yet.
+
 ## 0.1.1 — 2026-11-09
 
 ### Added
