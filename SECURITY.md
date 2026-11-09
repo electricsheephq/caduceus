@@ -22,8 +22,8 @@ We aim to acknowledge reports within 3 business days and to share a decision or 
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
-chose sees them; a research watch you turn on sends gene, drug and topic terms, never
-genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
+chose sees them; a research watch you turn on sends gene, drug and topic terms and public
+marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
 no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
 check it holds no health data, and files it to this repository with `gh` only after you
 approve the draft.
@@ -69,7 +69,7 @@ The same disclosure appears in the README and the manifest.
   - redirects refused;
   - timeouts, retries and a response-size cap;
   - NCBI requests rate-limited.
-- Query terms come from the knowledge pack's watch list, the user's medication names and their chosen topics, never from genotypes. Matches to the user's genotypes are computed locally.
+- Query terms come from the knowledge pack (its watch list, and the genes and markers it links to the user's medications), the user's medication names with their brand names, their chosen topics, and article IDs that LitVar2 returns. They never come from genotypes: two users with the same medications send the same requests. Matches to the user's genotypes are computed locally.
 
 **Writes and health statements**
 - Medication records need the user's confirmation: the tool returns a preview, and writes only on `confirm=true`.

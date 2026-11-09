@@ -12,11 +12,11 @@ Use this when the `caduceus:research-watch` automation runs, or when the user as
 Call `caduceus_capture op=watch_run`; pass `topics=[…]` only if the user asked for extra topics just now. What the result says:
 - `status: running`: the watch is still fetching. In an automated run, reply exactly `[SILENT]`. In chat, say it is still running and that you will have the results on the next run.
 - `disabled: true`: the watch is turned off in the settings. In an automated run, reply exactly `[SILENT]`.
-- No `new_items`: in an automated run, reply exactly `[SILENT]`. In chat, say nothing new has appeared since the last run (give `since` and `until`).
 - `status: failed`: the previous run failed in the background after its call had returned. Say so in one line, with its `error`, and say the next run tries again. Do this in an automated run too: never reply `[SILENT]` to a failure.
+- No `new_items`: in an automated run, reply exactly `[SILENT]`. In chat, say nothing new has appeared since the last run (give `since` and `until`).
 - `errors` that are not empty: mention in one line which source failed. The next run retries it.
 
-The watch sends only gene, drug and topic words to Europe PMC and NCBI. It matches results to the user's genotypes on this machine.
+The watch sends only gene, drug and topic words and public marker and article IDs to Europe PMC and NCBI, never genotypes. It matches results to the user's genotypes on this machine.
 
 ## 2. Write the digest
 
