@@ -82,7 +82,7 @@ def test_default_compare_reports_the_365_day_cap(plugin, series):
     assert result["data_range"] == DATA_RANGE
     assert result["window_note"] == (
         "This window ends on 2025-12-31; your data continues to 2026-11-07. "
-        "Leave out after_days to cover the data after the start (up to 365 days).")
+        "A compare covers at most 365 days after the start by default; use op=series for the later data.")
 
 
 def test_drug_compare_guidance_uses_only_the_trimmed_argument_and_hidden_start_stays_hidden(medications, series):
@@ -208,6 +208,11 @@ def test_empty_query_still_requires_kinds_or_ref(plugin):
     for args in ({}, {"query": "  "}, {"query": "", "kinds": []}):
         error = json.loads(ctx.tools["caduceus_search"]["handler"](args))
         assert error == {"error": "give a query, or a ref to fetch"}
+    # A misspelt kind is an error, never an empty listing that reads as "you have none".
+    error = json.loads(ctx.tools["caduceus_search"]["handler"]({"kinds": ["medications"]}))
+    assert error["error"].startswith("unknown kinds; use one of: annotation, ")
+    mixed = call("caduceus_search", kinds=["medication", "medications"])
+    assert mixed["scope_note"] == "This lists your recorded medication, newest first, up to 8."
 
 
 def test_registered_descriptions_explain_medication_workflow_without_changing_schemas(plugin):
@@ -218,7 +223,8 @@ def test_registered_descriptions_explain_medication_workflow_without_changing_sc
     assert "For medication questions, op=pgx gives the user's own gene–drug evidence." in descriptions["caduceus_genome"]
     assert ("For a question about how a medication is working, also call caduceus_genome op=pgx for that drug."
             in descriptions["caduceus_trend"])
-    assert "Leave out before_days/after_days to use all data around the start." in descriptions["caduceus_trend"]
+    assert ("Leave out after_days to cover the data after the start, up to a year; before_days defaults to 28 days."
+            in descriptions["caduceus_trend"])
     for name in ("caduceus_trend", "caduceus_genome"):
         assert descriptions[name].count(GUIDANCE) == 1
     for tool in TOOLS:

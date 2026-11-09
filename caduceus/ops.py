@@ -176,16 +176,19 @@ def search_tool(ctx, args: dict) -> dict:
                 record["guidance"] = GUIDANCE
             return record
         query = str(args.get("query") or "").strip()
+        listed = [k for k in kinds if k in search_index.KINDS]
         if query:
             found = search_index.search(store.vault, query, policy=policy, kinds=kinds, limit=limit)
-        elif kinds:
-            found = search_index.browse(store.vault, policy=policy, kinds=kinds, limit=limit)
+        elif listed:
+            found = search_index.browse(store.vault, policy=policy, kinds=listed, limit=limit)
+        elif kinds:  # an unknown kind must not read as "you have none"
+            raise ToolError("unknown kinds; use one of: " + ", ".join(search_index.KINDS))
         else:
             raise ToolError("give a query, or a ref to fetch")
     out = {"query": query, "results": found["results"], "match": found.get("match")}
     out.update(_withheld(found["withheld"]))
     if not query:
-        out["scope_note"] = f"This lists your recorded {', '.join(kinds)}, newest first, up to {limit}."
+        out["scope_note"] = f"This lists your recorded {', '.join(listed)}, newest first, up to {limit}."
     elif found["results"]:
         out["scope_note"] = ('These results match your query; they are not a complete list. To list every medication, '
                              'call caduceus_search with kinds=["medication"] and no query.')
@@ -496,7 +499,8 @@ def trend_tool(ctx, args: dict) -> dict:
                 pivot, hidden = _drug_start(store.vault, drug, policy)
                 if pivot is None:  # the drug's start is hidden: nothing about it, not even its date
                     return {"metric": metric, **_withheld(hidden)}
-            if after_days is None:
+            explicit_after = after_days is not None
+            if not explicit_after:
                 after_days = default_after_days(store.samples, metric, pivot)
             result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
                            before_days=before_days, after_days=after_days)
@@ -515,7 +519,9 @@ def trend_tool(ctx, args: dict) -> dict:
                 if op == "compare":
                     result["window_note"] = (
                         f"This window ends on {end.isoformat()}; your data continues to {last}. "
-                        "Leave out after_days to cover the data after the start (up to 365 days).")
+                        + ("Leave out after_days to cover the data after the start (up to 365 days)." if explicit_after
+                           else "A compare covers at most 365 days after the start by default; use op=series "
+                                "for the later data."))
                 else:
                     result["window_note"] = f"This series ends on {end.isoformat()}; your data continues to {last}."
         return result

@@ -71,7 +71,8 @@ TOOLS = (
             "start), labs (a lab result over time, e.g. HbA1c), check (today's out-of-range signals). Every result "
             "has units, source, coverage gaps and the calculation version; quote numbers exactly. "
             "For a question about how a medication is working, also call caduceus_genome op=pgx for that drug. "
-            "Leave out before_days/after_days to use all data around the start. " + LIMITS
+            "Leave out after_days to cover the data after the start, up to a year; before_days defaults to 28 days. "
+            + LIMITS
             + " Never suggest starting, stopping or changing a medication or its dose; for any medication decision, "
             "say to talk to the prescriber."
         ),
