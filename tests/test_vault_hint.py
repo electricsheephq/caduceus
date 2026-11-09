@@ -103,6 +103,15 @@ def test_a_user_typing_the_tag_still_gets_the_note(filled):
     "Am I a CYP2C19 poor metabolizer?",
     "Is my GLP-1 working?",
     "Should I take my pills at night?",
+    "Are these pills safe together?",
+    "How many steps did I take today?",
+    "What do my variants mean?",
+    "Is my lab work normal?",
+    "How was my last lab?",
+    "Should I take my tablets with food?",
+    "My injections hurt, what should I do",
+    "Am I healthy?",
+    "Can I wean off this slowly?",
 ])
 def test_health_questions_get_the_note(filled, text):
     assert ask(text) == {"context": hint.HINT}
@@ -132,6 +141,27 @@ def test_health_questions_get_the_note(filled, text):
     "Make the tags pill buttons for me",
     "Wire the RS232 port to my board",
     "Fix the caduceus tests for me",
+    "Rename glp1_client.py to client.py",
+    "How can I come off as less pushy?",
+    "How many steps are needed to deploy?",
+    "Should I start off with React?",
+    "Make the filter pills rounder",
+    "I started off by refactoring my parser",
+    "Let me start off with the API",
+    "Keep off my branch please, I'm rebasing",
+    "I'm coming off a long release week",
+    "How many steps per epoch should I use?",
+    "Rename my enum variants",
+    "Add dependency injection to my app",
+    "Test my app on a tablet",
+    "Here are my steps to reproduce",
+    "I set weight decay in my optimizer",
+    "Does my function have side effects?",
+    "Is my cluster healthy?",
+    "I set up my home lab",
+    "Open the g6pdx file in my repo",
+    "Fix my hla-ui component",
+    "What are my next steps?",
 ])
 def test_other_messages_get_nothing(filled, text):
     assert ask(text) is None
@@ -147,6 +177,9 @@ def test_recorded_medication_names_count_but_dose_form_words_do_not(filled):
     assert hint._name_words("Semaglutide 0.25 MG/DOSE Pen Injector") == {"semaglutide"}
     assert hint._name_words("glucose blood VI test strips (Accu-Chek Guide) Strip") == {"glucose"}
     assert hint._name_words("Tylenol Extra Strength") == {"tylenol"}
+    assert hint._name_words("Children's Tylenol") == {"tylenol"}
+    assert hint._name_words("Test Strips [OneTouch Ultra]") == {"onetouch"}
+    assert hint._name_words("insulin glargine 100 UNT/ML") == {"insulin"}
 
 
 def test_recorded_supplies_do_not_turn_ordinary_words_into_triggers(filled):
