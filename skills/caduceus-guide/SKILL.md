@@ -50,6 +50,7 @@ and `no_flag` does not mean normal.
 | Before and after a medication | `caduceus_trend op=compare metric=… drug=…` (uses the recorded start date; the after window runs to the latest data, up to a year, unless you pass `after_days`) |
 | A lab over time (HbA1c, LDL …) | `caduceus_trend op=labs lab=…` |
 | Anything else in the vault | `caduceus_search query=…`, then `ref=…` for the full record |
+| Every recorded medication (or condition, note…) | `caduceus_search kinds=["medication"]` with no query. A search with words returns only matches, never the full list |
 | A one-page brief for a doctor | `caduceus_capture op=brief` |
 
 ## Example: "Why isn't my Ozempic working?"
