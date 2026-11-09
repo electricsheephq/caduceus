@@ -172,6 +172,14 @@ def sniff_kind(path: Path) -> str:
             names = [i.filename.lower() for i in infos]
             if any(n.endswith("export.xml") for n in names):
                 return SourceKind.APPLE_HEALTH.value
+            xmls = sorted((i for i in infos if i.filename.lower().endswith(".xml")
+                           and not i.filename.lower().endswith("export_cda.xml")),
+                          key=lambda i: i.filename.count("/"))
+            for member in xmls[:10]:
+                with zf.open(member) as fh:
+                    head = _peek_text(fh.read(4096))
+                if "<!DOCTYPE HealthData" in head or "<HealthData" in head:
+                    return SourceKind.APPLE_HEALTH.value
             if any(n.endswith("promethease.html") for n in names):
                 return SourceKind.PROMETHEASE.value
             texts = [i for i in infos if i.filename.lower().endswith((".txt", ".csv", ".tsv"))]
@@ -205,7 +213,7 @@ def sniff_kind(path: Path) -> str:
     lowered = path.name.lower()
     if lowered.endswith((".html", ".htm")) and ("promethease" in lowered or "promethease" in head.lower()):
         return SourceKind.PROMETHEASE.value
-    if "<HealthData" in head:
+    if "<!DOCTYPE HealthData" in head or "<HealthData" in head:
         return SourceKind.APPLE_HEALTH.value
     if _looks_dtc(head):
         return SourceKind.DTC.value

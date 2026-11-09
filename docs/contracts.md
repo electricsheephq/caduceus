@@ -104,7 +104,10 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 
 **`import_apple_health`:**
 - **Run:** the `import_run` lives in the vault; samples go to `samples`.
-- **Parsing:** streams `export.xml` from inside the zip.
+- **Parsing:** streams a lone Apple Health XML or a safe XML member from a zip. A single `export.xml` takes
+  precedence; otherwise exactly one non-`export_cda.xml` XML must contain `<!DOCTYPE HealthData` or `<HealthData`
+  in its first 4096 bytes. Localized names are supported; size limits and entity guards apply to both paths.
+- **Lone XML:** warns that clinical records require the export zip.
 - **Clinical records:** `clinical-records/*.json` inside the zip go through the same FHIR code into `observation`, `condition` and `medication_event`.
 
 **Trend results:**
