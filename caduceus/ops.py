@@ -833,7 +833,8 @@ def _settings(ctx) -> dict:
             "research_items": _count(v, "SELECT count(*) FROM research_item"),
         }
     return {**policy.describe(), "research_watch": _cfg(ctx, "research_watch", True),
-            "research_topics": _cfg(ctx, "research_topics", []), "data_dir": str(data_dir()), "counts": counts,
+            "research_topics": _cfg(ctx, "research_topics", []), "vault_hint": _cfg(ctx, "vault_hint", True),
+            "data_dir": str(data_dir()), "counts": counts,
             "note": ("The vault stays on this machine; tools return only slices of it. Only the user can change "
                      "privacy settings, with /caduceus privacy, hide, show, unlock or lock.")}
 

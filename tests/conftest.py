@@ -19,7 +19,7 @@ class FakeCtx:
     def __init__(self, config=None):
         self.config = dict(config or {})
         self.tools, self.commands, self.cli_commands = {}, {}, {}
-        self.skills, self.blueprints = {}, {}
+        self.skills, self.blueprints, self.hooks = {}, {}, {}
 
     def register_tool(self, name, **kwargs):
         self.tools[name] = kwargs
@@ -35,6 +35,9 @@ class FakeCtx:
 
     def register_automation_blueprint(self, key, **kwargs):
         self.blueprints[key] = kwargs
+
+    def register_hook(self, hook_name, callback, **kwargs):
+        self.hooks.setdefault(hook_name, []).append(callback)
 
     def get_config(self, key, default=None):
         return self.config.get(key, default)

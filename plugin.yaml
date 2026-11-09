@@ -43,9 +43,15 @@ config_schema:
     default: true
     label: "Research watch"
     description: "Let research-watch runs query Europe PMC and NCBI with gene, drug and topic terms. Genotypes are never sent."
+  vault_hint:
+    type: bool
+    default: true
+    label: "Vault hint"
+    description: "Add a short fixed note to the first health, medication or DNA question in each chat, telling the model to answer from your vault and to leave medication decisions to your prescriber. It holds none of your data."
   research_topics:
     type: list
     default: []
     label: "Extra research topics"
     description: "Topics to watch besides your genes and medications, for example 'GLP-1 receptor agonist response'."
 provides_tools: [caduceus_search, caduceus_genome, caduceus_trend, caduceus_capture]
+provides_hooks: [pre_llm_call]

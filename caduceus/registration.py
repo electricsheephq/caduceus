@@ -1,4 +1,4 @@
-"""Registration: four tools, ``/caduceus``, four skills and two automation blueprints.
+"""Registration: four tools, ``/caduceus``, four skills, the vault-hint hook and two automation blueprints.
 
 Import-light and I/O-free: nothing opens a database until a tool or command runs.
 """
@@ -34,6 +34,14 @@ def register(ctx):
     if callable(skill):
         for name, description in SKILLS:
             skill(name, ROOT / "skills" / name / "SKILL.md", description)
+    hook = getattr(ctx, "register_hook", None)
+    if callable(hook):
+        from . import hint
+
+        try:
+            hook("pre_llm_call", lambda **kwargs: hint.pre_llm_call(ctx, **kwargs))
+        except Exception:  # a Hermes without this hook still gets the tools
+            pass
     blueprint = getattr(ctx, "register_automation_blueprint", None)
     if callable(blueprint):
         from .blueprints import BLUEPRINTS

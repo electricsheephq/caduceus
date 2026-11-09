@@ -7,9 +7,13 @@ from conftest import FakeCtx, load_plugin_package
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def manifest_tools():
-    line = next(l for l in (ROOT / "plugin.yaml").read_text().splitlines() if l.startswith("provides_tools:"))
+def manifest_list(key):
+    line = next(l for l in (ROOT / "plugin.yaml").read_text().splitlines() if l.startswith(f"{key}:"))
     return set(re.findall(r"[a-z_]+", line.split(":", 1)[1]))
+
+
+def manifest_tools():
+    return manifest_list("provides_tools")
 
 
 def test_registers_manifest_tools_command_skills_and_blueprints(data_dir):
@@ -26,6 +30,7 @@ def test_registers_manifest_tools_command_skills_and_blueprints(data_dir):
     for entry in ctx.skills.values():
         assert entry["path"].is_file()
     assert set(ctx.blueprints) == {"research-watch", "daily-check"}
+    assert set(ctx.hooks) == manifest_list("provides_hooks") == {"pre_llm_call"}  # hermes plugins validate checks this
     for fields in ctx.blueprints.values():
         assert "[SILENT]" in fields["prompt_template"]
     assert not any(data_dir.iterdir())  # registration touched no storage
