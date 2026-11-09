@@ -58,8 +58,9 @@ def test_first_health_turn_of_each_chat_gets_the_fixed_note(filled):
 
 
 def test_note_comes_back_when_it_drops_out_of_the_history(filled):
+    assert ask(OZEMPIC, "s1") == {"context": hint.HINT}  # the chat's first health turn
     compacted = [{"role": "user", "content": "Summary of the earlier conversation: ..."},
-                 {"role": "user", "content": "Should I stop my metformin?"}]
+                 {"role": "user", "content": "Should I stop my metformin?"}]  # the noted turn was compacted away
     assert ask("Should I stop my metformin?", "s1", compacted) == {"context": hint.HINT}
 
 
