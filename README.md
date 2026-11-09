@@ -41,7 +41,7 @@ turns it on.
 3. Ask *"Why isn't my Ozempic working?"*. One answer comes back, and each part names its source:
    - **Apple Health:** weight fell about 0.3 kg a week for three months after the recorded semaglutide start, then levelled off.
    - **Health records:** HbA1c went from 8.4% to 7.8%, still above the reference range.
-   - **Genome:** one GLP1R marker is flagged. Its evidence is small and mixed: one 2023 study found an effect, and a 2026 study found none. The answer also cites the 2026 *Nature* study on GLP-1 weight loss.
+   - **Genome:** one marker linked to how people respond to this kind of drug is flagged. Its evidence is small and mixed: one 2023 study found an effect, and a 2026 study found none. The answer also cites a 2026 *Nature* study on genetics and weight loss with this drug class.
    - **Next step:** bring these numbers to the prescriber.
 
    Then try *"Would Mounjaro be different for me?"*.
@@ -129,7 +129,7 @@ them. Hidden results are counted, never described.
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
-chose sees them; the research watch (on by default, runs when you or the agent ask for it or on a schedule you
+chose sees them; a hook adds one fixed note, holding none of your data, to the first health, medication or DNA question of each chat when the vault has data (off with the `vault_hint` setting); the research watch (on by default, runs when you or the agent ask for it or on a schedule you
 create, off with the `research_watch` setting) sends gene and topic terms, the names of medications you recorded,
 and public marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed
 like any message;
@@ -164,7 +164,7 @@ Change them in the plugin settings, or for privacy with `/caduceus` commands.
 
 - **`/blueprint caduceus:research-watch`:**
   - **What it does:** a digest of new studies (Europe PMC, LitVar2) and ClinVar changes about your genes, medications and chosen topics, weekly by default.
-  - **First run:** 3 studies to start with. Studies on your own gene–drug pairs come first (for example GLP1R and semaglutide, from the last five years), then papers that mention your markers, then general results. Each item says why it was picked.
+  - **First run:** 3 studies to start with. Studies on your own gene–drug pairs come first (for example a gene you carry and a medicine you take, from the last five years), then papers that mention your markers, then general results. Each item says why it was picked.
   - **After that:** only new ones, in the same order, and nothing when there is nothing new.
   - **What it sends:** gene and topic words, the names of medications you recorded, marker IDs from the built-in knowledge pack, and article IDs. Which terms it sends depends only on your medications and topics, never on your genotypes.
   - **When it runs:** when you or your agent ask for it, or on the schedule the blueprint creates. It is on by default; the `research_watch` setting turns it off.
