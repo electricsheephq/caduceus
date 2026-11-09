@@ -44,21 +44,22 @@ promethease pharmacogenomic pharmacogenomics pgx metabolizer metaboliser alzheim
 cholesterol ldl hdl triglycerides diabetes diabetic prediabetes hrv bmi vo2max spo2 ecg ekg
 """.split())
 # Gene names, including spellings like APOE4, APOE-e4, CYP2C19 and GLP-1.
-_GENE = re.compile(r"(?<![a-z0-9_])(?:apoe(?:-?e?[234])?|cyp\d[a-z0-9]*|glp-?1(?:r|-?ras?)?|gipr|hla-(?:[abc]|d[a-z0-9]*)|vkorc1"
+_GENE = re.compile(r"(?<![a-z0-9_])(?:apoe(?:-?e?[234])?|cyp\d[a-z0-9]*|glp-?1(?:r|-?ras?|s)?|gipr|hla-(?:[abc]\d*|d[a-z0-9]*)|vkorc1"
                    r"|slco1b1|tpmt|nudt15|dpyd|ugt1a1|g6pd|brca[12]|mthfr)(?![a-z0-9_])")
 # Everyday words and phrases that count only when the same message has I, me or my ("how did I sleep", "should I
 # stop taking it").
 _WEAK = frozenset("""
 health healthy weight sleep sleeping slept carrier variant variants lab labs heart blood doctor symptom symptoms
-tablet tablets injection injections
+tablets injection injections
 """.split())
 _WEAK_PHRASES = re.compile(r"(?<![a-z0-9])(?:(?:stop|start|keep|quit|stopped|started|stopping|starting) taking"
-                           r"|side effects?|wean(?:ing)? off|taper(?:ing)? off|how many steps)(?![a-z0-9])")
+                           r"|side effects?|wean(?:ing)? off|taper(?:ing)? off|how many steps"
+                           r"|take (?:my |the |this |these |your |a |an |one )?tablets?)(?![a-z0-9])")
 _SELF = frozenset({"i", "me", "my", "mine", "myself"})
 # Code, ops and UI terms are removed before any matching ("time.sleep", "health check", "filter pills").
 _TECH = re.compile("|".join((
     r"\b[a-z_]+\.sleep\b", r"\bhealth[ -]?(?:checks?|endpoints?|probes?)\b", r"\bhealthz\b",
-    r"\b(?:code|cluster|pods?|services?|nodes?|servers?|db|database|system|repo|build|pipeline|app|deployment|cache"
+    r"\b(?:code|cluster|pods?|services?|nodes?|servers?|db|database|repo|build|pipeline|app|deployment|cache"
     r"|queue|disk|instance|container)s? (?:(?:is|are|looks?|stays?) )?healthy\b",
     r"\b(?:brew|flutter|npm|expo|bun|pnpm|yarn|dart|react-native) doctor\b",
     r"\bheart (?:icons?|emojis?|buttons?|shapes?|symbols?|reactions?)\b",
@@ -67,26 +68,29 @@ _TECH = re.compile("|".join((
     r"\bvariants? (?:props?|types?|class(?:es)?|names?|api)\b",
     r"\b(?:sql|dependency|code|command|prompt|script|html|template|header|constructor|field|property|fault|process"
     r"|log|ldap|xpath|nosql|css|xml) injections?\b",
-    r"\bon (?:my |a |an |the |your )?tablets?\b",
     r"\btablet (?:mode|layout|view|app|screens?|sizes?|breakpoints?|versions?|ui)\b",
     r"\b(?:home|test|dev|ml|ai|cloud|qa|staging|computer|research) ?labs?\b",
-    r"\bsteps to reproduce\b", r"\brepro steps\b", r"\bsteps? (?:per|each|every) (?:epoch|batch|iteration|run|job|stage)\b",
+    r"\bsteps to reproduce\b", r"\brepro steps\b", r"\bsteps? (?:per|each|every) (?:epoch|batch|iteration|job|stage)\b",
     r"\b(?:training|warmup|warm-up|build|ci|pipeline|deploy|deployment|setup|install|migration|next) steps\b",
     r"\bweights? (?:decay|init(?:ialization)?|matri(?:x|ces)|files?|tying|sharing)\b",
-    r"\b(?:functions?|methods?|hooks?|code|components?|reducers?|getters?|quer(?:y|ies)|mutations?|procedures?"
-    r"|calls?|pure|no)\b(?: \w+){0,3} side effects?\b",
 )))
+# "side effects" of code ("does my function have side effects?"): only those two words are removed, so a drug
+# named in between still counts.
+_CODE_SIDE_EFFECTS = re.compile(r"\b((?:functions?|methods?|hooks?|code|components?|reducers?|getters?|quer(?:y|ies)"
+                                r"|mutations?|procedures?|calls?|pure)\b(?: \w+){0,3} )side effects?\b")
 _PHRASES = ("apple health", "heart rate", "blood pressure", "blood sugar", "blood test", "blood tests", "blood work",
             "bloodwork", "lab work", "labwork", "lab result", "lab results", "step count", "my steps", "daily steps",
             "steps per day", "steps a day")
 # Pack names that are also ordinary English words.
 _COMMON = frozenset({"tabloid"})
-# Dose-form, supply and other words in recorded medication names that say nothing about health on their own.
+# Dose-form, unit, supply and generic product words in recorded medication names: never a trigger on their own.
 _FORM_WORDS = frozenset("""
 oral orally tablet tablets capsule capsules extended release delayed injection injectable injector solution
 suspension topical cream ointment patch spray prefilled syringe with daily weekly once twice test tests strip strips
 blood children childrens adult adults infant infants kids junior extra strength maximum regular original daytime
-nighttime relief formula supply supplies lancet lancets needle needles meter sensor sensors device pack
+nighttime relief formula supply supplies lancet lancets needle needles meter sensor sensors device pack hour hours
+actuat unit units cold cough pain pressure monitor allergy sinus ultra ultra-fine plus mini liquid drops chewable
+gummies gummy true
 """.split())
 _TOKEN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _RSID = re.compile(r"(?<![a-z0-9])rs\d{4,}(?![a-z0-9])")  # not RS232 or RS485
@@ -160,14 +164,20 @@ def _vault_state() -> tuple[bool, frozenset]:
             return _state["has_data"], _state["names"]
     has_data, names = False, frozenset()
     if Path(path).is_file():
-        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=1.0)
-        try:
-            has_data = bool(conn.execute(
-                "SELECT EXISTS(SELECT 1 FROM source_artifact) OR EXISTS(SELECT 1 FROM search_doc)").fetchone()[0])
-            rows = conn.execute("SELECT drug, brand FROM medication_event").fetchall()
-            names = frozenset(word for row in rows for name in row if name for word in _name_words(str(name)))
-        finally:
-            conn.close()
+        try:  # an unreadable vault counts as empty until the cache expires
+            conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=1.0)
+            try:
+                has_data = bool(conn.execute(
+                    "SELECT EXISTS(SELECT 1 FROM source_artifact) OR EXISTS(SELECT 1 FROM search_doc)").fetchone()[0])
+                try:
+                    rows = conn.execute("SELECT drug, brand FROM medication_event").fetchall()
+                except sqlite3.OperationalError:  # no medication table: the words still work
+                    rows = []
+                names = frozenset(word for row in rows for name in row if name for word in _name_words(str(name)))
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            has_data, names = False, frozenset()
     with _lock:
         _state.update(at=now, path=str(path), has_data=has_data, names=names)
     return has_data, names
@@ -175,18 +185,17 @@ def _vault_state() -> tuple[bool, frozenset]:
 
 def _name_words(name: str) -> set[str]:
     """The drug word of a medication name, and of a bracketed brand: the first word that is not a dose form,
-    a supply or a size, read up to the strength. "metFORMIN 500 MG Oral Tablet [Glucophage]" gives metformin
-    and glucophage; "Children's Tylenol" gives tylenol; "Test Strips [OneTouch Ultra]" gives only onetouch."""
+    a unit, a supply or a generic product word. "metFORMIN 500 MG Oral Tablet [Glucophage]" gives metformin and
+    glucophage; "Children's Tylenol" gives tylenol; "Test Strips [OneTouch Ultra]" gives only onetouch."""
     lowered = name.lower()
     parts = re.findall(r"\[([^\]]*)\]", lowered) + [re.sub(r"\[[^\]]*\]", " ", lowered)]
     return {word for part in parts for word in _first_drug_word(part)}
 
 
 def _first_drug_word(text: str) -> list[str]:
+    """Strengths and quantities ("24 HR", "500 MG") are skipped, so "24 HR metformin ..." gives metformin."""
     for word in _TOKEN.findall(text):
-        if any(ch.isdigit() for ch in word):  # the strength: the name has ended
-            break
-        if len(word) >= 4 and word not in _FORM_WORDS:
+        if len(word) >= 4 and word not in _FORM_WORDS and not any(ch.isdigit() for ch in word):
             return [word]
     return []
 
@@ -209,7 +218,7 @@ def _pack_names() -> tuple[frozenset, re.Pattern]:
 
 
 def _about_health(text: str, recorded: frozenset) -> bool:
-    plain = _TECH.sub(" ", text.lower())  # code and UI terms ("time.sleep", "filter pills") say nothing
+    plain = _TECH.sub(" ", _CODE_SIDE_EFFECTS.sub(r"\1", text.lower()))  # code and UI terms say nothing
     words = set(_TOKEN.findall(plain))
     single, phrases = _pack_names()
     if words & _STRONG or words & single or words & recorded:

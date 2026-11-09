@@ -112,6 +112,15 @@ def test_a_user_typing_the_tag_still_gets_the_note(filled):
     "My injections hurt, what should I do",
     "Am I healthy?",
     "Can I wean off this slowly?",
+    "I have no metformin side effects; is it working?",
+    "Should I take my tablet with food?",
+    "No Ozempic side effects yet, is that normal?",
+    "Are there any methods to avoid insulin side effects?",
+    "Am I HLA-B27 positive?",
+    "Are GLP-1s safe for me?",
+    "Is my immune system healthy?",
+    "I am on tablets for my thyroid",
+    "How many steps per run did I take?",
 ])
 def test_health_questions_get_the_note(filled, text):
     assert ask(text) == {"context": hint.HINT}
@@ -162,6 +171,8 @@ def test_health_questions_get_the_note(filled, text):
     "Open the g6pdx file in my repo",
     "Fix my hla-ui component",
     "What are my next steps?",
+    "My tablet will not charge",
+    "Does my reducer cause side effects for me?",
 ])
 def test_other_messages_get_nothing(filled, text):
     assert ask(text) is None
@@ -180,6 +191,10 @@ def test_recorded_medication_names_count_but_dose_form_words_do_not(filled):
     assert hint._name_words("Children's Tylenol") == {"tylenol"}
     assert hint._name_words("Test Strips [OneTouch Ultra]") == {"onetouch"}
     assert hint._name_words("insulin glargine 100 UNT/ML") == {"insulin"}
+    assert hint._name_words("24 HR metformin hydrochloride 500 MG Extended Release Oral Tablet") == {"metformin"}
+    assert hint._name_words("Daytime Cold & Flu Relief") == set()
+    assert hint._name_words("Pen Needles [BD Ultra-Fine]") == set()
+    assert hint._name_words("Blood Pressure Monitor") == set()
 
 
 def test_recorded_supplies_do_not_turn_ordinary_words_into_triggers(filled):
@@ -219,12 +234,37 @@ def test_errors_mean_no_note_and_never_a_block(filled, data_dir, monkeypatch):
             raise RuntimeError("config unavailable")
 
     assert ask(OZEMPIC, "a", ctx=BrokenConfig()) == {"context": hint.HINT}  # unreadable setting: default on
-    monkeypatch.setattr(hint, "_vault_state", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
-    assert ask(OZEMPIC, "b") is None
-    monkeypatch.undo()
+    with monkeypatch.context() as patch:  # scoped: the data_dir fixture's setting must stay in place
+        patch.setattr(hint, "_vault_state", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        assert ask(OZEMPIC, "b") is None
     hint._reset()
+    filled.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # otherwise the write-ahead log still serves the data
+    filled.close()
+    for leftover in ("vault.db-wal", "vault.db-shm"):
+        (data_dir / leftover).unlink(missing_ok=True)
     (data_dir / "vault.db").write_bytes(b"not a database" * 100)
+    assert hint._vault_state() == (False, frozenset())  # unreadable: empty, and cached for the TTL
     assert ask(OZEMPIC, "c") is None
+
+
+def test_vault_paths_with_uri_characters_still_work(tmp_path, monkeypatch):
+    root = tmp_path / "health#backup?v=1 100%"
+    root.mkdir()
+    monkeypatch.setenv("CADUCEUS_DATA_DIR", str(root))
+    from caduceus.core.db import open_vault
+
+    conn = open_vault(root / "vault.db")
+    with write_txn(conn):
+        search.index_doc(conn, kind="journal", ref="1", title="Note", body="ok", category="wellness")
+    conn.close()
+    assert ask(OZEMPIC) == {"context": hint.HINT}
+
+
+def test_a_vault_without_the_medication_table_still_counts(filled):
+    with write_txn(filled):
+        filled.execute("DROP TABLE medication_event")
+    assert hint._vault_state() == (True, frozenset())
+    assert ask(OZEMPIC) == {"context": hint.HINT}
 
 
 def test_vault_state_is_cached_then_refreshed(vault, monkeypatch):
