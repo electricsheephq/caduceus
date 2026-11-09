@@ -29,10 +29,11 @@ newest research. Answers are cited, with honest limits.
 Requires Hermes Agent 0.23.0 or newer. There are no extra dependencies.
 
 ```bash
-hermes plugins install https://github.com/electricsheephq/caduceus
+hermes plugins install https://github.com/electricsheephq/caduceus --enable
 ```
 
-Once it is in the plugin catalog, `hermes plugins install caduceus` works too. Restart Hermes, then tell your agent
+Once it is in the plugin catalog, `hermes plugins install caduceus --enable` works too. Without `--enable`, Hermes
+installs the plugin switched off; `hermes plugins enable caduceus` turns it on. Restart Hermes, then tell your agent
 **"set up Caduceus"**. The setup skill takes you through:
 1. importing your files;
 2. recording your medications;
