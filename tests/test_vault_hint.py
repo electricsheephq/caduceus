@@ -55,8 +55,18 @@ def test_note_in_history_counts_after_a_restart(filled):
                {"role": "assistant", "content": "Your vault shows..."}]
     assert ask("What about my metformin?", "s1", earlier) is None
     hint._reset()
-    quoted = [{"role": "assistant", "content": "The [Caduceus] tools say..."}]  # only user turns carry the note
+    quoted = [{"role": "assistant", "content": hint.HINT}]  # only user turns carry the note
     assert ask("What about my metformin?", "s2", quoted) == {"context": hint.HINT}
+    hint._reset()
+    image = {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}
+    multimodal = [{"role": "user", "content": [image, {"type": "text", "text": OZEMPIC + "\n\n" + hint.HINT}]}]
+    assert ask("What about my metformin?", None, multimodal) is None  # no session id: the history decides
+
+
+def test_a_user_typing_the_tag_still_gets_the_note(filled):
+    typed = "[Caduceus] Why isn't my Ozempic working?"
+    current = [{"role": "user", "content": typed}]  # Hermes passes the current message in the history too
+    assert ask(typed, "s1", current) == {"context": hint.HINT}
 
 
 @pytest.mark.parametrize("text", [
@@ -70,6 +80,9 @@ def test_note_in_history_counts_after_a_restart(filled):
     "Am I a carrier for anything?",
     "¿Por qué no me funciona Ozempic?",
     "Any side effects to watch for with tirzepatide?",
+    "How many steps did I walk last week?",
+    "How much weight have I lost since May?",
+    "What did my labs say about my kidneys?",
 ])
 def test_health_questions_get_the_note(filled, text):
     assert ask(text) == {"context": hint.HINT}
@@ -85,6 +98,15 @@ def test_health_questions_get_the_note(filled, text):
     "Write the weekly report",
     "Run the test steps again",
     "Mix 5 fun ideas for the launch",
+    "Explain side effects in React",
+    "What are my next steps for the release?",
+    "Fix my health check endpoint",
+    "Why does my time.sleep block?",
+    "Show me the test steps",
+    "Is my code healthy?",
+    "Read me the tabloid headlines",
+    "Fix the SQL injection in my code",
+    "Start taking backups daily",
 ])
 def test_other_messages_get_nothing(filled, text):
     assert ask(text) is None
@@ -104,7 +126,7 @@ def test_the_note_is_constant_and_holds_no_vault_values(filled):
     add_medication(filled, "Lisinopril 10 MG Oral Tablet")
     assert ask("Is my lisinopril dose right?") == {"context": hint.HINT}
     assert "lisinopril" not in hint.HINT.lower()
-    assert "prescriber" in hint.HINT and hint.HINT.startswith(hint.MARKER)
+    assert "prescriber" in hint.HINT and hint.HINT.startswith("[Caduceus] ")
 
 
 def test_setting_off_means_no_note(filled):

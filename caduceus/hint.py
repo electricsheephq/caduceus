@@ -25,7 +25,6 @@ from pathlib import Path
 
 from .core import paths
 
-MARKER = "[Caduceus]"
 HINT = (
     "[Caduceus] This user keeps a private health vault on this machine (DNA, Apple Health, health records). "
     "Before answering about their genes, medications, labs or health trends, call the caduceus_* tools (the "
@@ -33,6 +32,8 @@ HINT = (
     "knowledge alone. Information with limits, not medical advice: never suggest starting, stopping, switching "
     "or changing a medication, its form or its dose; for any medication decision, say to talk to the prescriber."
 )
+# How an earlier note is recognised in the history: its opening words, which a user would not type.
+NOTE_ID = HINT[:64]
 # Words that mark a health, medication or DNA message on their own.
 _STRONG = frozenset("""
 medication medications medicine medicines meds drug drugs dose doses dosage dosing pill pills prescription
@@ -41,15 +42,16 @@ genetics genome genomic genomics genotype genotypes genotyped dna snp snps allel
 myheritage promethease pharmacogenomic pharmacogenomics pgx apoe alzheimer alzheimers glucose a1c hba1c
 cholesterol ldl hdl triglycerides diabetes diabetic prediabetes hrv bmi vo2max spo2 ecg ekg caduceus
 """.split())
-# Words that count only next to a first-person word ("my sleep", not "time.sleep").
-_WEAK = frozenset("""
-health healthy weight sleep sleeping slept steps carrier variant variants lab labs injection injections tablet
-tablets heart blood doctor symptom symptoms
-""".split())
+# Everyday words that count only when the same message has I, me or my ("how did I sleep"), and never inside a
+# code or ops term (_TECH: "time.sleep", "health check").
+_WEAK = frozenset("health weight sleep sleeping slept carrier labs heart blood doctor symptom symptoms".split())
 _SELF = frozenset({"i", "me", "my", "mine", "myself"})
+_TECH = re.compile(r"\b[a-z_]+\.sleep\b|\bhealth[ -]?(?:checks?|endpoints?|probes?)\b|\bhealthz\b")
 _PHRASES = ("apple health", "heart rate", "blood pressure", "blood sugar", "blood test", "blood tests",
-            "side effect", "side effects", "lab result", "lab results", "stop taking", "start taking",
-            "keep taking", "quit taking", "stopped taking", "started taking")
+            "lab result", "lab results", "step count", "my steps", "daily steps", "steps per day", "steps a day",
+            "how many steps")
+# Pack names that are also ordinary English words.
+_COMMON = frozenset({"tabloid"})
 # Dose-form and other words in recorded medication names that say nothing about health on their own.
 _FORM_WORDS = frozenset("""
 oral orally tablet tablets capsule capsules extended release delayed injection injectable injector solution
@@ -96,13 +98,7 @@ def _setting(ctx):
 
 
 def _text(message) -> str:
-    if isinstance(message, str):
-        text = message
-    elif isinstance(message, list):  # multimodal turns: only the text parts
-        text = " ".join(str(part.get("text") or "") for part in message
-                        if isinstance(part, dict) and part.get("type") == "text")
-    else:
-        return ""
+    text = _flat(message)  # multimodal turns: only the text parts
     if len(text) > _SCAN:  # a pasted file: the question is usually at one end
         text = text[:_SCAN // 2] + " " + text[-_SCAN // 2:]
     return text
@@ -118,10 +114,19 @@ def _hinted(session: str, history) -> bool:
         if not isinstance(message, dict) or message.get("role") != "user":
             continue
         for key in ("api_content", "content"):
-            value = message.get(key)
-            if isinstance(value, str) and MARKER in value:
+            if NOTE_ID in _flat(message.get(key)):
                 return True
     return False
+
+
+def _flat(value) -> str:
+    """A message's text: the string itself, or the text parts of a multimodal list."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return " ".join(str(part.get("text") or "") for part in value
+                        if isinstance(part, dict) and part.get("type") == "text")
+    return ""
 
 
 def _remember(session: str) -> None:
@@ -180,7 +185,7 @@ def _pack_names() -> tuple[frozenset, re.Pattern]:
         phrases = set(_PHRASES) | {n for n in names if " " in n}
         pattern = re.compile(r"(?<![a-z0-9])(?:" + "|".join(
             re.escape(p) for p in sorted(phrases, key=len, reverse=True)) + r")(?![a-z0-9])")
-        _pack = (frozenset(n for n in names if " " not in n and len(n) >= 4), pattern)
+        _pack = (frozenset(n for n in names if " " not in n and len(n) >= 4) - _COMMON, pattern)
     return _pack
 
 
@@ -190,9 +195,10 @@ def _about_health(text: str, recorded: frozenset) -> bool:
     single, phrases = _pack_names()
     if words & _STRONG or words & single or words & recorded:
         return True
-    if (words & _WEAK and words & _SELF) or _RSID.search(lowered):
+    if _RSID.search(lowered) or phrases.search(lowered):
         return True
-    return bool(phrases.search(lowered))
+    everyday = set(_TOKEN.findall(_TECH.sub(" ", lowered)))
+    return bool(everyday & _WEAK and everyday & _SELF)
 
 
 def _reset() -> None:
