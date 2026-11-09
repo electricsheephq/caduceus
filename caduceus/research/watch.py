@@ -1,6 +1,7 @@
 """Bounded public-science queries, local matching, and durable seed/new digests."""
 from __future__ import annotations
 
+import html
 import json
 import re
 import time
@@ -18,6 +19,10 @@ EPMC = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 LITVAR = "https://www.ncbi.nlm.nih.gov/research/litvar2-api/variant/get/"
 SOURCES = ("europepmc", "clinvar", "litvar")
+GENETIC_TERMS = ("variant", "variants", "polymorphism", "polymorphisms", "genotype", "genotypes",
+                 "allele", "alleles", "pharmacogenetic", "pharmacogenetics", "pharmacogenomic",
+                 "pharmacogenomics", "genetic")
+INLINE_TAGS = re.compile(r"</?(?:i|b|em|strong|sup|sub|span|br|u|small)(?:\s[^<>]*?)?\s*/?>", re.I)
 
 
 def _timestamp(now):
@@ -36,16 +41,19 @@ def _medications(conn, allow=None):
     """Current medications the knowledge pack knows. *allow* (a category predicate) leaves out the ones the user's
     privacy settings hide, so they never become search terms sent to the research services."""
     rows = conn.execute(
-        "SELECT drug, event, category FROM medication_event ORDER BY occurred_on DESC, id DESC"
+        "SELECT drug, event, occurred_on, category FROM medication_event ORDER BY occurred_on DESC, id DESC"
     )
-    latest = {}
+    latest, starts = {}, {}
     for row in rows:
         if allow is not None and not allow(row["category"]):
             continue
         drug = normalize_drug(row["drug"])
         if drug and drug not in latest:
             latest[drug] = row["event"]
-    return sorted(drug for drug, event in latest.items() if event != "stop")
+        if drug and row["event"] == "start" and drug not in starts:
+            starts[drug] = row["occurred_on"]
+    current = sorted(drug for drug, event in latest.items() if event != "stop")
+    return sorted(current, key=lambda drug: starts.get(drug, ""), reverse=True)
 
 
 def default_watch(conn, *, topics=(), allow=None) -> dict:
@@ -76,12 +84,14 @@ def _quoted(values):
 def _pairs(pack, drugs):
     """Public pack associations only; local calls never select a query or its order."""
     pairs = {}
-    for drug in sorted(set(drugs)):
+    for drug in dict.fromkeys(drugs):
         linked = [e for e in pack.entries if drug in e["drugs"]]
-        if linked:
+        genes = sorted({e["gene"] for e in linked if e["gene"]})
+        rsids = sorted({m["rsid"] for e in linked for m in e["markers"] if m["rsid"]})
+        if genes or rsids:
             pairs[drug] = {
-                "genes": sorted({e["gene"] for e in linked}),
-                "rsids": sorted({m["rsid"] for e in linked for m in e["markers"]}),
+                "genes": genes,
+                "rsids": rsids,
                 "terms": sorted({drug.casefold()} | {k.casefold() for k, v in pack.drugs.items() if v == drug}),
             }
     return pairs
@@ -109,12 +119,15 @@ def _why(row, pairs, origins=()):
 
 def _publication(row, source="europepmc", matched=()):
     journal = row.get("journalTitle") or row.get("journalInfo", {}).get("journal", {}).get("title")
+    title = INLINE_TAGS.sub("", html.unescape(row.get("title", "")))
+    summary = re.sub("<[^>]+>", "", row.get("abstractText") or "")
+    summary = INLINE_TAGS.sub("", html.unescape(summary))[:600]
     return {"source": source, "external_id": str(row.get("id") or row.get("pmid") or row.get("doi") or ""),
-            "title": row.get("title", ""), "journal": journal, "year": row.get("pubYear"),
+            "title": title, "journal": journal, "year": row.get("pubYear"),
             "pub_date": row.get("firstPublicationDate"), "doi": row.get("doi"),
             "pmid": str(row["pmid"]) if row.get("pmid") else None, "pmcid": row.get("pmcid"),
             "url": f"https://europepmc.org/article/{row.get('source', 'MED')}/{row.get('id', '')}",
-            "summary": re.sub("<[^>]+>", "", row.get("abstractText") or "")[:600],
+            "summary": summary,
             "matched_rsids": list(matched)}
 
 
@@ -204,8 +217,9 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
     watch = dict(stored)
     terms = _terms(watch["terms_json"])
     # Medication changes affect terms, never genotype selection.
-    terms["drugs"] = (_medications(conn, allow) if watch["name"] == "default" else
-                      sorted(set(terms.get("drugs", [])) | set(_medications(conn, allow))))
+    medications = _medications(conn, allow)
+    terms["drugs"] = (medications if watch["name"] == "default" else
+                      medications + sorted(set(terms.get("drugs", [])) - set(medications)))
     sources = _terms(watch["sources_json"])
     stamp = _timestamp(now)
     until = stamp[:10]
@@ -318,9 +332,9 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
             if remaining() <= 2:
                 skipped.append({"source": "europepmc-pairs", "drugs": len(pairs) - index})
                 break
-            query = (f'(({_quoted(pair["genes"])}) OR ({_quoted(pair["rsids"])})) AND '
-                     f'({_quoted(pair["terms"])}) AND '
-                     f'({_quoted(["variant", "variants", "polymorphism", "genotype", "allele", "pharmacogenetic", "pharmacogenomic", "genetic"])}) '
+            query = (f'TITLE_ABS:({_quoted(pair["genes"] + pair["rsids"])}) AND '
+                     f'TITLE_ABS:({_quoted(pair["terms"])}) AND '
+                     f'TITLE_ABS:({_quoted(GENETIC_TERMS)}) '
                      f'AND FIRST_PDATE:[{since5} TO {until}] AND (SRC:MED OR SRC:PPR)')
             try:
                 data = request("europepmc-pairs", EPMC, {"query": query, "format": "json", "resultType": "core",
@@ -328,7 +342,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                 items = [_publication(row) for row in data["resultList"]["result"]]
                 fetched.extend(items)
                 extra_items.extend(items)
-                pair_hits.extend((item, drug) for item in items)
+                pair_hits.extend((item, drug, (rank, index)) for rank, item in enumerate(items))
             except Exception as exc:
                 errors.append({"source": "europepmc-pairs", "error": type(exc).__name__})
 
@@ -402,14 +416,20 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                         except Exception as exc:
                             errors.append({"source": source, "rsid": rsid, "error": type(exc).__name__})
                     wanted = sorted(set(pair_pmids) - fetched_pmids, key=int, reverse=True)[:25]
-                    if seed and wanted and remaining() > 2 and "europepmc" in sources:
-                        data = request("europepmc", EPMC, {
-                            "query": f'EXT_ID:({" OR ".join(wanted)}) AND SRC:MED',
-                            "format": "json", "resultType": "core", "pageSize": 25, "sort": ""})
-                        items = [_publication(row, matched=sorted(pair_pmids.get(str(row.get("pmid")), ())))
-                                 for row in data["resultList"]["result"]]
-                        fetched.extend(items)
-                        extra_items.extend(items)
+                    if seed and wanted and "europepmc" in sources:
+                        if remaining() <= 2:
+                            skipped.append({"source": "europepmc-ext", "pmids": len(wanted)})
+                        else:
+                            try:
+                                data = request("europepmc-ext", EPMC, {
+                                    "query": f'EXT_ID:({" OR ".join(wanted)}) AND SRC:MED',
+                                    "format": "json", "resultType": "core", "pageSize": 25, "sort": ""})
+                                items = [_publication(row, matched=sorted(pair_pmids.get(str(row.get("pmid")), ())))
+                                         for row in data["resultList"]["result"]]
+                                fetched.extend(items)
+                                extra_items.extend(items)
+                            except Exception as exc:
+                                errors.append({"source": "europepmc-ext", "error": type(exc).__name__})
                 elif source not in SOURCES:
                     errors.append({"source": source, "error": "unknown source"})
             except Exception as exc:
@@ -425,7 +445,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
     extra_keys = {(item["source"], item["external_id"]) for item in extra_items}
     pair_origins, pair_ranks, extra_ids = {}, {}, set()
     origins = {}
-    for rank, (item, drug) in enumerate(pair_hits):
+    for item, drug, rank in pair_hits:
         key = (item["source"], item["external_id"])
         origins.setdefault(key, []).append((rank, drug))
     with write_txn(conn):
@@ -444,7 +464,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                 extra_ids.add(item_id)
             for rank, drug in origins.get(key, []):
                 pair_origins.setdefault(item_id, set()).add(drug)
-                pair_ranks.setdefault(item_id, rank)
+                pair_ranks[item_id] = min(pair_ranks.get(item_id, rank), rank)
         candidates = ((set(primary_ids) | extra_ids) if primary_ids else all_ids) if seed else new_ids
         rows = [dict(conn.execute("SELECT * FROM research_item WHERE id=?", (i,)).fetchone()) for i in candidates]
         for row in rows:

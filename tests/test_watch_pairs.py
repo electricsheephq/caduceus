@@ -61,10 +61,11 @@ def test_persona_pair_first_and_general_relevance_follow(vault):
     pair_queries = [q for q in result["queried"] if q["source"] == "europepmc-pairs"]
     assert len(pair_queries) == 1
     assert pair_queries[0]["params"] == {
-        "query": '(("GLP1R") OR ("rs10305420" OR "rs6923761")) AND '
-                 '("ozempic" OR "rybelsus" OR "semaglutide" OR "wegovy") AND '
-                 '("variant" OR "variants" OR "polymorphism" OR "genotype" OR "allele" OR '
-                 '"pharmacogenetic" OR "pharmacogenomic" OR "genetic") AND '
+        "query": 'TITLE_ABS:("GLP1R" OR "rs10305420" OR "rs6923761") AND '
+                 'TITLE_ABS:("ozempic" OR "rybelsus" OR "semaglutide" OR "wegovy") AND '
+                 'TITLE_ABS:("variant" OR "variants" OR "polymorphism" OR "polymorphisms" OR '
+                 '"genotype" OR "genotypes" OR "allele" OR "alleles" OR "pharmacogenetic" OR '
+                 '"pharmacogenetics" OR "pharmacogenomic" OR "pharmacogenomics" OR "genetic") AND '
                  'FIRST_PDATE:[2021-11-09 TO 2026-11-08] AND (SRC:MED OR SRC:PPR)',
         "format": "json", "resultType": "core", "pageSize": 25, "sort": ""}
     assert len(result["queried"]) == 28

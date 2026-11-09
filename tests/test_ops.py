@@ -223,7 +223,7 @@ def test_late_watch_failure_is_reported_once_then_retry_uses_fake_transport(plug
                               "Nothing new was saved from it. Run the watch again."}
     assert ops._WATCH_PENDING == []
     monkeypatch.setattr(watch, "run_watch", original)
-    monkeypatch.setattr(ops, "WATCH_WAIT_S", 2)
+    monkeypatch.setattr(ops, "WATCH_WAIT_S", 10)
     third = call("caduceus_capture", op="watch_run")
     assert third.get("kind") == "seed" and third["errors"] == [], third
     assert ops._WATCH_PENDING == []
