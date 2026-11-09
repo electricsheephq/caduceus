@@ -2,7 +2,7 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.1.1 — UNRELEASED
+## 0.1.1 — 2026-11-09
 
 ### Added
 - **`/caduceus demo`:** loads an invented demo person into an empty vault, so you can try Caduceus without your own data. It refuses when the vault already holds your files, so the two never mix.
