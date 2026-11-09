@@ -166,7 +166,9 @@ def test_demo_serializes_generation_and_storage(data_dir, vault, monkeypatch):
             release.set()
         replies = [first.result(timeout=5), second.result(timeout=5)]
     assert len(generations) == 1
-    assert set(replies) == {LOADING, BUSY}
+    # Whichever call submits first starts the job; the other is told it is busy. If the second call
+    # submits first, the first one sees the stored persona and reports that it is finishing the import.
+    assert set(replies) in ({LOADING, BUSY}, {BUSY, FINISHING})
     assert len(submissions) == 2 and submissions[0] == submissions[1]
     assert vault.execute('SELECT count(*) FROM source_artifact').fetchone()[0] == 3
 
