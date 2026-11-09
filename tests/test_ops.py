@@ -188,3 +188,42 @@ def test_concurrent_reports_and_briefs_never_share_a_temporary_file(plugin):
     for thread in threads:
         thread.join()
     assert errors == []
+
+
+def test_late_watch_failure_is_reported_once_then_retry_uses_fake_transport(plugin, monkeypatch):
+    import importlib
+    import threading
+
+    from test_watch_pairs import PairHttp
+
+    _, call, _ = plugin
+    package = load_plugin_package()
+    ops = importlib.import_module(package.__name__ + ".caduceus.ops")
+    watch = importlib.import_module(package.__name__ + ".caduceus.research.watch")
+    transport = importlib.import_module(package.__name__ + ".caduceus.research.http")
+    original = watch.run_watch
+    release = threading.Event()
+    monkeypatch.setattr(ops, "WATCH_WAIT_S", 0.01)
+    monkeypatch.setattr(transport, "UrllibHttp", PairHttp)
+
+    def fail_late(*args, **kwargs):
+        assert release.wait(2)
+        raise ValueError("synthetic path/URL detail must not escape")
+
+    monkeypatch.setattr(watch, "run_watch", fail_late)
+    try:
+        first = call("caduceus_capture", op="watch_run")
+        assert first["status"] == "running"
+    finally:
+        release.set()
+        assert ops.jobs.join("research-watch", 2)
+    second = call("caduceus_capture", op="watch_run")
+    assert second == {"status": "failed", "error": "ValueError",
+                      "note": "The last research watch run failed in the background after its call returned. "
+                              "Nothing new was saved from it. Run the watch again."}
+    assert ops._WATCH_PENDING == []
+    monkeypatch.setattr(watch, "run_watch", original)
+    monkeypatch.setattr(ops, "WATCH_WAIT_S", 2)
+    third = call("caduceus_capture", op="watch_run")
+    assert third.get("kind") == "seed" and third["errors"] == [], third
+    assert ops._WATCH_PENDING == []

@@ -175,6 +175,17 @@ class UrllibHttp: get_json(url, params) -> dict
 - **Matching** to the user's genotypes happens locally.
 - **Dedupe:** by PMID, DOI or ClinVar id.
 - **Digests:** the first run gives a top-3 seed digest; later runs give only new items.
+- **Pair-first seed:** allowed current drugs select public pack genes/rsids and all pack drug aliases. Pair genes
+  supplement the primary query. After primary/ClinVar work, each linked drug gets one relevance-ranked Europe PMC
+  page (25, five years, genetics terms), unless at most two requests remain (reported in `skipped`). Seed LitVar
+  requests try pair rsids first, then the daily rotation of the rest; one optional Europe PMC `EXT_ID` page fetches
+  the 25 numerically largest unseen pair PMIDs. All requests share the budget; enrichment leaves two spare and
+  never advances the primary watermark. Later runs add no request kinds.
+- **Order and explanation:** every digest item includes `why = {reason, drugs, genes, rsids}`, computed locally
+  without calls. Tiers are `gene_drug`, `variant`, `general`. The seed keeps pair-query relevance order first,
+  then newest other gene–drug hits, newest variant hits and primary general relevance order, capped at three.
+  Later digests sort each tier newest first. All fetched items are stored as seen; seed/overlap/watermark and
+  delivery semantics are otherwise unchanged. Calls affect only local `matched.calls`, never requests or rank.
 
 ## Orchestrator glue (`caduceus/tools.py`, `caduceus/registration.py`, `caduceus/brief.py`)
 

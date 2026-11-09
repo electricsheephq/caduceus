@@ -77,7 +77,7 @@ class FakeHttp:
 
 def watch(vault, sources=("europepmc",), rsids=("rs6923761",)):
     w = default_watch(vault, topics=("diabetes",))
-    terms = {"genes": ["GLP1R", "APOE"], "drugs": ["semaglutide"], "topics": ["diabetes"], "rsids": list(rsids)}
+    terms = {"genes": ["GLP1R", "APOE"], "drugs": [], "topics": ["diabetes"], "rsids": list(rsids)}
     with write_txn(vault):
         vault.execute("UPDATE watch SET name='synthetic',terms_json=?,sources_json=? WHERE id=?",
                       (json.dumps(terms), json.dumps(sources), w["id"]))

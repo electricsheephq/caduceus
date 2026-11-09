@@ -73,6 +73,40 @@ def _quoted(values):
     return " OR ".join('"' + re.sub(r'[^\w .-]', ' ', str(v)).strip() + '"' for v in values if str(v).strip())
 
 
+def _pairs(pack, drugs):
+    """Public pack associations only; local calls never select a query or its order."""
+    pairs = {}
+    for drug in sorted(set(drugs)):
+        linked = [e for e in pack.entries if drug in e["drugs"]]
+        if linked:
+            pairs[drug] = {
+                "genes": sorted({e["gene"] for e in linked}),
+                "rsids": sorted({m["rsid"] for e in linked for m in e["markers"]}),
+                "terms": sorted({drug.casefold()} | {k.casefold() for k, v in pack.drugs.items() if v == drug}),
+            }
+    return pairs
+
+
+def _why(row, pairs, origins=()):
+    text = row["title"] + " " + row["summary"]
+    matched = json.loads(row["matched_json"])
+    hits, variants = [], []
+    for drug, pair in pairs.items():
+        contains = lambda term: re.search(r"\b" + re.escape(term) + r"\b", text, re.I)
+        genes = set(pair["genes"]).intersection(matched["genes"])
+        rsids = set(pair["rsids"]).intersection(matched["rsids"])
+        drug_hit = any(contains(term) for term in pair["terms"])
+        if drug in origins or (drug_hit and (rsids or any(contains(g) for g in pair["genes"]))):
+            hits.append((drug, genes, rsids))
+        elif rsids and not drug_hit:
+            variants.append((drug, genes, rsids))
+    parts = hits or variants
+    return {"reason": "gene_drug" if hits else "variant" if variants else "general",
+            "drugs": sorted({d for d, _, _ in parts}),
+            "genes": sorted({g for _, genes, _ in parts for g in genes}),
+            "rsids": sorted({r for _, _, rsids in parts for r in rsids})}
+
+
 def _publication(row, source="europepmc", matched=()):
     journal = row.get("journalTitle") or row.get("journalInfo", {}).get("journal", {}).get("title")
     return {"source": source, "external_id": str(row.get("id") or row.get("pmid") or row.get("doi") or ""),
@@ -267,12 +301,43 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                 watermark = completed_until
 
     pack = load_pack()
+    pairs = _pairs(pack, terms.get("drugs", []))
+    pair_rsids = sorted({r for pair in pairs.values() for r in pair["rsids"]})
+    terms["genes"] = list(dict.fromkeys(terms.get("genes", []) +
+                                       sorted({g for pair in pairs.values() for g in pair["genes"]})))
     marker_genes = {m["rsid"]: e["gene"] for e in pack.entries for m in e["markers"]}
     marker_genes.update({"rs429358": "APOE", "rs7412": "APOE"})
     rsids = sorted({r for r in terms.get("rsids", []) if re.fullmatch(r"rs\d+", str(r))})
+    pair_hits, extra_items = [], []
+
+    def fetch_pairs():
+        if not seed:
+            return
+        since5 = (date.fromisoformat(until) - timedelta(days=5 * 365)).isoformat()
+        for index, (drug, pair) in enumerate(pairs.items()):
+            if remaining() <= 2:
+                skipped.append({"source": "europepmc-pairs", "drugs": len(pairs) - index})
+                break
+            query = (f'(({_quoted(pair["genes"])}) OR ({_quoted(pair["rsids"])})) AND '
+                     f'({_quoted(pair["terms"])}) AND '
+                     f'({_quoted(["variant", "variants", "polymorphism", "genotype", "allele", "pharmacogenetic", "pharmacogenomic", "genetic"])}) '
+                     f'AND FIRST_PDATE:[{since5} TO {until}] AND (SRC:MED OR SRC:PPR)')
+            try:
+                data = request("europepmc-pairs", EPMC, {"query": query, "format": "json", "resultType": "core",
+                                                       "pageSize": 25, "sort": ""})
+                items = [_publication(row) for row in data["resultList"]["result"]]
+                fetched.extend(items)
+                extra_items.extend(items)
+                pair_hits.extend((item, drug) for item in items)
+            except Exception as exc:
+                errors.append({"source": "europepmc-pairs", "error": type(exc).__name__})
+
     with http.limited(budget) if isinstance(http, UrllibHttp) else nullcontext():
         # The primary source must run first, regardless of configured source order.
         ordered = (["europepmc"] if "europepmc" in sources else []) + [s for s in sources if s != "europepmc"]
+        # Preserve primary/ClinVar work, then spend the shared enrichment budget on pairs before LitVar.
+        if "europepmc" in sources:
+            ordered.insert(ordered.index("litvar") if "litvar" in ordered else len(ordered), "europepmc-pairs")
         for source in ordered:
             try:
                 if source == "europepmc":
@@ -280,6 +345,8 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                     topics = _quoted(terms.get("drugs", []) + terms.get("topics", []))
                     if genes and topics:
                         epmc(f"({genes}) AND ({topics})")
+                elif source == "europepmc-pairs":
+                    fetch_pairs()
                 elif source == "clinvar" and rsids:
                     start = 0
                     while True:
@@ -299,8 +366,8 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                         start += len(ids)
                         if start >= int(search.get("count", start)):
                             break
-                elif source == "litvar" and primary_items:
-                    # Annotate date-filtered primary hits only. No EXT_ID metadata fan-out.
+                elif source == "litvar" and (primary_items or (seed and pair_rsids)):
+                    # Primary annotations stay local; seed pair variants may add one metadata page.
                     by_pmid = {}
                     for item in primary_items:
                         if item["pmid"]:
@@ -308,9 +375,14 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                     cache = {}
                     offset = date.fromisoformat(until).toordinal() % len(rsids) if rsids else 0
                     rotated = rsids[offset:] + rsids[:offset]
+                    if seed:
+                        rotated = pair_rsids + [r for r in rotated if r not in pair_rsids]
+                    pair_pmids = {}
+                    fetched_pmids = {item["pmid"] for item in fetched if item["pmid"]}
                     for index, rsid in enumerate(rotated):
                         # Leave two requests spare; enrichment is optional and its omissions are visible.
-                        if remaining() <= 2:
+                        reserve = 3 if seed and set(pair_pmids) - fetched_pmids else 2
+                        if remaining() <= reserve:
                             skipped.append({"source": source, "rsids": len(rotated) - index})
                             break
                         try:
@@ -318,6 +390,10 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                                 variant = quote("litvar@" + rsid + "##", safe="")
                                 data = request(source, LITVAR + variant + "/publications", {})
                                 cache[rsid] = {str(pmid) for pmid in data["pmids"]}
+                            if seed and rsid in pair_rsids:
+                                for pmid in cache[rsid]:
+                                    if re.fullmatch(r"\d+", pmid):
+                                        pair_pmids.setdefault(pmid, set()).add(rsid)
                             for pmid in cache[rsid].intersection(by_pmid):
                                 for item in by_pmid[pmid]:
                                     item["matched_rsids"].append(rsid)
@@ -325,6 +401,15 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                             raise
                         except Exception as exc:
                             errors.append({"source": source, "rsid": rsid, "error": type(exc).__name__})
+                    wanted = sorted(set(pair_pmids) - fetched_pmids, key=int, reverse=True)[:25]
+                    if seed and wanted and remaining() > 2 and "europepmc" in sources:
+                        data = request("europepmc", EPMC, {
+                            "query": f'EXT_ID:({" OR ".join(wanted)}) AND SRC:MED',
+                            "format": "json", "resultType": "core", "pageSize": 25, "sort": ""})
+                        items = [_publication(row, matched=sorted(pair_pmids.get(str(row.get("pmid")), ())))
+                                 for row in data["resultList"]["result"]]
+                        fetched.extend(items)
+                        extra_items.extend(items)
                 elif source not in SOURCES:
                     errors.append({"source": source, "error": "unknown source"})
             except Exception as exc:
@@ -337,6 +422,12 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
     all_ids, new_ids, seen_ids = set(), set(), set()
     primary_ids = []
     seed_keys = {(item["source"], item["external_id"]) for item in seed_items}
+    extra_keys = {(item["source"], item["external_id"]) for item in extra_items}
+    pair_origins, pair_ranks, extra_ids = {}, {}, set()
+    origins = {}
+    for rank, (item, drug) in enumerate(pair_hits):
+        key = (item["source"], item["external_id"])
+        origins.setdefault(key, []).append((rank, drug))
     with write_txn(conn):
         for item in fetched:
             if not item["external_id"]:
@@ -348,14 +439,26 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
             all_ids.add(item_id)
             if (item["source"], item["external_id"]) in seed_keys and item_id not in primary_ids:
                 primary_ids.append(item_id)
-        candidates = (set(primary_ids) if primary_ids else all_ids) if seed else new_ids
+            key = (item["source"], item["external_id"])
+            if key in extra_keys:
+                extra_ids.add(item_id)
+            for rank, drug in origins.get(key, []):
+                pair_origins.setdefault(item_id, set()).add(drug)
+                pair_ranks.setdefault(item_id, rank)
+        candidates = ((set(primary_ids) | extra_ids) if primary_ids else all_ids) if seed else new_ids
         rows = [dict(conn.execute("SELECT * FROM research_item WHERE id=?", (i,)).fetchone()) for i in candidates]
+        for row in rows:
+            row["why"] = _why(row, pairs, pair_origins.get(row["id"], ()))
+        # Stable sorts preserve newest-first order inside each tier, except seed relevance tiers.
+        rows.sort(key=lambda r: (r["pub_date"] or "", r["year"] or 0, r["id"]), reverse=True)
         if seed:
-            # Europe PMC supplied relevance order; secondary metadata cannot displace it.
             ranks = {item_id: rank for rank, item_id in enumerate(primary_ids)}
-            rows.sort(key=lambda r: (ranks.get(r["id"], len(primary_ids)), r["id"]))
+            rows.sort(key=lambda r: (0, pair_ranks[r["id"]]) if r["id"] in pair_ranks else
+                      (1, 0) if r["why"]["reason"] == "gene_drug" else
+                      (2, 0) if r["why"]["reason"] == "variant" else
+                      (3, ranks.get(r["id"], len(primary_ids)), r["id"]))
         else:
-            rows.sort(key=lambda r: (r["pub_date"] or "", r["year"] or 0, r["id"]), reverse=True)
+            rows.sort(key=lambda r: {"gene_drug": 0, "variant": 1, "general": 2}[r["why"]["reason"]])
         selected = rows[:3] if seed else rows
         kind = "seed" if seed else "new" if selected else "none"
         conn.execute("INSERT INTO delivery(watch_id,run_at,kind,item_ids_json,errors_json) VALUES (?,?,?,?,?)",
