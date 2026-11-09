@@ -22,8 +22,10 @@ We aim to acknowledge reports within 3 business days and to share a decision or 
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
-chose sees them; a research watch you turn on sends gene, drug and topic terms and public
-marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
+chose sees them; the research watch (on by default, runs when you or the agent ask for it or on a schedule you
+create, off with the `research_watch` setting) sends gene and topic terms, the names of medications you recorded,
+and public marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed
+like any message;
 no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
 check it holds no health data, and files it to this repository with `gh` only after you
 approve the draft.

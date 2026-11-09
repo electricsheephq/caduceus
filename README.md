@@ -94,8 +94,10 @@ them. Hidden results are counted, never described.
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
-chose sees them; a research watch you turn on sends gene, drug and topic terms and public
-marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed like any message;
+chose sees them; the research watch (on by default, runs when you or the agent ask for it or on a schedule you
+create, off with the `research_watch` setting) sends gene and topic terms, the names of medications you recorded,
+and public marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed
+like any message;
 no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
 check it holds no health data, and files it to this repository with `gh` only after you
 approve the draft.
@@ -108,7 +110,8 @@ Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is 
   - **What it does:** a digest of new studies (Europe PMC, LitVar2) and ClinVar changes about your genes, medications and chosen topics, weekly by default.
   - **First run:** 3 studies to start with. Studies on your own gene–drug pairs come first (for example GLP1R and semaglutide, from the last five years), then papers that mention your markers, then general results. Each item says why it was picked.
   - **After that:** only new ones, in the same order, and nothing when there is nothing new.
-  - **What it sends:** gene, drug and topic words, marker IDs from the built-in knowledge pack, and article IDs. Which terms it sends depends only on your medications and topics, never on your genotypes.
+  - **What it sends:** gene and topic words, the names of medications you recorded, marker IDs from the built-in knowledge pack, and article IDs. Which terms it sends depends only on your medications and topics, never on your genotypes.
+  - **When it runs:** when you or your agent ask for it, or on the schedule the blueprint creates. It is on by default; the `research_watch` setting turns it off.
 - **`/blueprint caduceus:daily-check`:** once a day, checks your Apple Health trends (resting heart rate, sleep, weight, steps) and messages you only when something is outside its threshold. It costs one model call a day.
 
 ## Accuracy and limits

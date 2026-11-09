@@ -13,7 +13,7 @@ Health or medical records. Go one step at a time, and keep each message short.
 In two or three sentences:
 - Caduceus keeps a private vault of their health data, and it stays on their machine.
 - To answer a question, your tools read only the slices it needs. Those slices reach the model they chose, like any message.
-- The research watch, if they turn it on, sends only gene, drug and topic words and public marker and article IDs (never genotypes) to Europe PMC and NCBI.
+- The research watch is on by default (the `research_watch` setting turns it off). It sends only gene and topic words, the names of their recorded medications, and public marker and article IDs (never genotypes) to Europe PMC and NCBI.
 
 Say "your vault stays on your machine", naming the vault. Never say "everything stays on your machine", "nothing is
 uploaded", "nothing leaves your machine" or "nothing was sent":
