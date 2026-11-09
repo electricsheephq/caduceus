@@ -1,4 +1,4 @@
-"""The vault hint: a fixed note on the first health turn of a session, only when the vault holds data."""
+"""The vault hint: a fixed note on a chat's first health turn, only when the vault holds data."""
 import pytest
 
 from conftest import FakeCtx, load_plugin_package
@@ -44,15 +44,27 @@ def test_no_vault_or_empty_vault_gives_no_hint(data_dir):
     assert ask(OZEMPIC) is None
 
 
-def test_first_health_turn_of_each_session_gets_the_fixed_note(filled):
+def hinted_turn(text=OZEMPIC):
+    """A user message as Hermes keeps it after the hook added the note."""
+    return {"role": "user", "content": text, "api_content": text + "\n\n" + hint.HINT}
+
+
+def test_first_health_turn_of_each_chat_gets_the_fixed_note(filled):
     assert ask(OZEMPIC, "s1") == {"context": hint.HINT}
-    assert ask("And would Mounjaro be different?", "s1") is None
+    later = [hinted_turn(), {"role": "assistant", "content": "Your vault shows..."},
+             {"role": "user", "content": "And would Mounjaro be different?"}]
+    assert ask("And would Mounjaro be different?", "s1", later) is None
     assert ask(OZEMPIC, "s2") == {"context": hint.HINT}
 
 
+def test_note_comes_back_when_it_drops_out_of_the_history(filled):
+    compacted = [{"role": "user", "content": "Summary of the earlier conversation: ..."},
+                 {"role": "user", "content": "Should I stop my metformin?"}]
+    assert ask("Should I stop my metformin?", "s1", compacted) == {"context": hint.HINT}
+
+
 def test_note_in_history_counts_after_a_restart(filled):
-    earlier = [{"role": "user", "content": OZEMPIC, "api_content": OZEMPIC + "\n\n" + hint.HINT},
-               {"role": "assistant", "content": "Your vault shows..."}]
+    earlier = [hinted_turn(), {"role": "assistant", "content": "Your vault shows..."}]
     assert ask("What about my metformin?", "s1", earlier) is None
     hint._reset()
     quoted = [{"role": "assistant", "content": hint.HINT}]  # only user turns carry the note
@@ -83,6 +95,13 @@ def test_a_user_typing_the_tag_still_gets_the_note(filled):
     "How many steps did I walk last week?",
     "How much weight have I lost since May?",
     "What did my labs say about my kidneys?",
+    "Should I stop taking lisinopril?",
+    "Is lisinopril causing side effects for me?",
+    "What does my APOE4 mean?",
+    "Am I APOE-e4?",
+    "Am I a CYP2C19 poor metabolizer?",
+    "Is my GLP-1 working?",
+    "Should I take my pills at night?",
 ])
 def test_health_questions_get_the_note(filled, text):
     assert ask(text) == {"context": hint.HINT}
@@ -107,6 +126,11 @@ def test_health_questions_get_the_note(filled, text):
     "Read me the tabloid headlines",
     "Fix the SQL injection in my code",
     "Start taking backups daily",
+    "Run brew doctor and tell me what I should fix",
+    "I want a heart icon on the like button",
+    "Make the tags pill buttons for me",
+    "Wire the RS232 port to my board",
+    "Fix the caduceus tests for me",
 ])
 def test_other_messages_get_nothing(filled, text):
     assert ask(text) is None
@@ -120,6 +144,15 @@ def test_recorded_medication_names_count_but_dose_form_words_do_not(filled):
     assert ask("Order the oral history tablets weekly", "c") is None
     assert hint._name_words("metFORMIN 500 MG Oral Tablet [Glucophage]") == {"metformin", "glucophage"}
     assert hint._name_words("Semaglutide 0.25 MG/DOSE Pen Injector") == {"semaglutide"}
+    assert hint._name_words("glucose blood VI test strips (Accu-Chek Guide) Strip") == {"glucose"}
+    assert hint._name_words("Tylenol Extra Strength") == {"tylenol"}
+
+
+def test_recorded_supplies_do_not_turn_ordinary_words_into_triggers(filled):
+    add_medication(filled, "glucose blood VI test strips (Accu-Chek Guide) Strip")
+    add_medication(filled, "Tylenol Extra Strength")
+    assert ask("Run the unit test again with extra logging", "a") is None
+    assert ask("Did Tylenol help my headaches?", "b") == {"context": hint.HINT}
 
 
 def test_the_note_is_constant_and_holds_no_vault_values(filled):
@@ -172,12 +205,6 @@ def test_vault_state_is_cached_then_refreshed(vault, monkeypatch):
     assert ask(OZEMPIC, "c") == {"context": hint.HINT}
 
 
-def test_remembered_sessions_are_bounded(filled):
-    for n in range(hint._SEEN_MAX + 50):
-        assert ask(OZEMPIC, f"s{n}") == {"context": hint.HINT}
-    assert len(hint._seen) == hint._SEEN_MAX
-
-
 def test_registered_hook_passes_hermes_kwargs_through(filled):
     ctx = FakeCtx()
     load_plugin_package().register(ctx)
@@ -186,4 +213,4 @@ def test_registered_hook_passes_hermes_kwargs_through(filled):
                    is_first_turn=True, model="m", platform="cli", parent_session_id="", sender_id="",
                    telemetry_schema_version=1)
     assert out == {"context": hint.HINT}
-    assert callback(session_id="reg-1", user_message=OZEMPIC, conversation_history=[]) is None
+    assert callback(session_id="reg-1", user_message=OZEMPIC, conversation_history=[hinted_turn()]) is None

@@ -3,13 +3,15 @@
 Small models sometimes answer "Why isn't my Ozempic working?" from general knowledge without calling
 any Caduceus tool, so the rules in the tool results never reach them. Hermes calls ``pre_llm_call``
 once per user turn and appends returned context to that turn's user message, never to the system
-prompt. Hermes keeps it with the message, so one note per session is enough.
+prompt. Hermes stores it with the message (``api_content``) and replays it, so one note per chat is
+enough: the hook looks for it in the history it is given. If the note drops out of the history (for
+example after Hermes compacts a long chat), the next health turn adds it again.
 
 The note is a constant and never carries a value from the vault. It is added only when:
 - the ``vault_hint`` setting is on (the default);
 - the vault holds data;
 - the message is about health, medications or DNA;
-- this session has not had it yet.
+- the history does not already hold it.
 
 It never vetoes a turn, and any error means no note.
 """
@@ -20,7 +22,6 @@ import re
 import sqlite3
 import threading
 import time
-from collections import OrderedDict
 from pathlib import Path
 
 from .core import paths
@@ -36,17 +37,25 @@ HINT = (
 NOTE_ID = HINT[:64]
 # Words that mark a health, medication or DNA message on their own.
 _STRONG = frozenset("""
-medication medications medicine medicines meds drug drugs dose doses dosage dosing pill pills prescription
-prescriptions prescribed prescriber pharmacist pharmacy metformin insulin statin statins gene genes genetic
-genetics genome genomic genomics genotype genotypes genotyped dna snp snps allele alleles 23andme ancestrydna
-myheritage promethease pharmacogenomic pharmacogenomics pgx apoe alzheimer alzheimers glucose a1c hba1c
-cholesterol ldl hdl triglycerides diabetes diabetic prediabetes hrv bmi vo2max spo2 ecg ekg caduceus
+medication medications medicine medicines meds drug drugs dose doses dosage dosing prescription prescriptions
+prescribed prescriber pharmacist pharmacy metformin insulin statin statins gene genes genetic genetics genome
+genomic genomics genotype genotypes genotyped dna snp snps allele alleles 23andme ancestrydna myheritage
+promethease pharmacogenomic pharmacogenomics pgx metabolizer metaboliser alzheimer alzheimers glucose a1c hba1c
+cholesterol ldl hdl triglycerides diabetes diabetic prediabetes hrv bmi vo2max spo2 ecg ekg
 """.split())
+# Gene names, including spellings like APOE4, APOE-e4, CYP2C19 and GLP-1.
+_GENE = re.compile(r"(?<![a-z0-9])(?:apoe|cyp\d[a-z0-9]*|glp-?1|glp1r|gipr|hla-[a-z0-9]+|vkorc1|slco1b1|tpmt|nudt15"
+                   r"|dpyd|ugt1a1|g6pd|brca[12]|mthfr)")
 # Everyday words that count only when the same message has I, me or my ("how did I sleep"), and never inside a
 # code or ops term (_TECH: "time.sleep", "health check").
-_WEAK = frozenset("health weight sleep sleeping slept carrier labs heart blood doctor symptom symptoms".split())
+_WEAK = frozenset("health weight sleep sleeping slept carrier labs heart blood doctor symptom symptoms pill pills"
+                  .split())
+_WEAK_PHRASES = re.compile(r"(?<![a-z0-9])(?:(?:stop|start|keep|quit|stopped|started|coming|come) (?:taking|off)"
+                           r"|side effects?|wean(?:ing)? off|taper(?:ing)? off)(?![a-z0-9])")
 _SELF = frozenset({"i", "me", "my", "mine", "myself"})
-_TECH = re.compile(r"\b[a-z_]+\.sleep\b|\bhealth[ -]?(?:checks?|endpoints?|probes?)\b|\bhealthz\b")
+_TECH = re.compile(r"\b[a-z_]+\.sleep\b|\bhealth[ -]?(?:checks?|endpoints?|probes?)\b|\bhealthz\b"
+                   r"|\b(?:brew|flutter|npm|expo|bun|pnpm|yarn|dart|react-native) doctor\b"
+                   r"|\bheart (?:icons?|emojis?|buttons?|shapes?|symbols?|reactions?)\b|\bpill[ -](?:buttons?|badges?|shapes?|tabs?)\b")
 _PHRASES = ("apple health", "heart rate", "blood pressure", "blood sugar", "blood test", "blood tests",
             "lab result", "lab results", "step count", "my steps", "daily steps", "steps per day", "steps a day",
             "how many steps")
@@ -58,32 +67,26 @@ oral orally tablet tablets capsule capsules extended release delayed injection i
 suspension topical cream ointment patch spray prefilled syringe with daily weekly once twice
 """.split())
 _TOKEN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-_RSID = re.compile(r"(?<![a-z0-9])rs\d{3,}(?![a-z0-9])")
+_RSID = re.compile(r"(?<![a-z0-9])rs\d{4,}(?![a-z0-9])")  # not RS232 or RS485
 _SCAN = 20_000  # characters of a long message to read: its start and its end
 _TTL = 60.0
-_SEEN_MAX = 512
 
 _lock = threading.Lock()
-_seen: OrderedDict[str, None] = OrderedDict()
 _state: dict = {"at": 0.0, "path": None, "has_data": False, "names": frozenset()}
 _pack: tuple[frozenset, re.Pattern] | None = None
 
 
 def pre_llm_call(ctx, **kwargs):
-    """``{"context": HINT}`` for the first health turn of a session, else None."""
+    """``{"context": HINT}`` for a health turn when the chat's history lacks the note, else None."""
     try:
         if _setting(ctx) is False:
             return None
         text = _text(kwargs.get("user_message"))
-        if not text.strip():
-            return None
-        session = str(kwargs.get("session_id") or "")
-        if _hinted(session, kwargs.get("conversation_history")):
+        if not text.strip() or _hinted(kwargs.get("conversation_history")):
             return None
         has_data, recorded = _vault_state()
         if not has_data or not _about_health(text, recorded):
             return None
-        _remember(session)
         return {"context": HINT}
     except Exception:
         return None
@@ -104,12 +107,9 @@ def _text(message) -> str:
     return text
 
 
-def _hinted(session: str, history) -> bool:
-    """Whether this session already has the note: remembered here, or in an earlier user message
-    (Hermes stores the note in the message's ``api_content``, so this survives a restart)."""
-    with _lock:
-        if session and session in _seen:
-            return True
+def _hinted(history) -> bool:
+    """Whether an earlier user message carries the note. Hermes stores it in that message's ``api_content``
+    and restores it with the chat, so this holds across restarts."""
     for message in history or ():
         if not isinstance(message, dict) or message.get("role") != "user":
             continue
@@ -127,15 +127,6 @@ def _flat(value) -> str:
         return " ".join(str(part.get("text") or "") for part in value
                         if isinstance(part, dict) and part.get("type") == "text")
     return ""
-
-
-def _remember(session: str) -> None:
-    if not session:
-        return
-    with _lock:
-        _seen[session] = None
-        while len(_seen) > _SEEN_MAX:
-            _seen.popitem(last=False)
 
 
 def _vault_state() -> tuple[bool, frozenset]:
@@ -161,15 +152,13 @@ def _vault_state() -> tuple[bool, frozenset]:
 
 
 def _name_words(name: str) -> set[str]:
-    """The drug words of a medication name: "metFORMIN 500 MG Oral Tablet [Glucophage]" gives metformin
-    and glucophage (the words before the strength, and a bracketed brand)."""
+    """The drug words of a medication name: its first word, and the first word of a bracketed brand.
+    "metFORMIN 500 MG Oral Tablet [Glucophage]" gives metformin and glucophage; "glucose blood VI test
+    strips (Accu-Chek Guide)" gives only glucose, so "test" never becomes a trigger."""
     lowered = name.lower()
-    words = set()
-    for brand in re.findall(r"\[([^\]]*)\]", lowered):
-        words.update(_TOKEN.findall(brand))
-    head = re.split(r"\d", re.sub(r"\[[^\]]*\]", " ", lowered), maxsplit=1)[0]
-    words.update(_TOKEN.findall(head))
-    return {w for w in words if len(w) >= 4 and w not in _FORM_WORDS}
+    firsts = [_TOKEN.findall(part)[:1] for part in re.findall(r"\[([^\]]*)\]", lowered)]
+    firsts.append(_TOKEN.findall(re.sub(r"\[[^\]]*\]", " ", lowered))[:1])
+    return {w for first in firsts for w in first if len(w) >= 4 and not w.isdigit() and w not in _FORM_WORDS}
 
 
 def _pack_names() -> tuple[frozenset, re.Pattern]:
@@ -195,16 +184,16 @@ def _about_health(text: str, recorded: frozenset) -> bool:
     single, phrases = _pack_names()
     if words & _STRONG or words & single or words & recorded:
         return True
-    if _RSID.search(lowered) or phrases.search(lowered):
+    if _GENE.search(lowered) or _RSID.search(lowered) or phrases.search(lowered):
         return True
-    everyday = set(_TOKEN.findall(_TECH.sub(" ", lowered)))
-    return bool(everyday & _WEAK and everyday & _SELF)
+    plain = _TECH.sub(" ", lowered)
+    everyday = set(_TOKEN.findall(plain))
+    return bool(everyday & _SELF and (everyday & _WEAK or _WEAK_PHRASES.search(plain)))
 
 
 def _reset() -> None:
-    """Tests: forget hinted sessions and the cached vault state."""
+    """Tests: forget the cached vault state and pack names."""
     global _pack
     with _lock:
-        _seen.clear()
         _state.update(at=0.0, path=None, has_data=False, names=frozenset())
     _pack = None
