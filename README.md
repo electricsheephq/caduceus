@@ -59,20 +59,22 @@ your own data.
 | FamilyTreeDNA Family Finder raw data, `.csv.gz` | Family Finder → download raw data (the build 37 file) |
 | Living DNA raw data, `.zip` or `.txt` | Download your raw data in your Living DNA settings |
 | Promethease report, `.zip` or `.html` | The report file you downloaded from Promethease |
-| Apple Health `export.zip` | iPhone Health app → your picture → Export All Health Data. With Health Records connected, it includes your clinical records |
+| Apple Health export: the `.zip` from an iPhone in any language, or the export XML inside it | iPhone Health app → your picture → Export All Health Data. With Health Records connected, the zip includes your clinical records |
 | FHIR R4 JSON (labs, conditions, medications) | A patient portal's FHIR or "download my record" export |
 
 Give your agent the file's path, and Caduceus copies the file into its vault and imports it.
 - The agent is told never to open these files itself.
 - Big imports keep running in the background, and re-importing a file does nothing.
 - An interrupted import resumes where it stopped.
+- A vault holds one person. A second DNA file is compared with the first on shared markers, and if it looks like a
+  different person, you are told, and answers carry a warning. Keep each person in their own Hermes profile.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `caduceus_search` | Full-text search across your annotations, research, labs, conditions, medications and notes, with cited snippets |
-| `caduceus_genome` | Your genotype at any marker, gene views, gene–drug checks (CPIC guidance plus GLP-1 research), derived calls (APOE, CYP2C19, CYP2C9 and others), top findings, and the rebuilt variant report |
+| `caduceus_search` | Full-text search across your annotations, research, labs, conditions, medications and notes, with cited snippets; lists everything of one kind, such as your medications |
+| `caduceus_genome` | Your genotype at any marker, gene views, gene–drug checks (CPIC guidance plus GLP-1 research), derived calls (APOE, CYP2C19, CYP2C9 and others), a gene–drug profile, top findings, and the rebuilt variant report |
 | `caduceus_trend` | Apple Health trends with units, coverage gaps and a calculation version; before and after a medication start; lab results over time; a daily signal check |
 | `caduceus_capture` | Imports and their progress, medications (recorded only after you confirm), notes, the research watch, settings, and the health brief |
 
