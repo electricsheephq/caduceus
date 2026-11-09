@@ -678,6 +678,10 @@ def _watch_run(ctx, args: dict) -> dict:
     with _WATCH_LOCK:
         pending, _WATCH_PENDING[:] = list(_WATCH_PENDING), []
     if pending:
+        if "error" in pending[-1]:
+            return {"status": "failed", "error": pending[-1]["error"],
+                    "note": "The last research watch run failed in the background after its call returned. "
+                            "Nothing new was saved from it. Run the watch again."}
         return {**_filter_watch(pending[-1]["result"], policy),
                 "note": "These are from a watch run that finished in the background."}
     run_watch = _need("research.watch", "run_watch")
@@ -695,17 +699,24 @@ def _watch_run(ctx, args: dict) -> dict:
     holder: dict = {"waiting": True}
 
     def job():
-        vault = open_vault()
         try:
-            watch = default_watch(vault, topics=topics, allow=allow)
+            vault = open_vault()
             try:
-                calls = get_calls(vault, _pack_rsids(load_pack()))
-            except Exception:  # no DNA imported yet: the watch still runs, without local matching
-                calls = None
-            result = run_watch(vault, watch, http=http_cls(), now=datetime.now(timezone.utc), budget=30, calls=calls,
-                               allow=allow)
-        finally:
-            vault.close()
+                watch = default_watch(vault, topics=topics, allow=allow)
+                try:
+                    calls = get_calls(vault, _pack_rsids(load_pack()))
+                except Exception:  # no DNA imported yet: the watch still runs, without local matching
+                    calls = None
+                result = run_watch(vault, watch, http=http_cls(), now=datetime.now(timezone.utc), budget=30, calls=calls,
+                                   allow=allow)
+            finally:
+                vault.close()
+        except Exception as exc:
+            with _WATCH_LOCK:
+                holder["error"] = type(exc).__name__
+                if not holder["waiting"]:
+                    _WATCH_PENDING.append(holder)
+            raise
         with _WATCH_LOCK:
             holder["result"] = result
             if not holder["waiting"]:
@@ -716,8 +727,11 @@ def _watch_run(ctx, args: dict) -> dict:
     with _WATCH_LOCK:
         holder["waiting"] = False
         finished = "result" in holder
+        error = holder.get("error")
     if finished:
         return _filter_watch(holder["result"], policy)
+    if error:
+        raise ToolError(f"research watch failed: {error}")
     if outcome["state"] == "error":
         raise ToolError(f"research watch failed: {outcome['error']}")
     return {"status": "running",

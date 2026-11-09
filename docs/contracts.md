@@ -175,6 +175,24 @@ class UrllibHttp: get_json(url, params) -> dict
 - **Matching** to the user's genotypes happens locally.
 - **Dedupe:** by PMID, DOI or ClinVar id.
 - **Digests:** the first run gives a top-3 seed digest; later runs give only new items.
+- **Pair-first seed:** allowed current drugs select public pack genes/rsids and all pack drug aliases. Pair genes
+  supplement the primary query. After primary/ClinVar work, each linked drug gets one relevance-ranked Europe PMC
+  page (25, five years, genetics terms), with genes/rsids, drug aliases and genetics terms each restricted to
+  `TITLE_ABS`. Empty gene/rsid parts are omitted; a drug with neither gets no pair query. Linked drugs are queried
+  by most recent medication start first, with alphabetical ties. At most two requests remaining skips the page
+  (reported in `skipped`). Seed LitVar
+  requests try pair rsids first, then the daily rotation of the rest; one optional Europe PMC `EXT_ID` page fetches
+  the 25 numerically largest unseen pair PMIDs. All requests share the budget; enrichment leaves two spare and
+  never advances the primary watermark. Skipped metadata pages report `europepmc-ext` and a PMID count;
+  failed metadata pages report errors under `europepmc-ext`. Later runs add no request kinds.
+  Titles are unescaped then stripped of inline formatting tags. Abstracts lose raw tags first, then are
+  unescaped and stripped of inline tags before truncation to 600 characters. Stored titles are not migrated.
+- **Order and explanation:** every digest item includes `why = {reason, drugs, genes, rsids}`, computed locally
+  without calls. Tiers are `gene_drug`, `variant`, `general`. The seed interleaves pair-query relevance ranks
+  across medications (rank within medication, medication index), using the minimum rank for duplicate papers,
+  then newest other gene–drug hits, newest variant hits and primary general relevance order, capped at three.
+  Later digests sort each tier newest first. All fetched items are stored as seen; seed/overlap/watermark and
+  delivery semantics are otherwise unchanged. Calls affect only local `matched.calls`, never requests or rank.
 
 ## Orchestrator glue (`caduceus/tools.py`, `caduceus/registration.py`, `caduceus/brief.py`)
 
