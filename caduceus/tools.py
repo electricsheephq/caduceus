@@ -29,13 +29,13 @@ TOOLS = (
         "description": (
             "Search the user's private Caduceus health vault on this machine: DNA annotations, research items, lab "
             "results, conditions, medications and journal notes. Returns cited snippets; fetch one record in full "
-            "with ref. " + NEVER_READ
+            'with ref. List recorded kinds with kinds=["medication"] and no query. ' + NEVER_READ
         ),
         "parameters": _obj({
-            "query": {"type": "string", "description": "Words to find, e.g. 'simvastatin' or 'GLP1R weight'."},
+            "query": {"type": "string", "description": "Words to find, e.g. 'simvastatin' or 'GLP1R weight'; omit to list kinds."},
             "kinds": {"type": "array", "items": {"type": "string", "enum": [
                 "annotation", "assertion", "research", "observation", "condition", "medication", "journal",
-                "finding", "pgx"]}, "description": "Only these record kinds."},
+                "finding", "pgx"]}, "description": "Only these record kinds; omit query to list them newest first."},
             "ref": {"type": "string", "description": "Fetch one record in full by the ref a search returned."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 25},
         }),
@@ -48,7 +48,9 @@ TOOLS = (
             "research, with each marker called, absent or not on the chip), derived (APOE, CYP2C19 and other "
             "combined calls), summary (what is imported, top findings), filter (findings by magnitude, repute or "
             "topic), report (rebuild the variant report as a local HTML file). Consumer chips miss rare variants "
-            "and can be wrong; results say so. " + LIMITS + " " + NEVER_READ
+            "and can be wrong; results say so. For medication questions, op=pgx gives the user's own gene–drug evidence. "
+            + LIMITS + " Never suggest starting, stopping or changing a medication or its dose; for any medication "
+            "decision, say to talk to the prescriber. " + NEVER_READ
         ),
         "parameters": _obj({
             "op": {"type": "string", "enum": ["lookup", "gene", "pgx", "derived", "summary", "filter", "report"]},
@@ -67,7 +69,11 @@ TOOLS = (
             "Deterministic numbers from the user's Apple Health samples and lab results. op=metrics (what exists), "
             "series (values bucketed by day, week or month), compare (before vs after a date or a medication's "
             "start), labs (a lab result over time, e.g. HbA1c), check (today's out-of-range signals). Every result "
-            "has units, source, coverage gaps and the calculation version; quote numbers exactly. " + LIMITS
+            "has units, source, coverage gaps and the calculation version; quote numbers exactly. "
+            "For a question about how a medication is working, also call caduceus_genome op=pgx for that drug. "
+            "Leave out before_days/after_days to use all data around the start. " + LIMITS
+            + " Never suggest starting, stopping or changing a medication or its dose; for any medication decision, "
+            "say to talk to the prescriber."
         ),
         "parameters": _obj({
             "op": {"type": "string", "enum": ["metrics", "series", "compare", "labs", "check"]},

@@ -15,6 +15,7 @@ duplicates.
 | `sources.update_progress(conn, run_id, dict)` | Call about every 10k–50k rows. |
 | `sources.finish_import(conn, run_id, *, counts, status, errors=())` | `status` is one of `succeeded`, `failed`, `cancelled`. |
 | `search.index_doc(conn, *, kind, ref, title, body, category, ts=None)` | Upsert into the search index. `kind` is in `search.KINDS`; `category` is a `policy.Category`. |
+| `search.browse(conn, *, policy, kinds, limit=8) -> dict` | Same hit shape as search, newest first, limited to visible records of the given kinds; `withheld` counts hidden records. |
 | `policy.Category`, `policy.Policy`, `policy.allowed(policy, category)`, `policy.categorize(genes=…, text=…, markers=…, default=…)` | Categorize every record you index or store. `markers` applies the fixed categories in `policy.MARKER_CATEGORY` (APOE and the BRCA founder variants), whatever the text says. |
 | `policy.visible(policy, category, *, kind=None)` | What the tools show: the item's own category **and** the base category of its kind (`observation` and `condition` → records, `medication` → medication, `research` → research). Hiding `medication` hides a contraceptive too. |
 | `policy.medication_category(text)` | The category of one of the user's own medications: sensitive when its text says so or when the drug is prescribed mainly for a sensitive condition (an SSRI, a contraceptive). Never used for gene–drug records, which stay drug-response items. |
@@ -197,3 +198,6 @@ class UrllibHttp: get_json(url, params) -> dict
 ## Orchestrator glue (`caduceus/tools.py`, `caduceus/registration.py`, `caduceus/brief.py`)
 
 The tools call the functions above and run imports through `core.jobs.submit`. They filter every result through the policy.
+Search distinguishes query matches from kind listings with `scope_note`; medication hits carry prescriber `guidance`.
+Trend `compare`/`series` add the metric's full stored `data_range` when present, without changing window `coverage`;
+`window_note` flags an earlier end. Compares carry `guidance`; drug pivots also suggest a local `op=pgx` call.
