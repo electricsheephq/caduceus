@@ -80,6 +80,29 @@ def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=Non
     return {"results": results, "withheld": withheld, "match": mode}
 
 
+def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8) -> dict:
+    """List recorded kinds newest first, filtering and counting hidden rows before limiting visible hits."""
+    if isinstance(kinds, str):
+        kinds = [kinds]
+    kinds = [k for k in (kinds or []) if k in KINDS]
+    limit = max(1, min(int(limit or 8), 25))
+    results, withheld = [], 0
+    if kinds:
+        rows = conn.execute(
+            "SELECT kind, ref, title, body, category, ts FROM search_doc "
+            f"WHERE kind IN ({','.join('?' * len(kinds))}) ORDER BY ts DESC, id DESC", kinds)
+        for row in rows:
+            if not visible(policy, row["category"], kind=row["kind"]):
+                withheld += 1
+                continue
+            if len(results) < limit:
+                results.append({
+                    "ref": f"{row['kind']}:{row['ref']}", "kind": row["kind"], "title": row["title"],
+                    "snippet": row["body"][:240], "category": row["category"], "date": row["ts"],
+                })
+    return {"results": results, "withheld": withheld, "match": "browse"}
+
+
 def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy) -> dict | None:
     """One indexed record in full, by the ``kind:ref`` a search returned. None when absent or withheld."""
     kind, _, key = str(ref or "").partition(":")

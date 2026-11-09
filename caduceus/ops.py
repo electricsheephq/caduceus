@@ -11,7 +11,7 @@ import json
 import re
 import sqlite3
 import threading
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from .core import jobs, search as search_index, sources
 from .core.contracts import SourceKind
@@ -30,6 +30,8 @@ _LOINC = re.compile(r"^\d{1,7}-\d$")
 _SENSITIVE_MARKERS = MARKER_CATEGORY  # APOE and the BRCA founder variants keep fixed categories
 CHIP_LIMITS = ("Consumer DNA chips test common variants; rare variants can be missed or miscalled. A clinical test "
                "confirms anything important.")
+GUIDANCE = ("Information with limits, not medical advice. Never suggest starting, stopping or changing a medication "
+            "or its dose; for any medication decision, say to talk to the prescriber.")
 
 
 # ---------------------------------------------------------------- settings, connections, helpers
@@ -170,13 +172,28 @@ def search_tool(ctx, args: dict) -> dict:
             record = search_index.fetch(store.vault, str(args["ref"]), policy=policy)
             if record is None:
                 raise ToolError("no record with that ref")
+            if record.get("kind") == "medication":
+                record["guidance"] = GUIDANCE
             return record
         query = str(args.get("query") or "").strip()
-        if not query:
+        listed = [k for k in kinds if k in search_index.KINDS]
+        if query:
+            found = search_index.search(store.vault, query, policy=policy, kinds=kinds, limit=limit)
+        elif listed:
+            found = search_index.browse(store.vault, policy=policy, kinds=listed, limit=limit)
+        elif kinds:  # an unknown kind must not read as "you have none"
+            raise ToolError("unknown kinds; use one of: " + ", ".join(search_index.KINDS))
+        else:
             raise ToolError("give a query, or a ref to fetch")
-        found = search_index.search(store.vault, query, policy=policy, kinds=kinds, limit=limit)
     out = {"query": query, "results": found["results"], "match": found.get("match")}
     out.update(_withheld(found["withheld"]))
+    if not query:
+        out["scope_note"] = f"This lists your recorded {', '.join(listed)}, newest first, up to {limit}."
+    elif found["results"]:
+        out["scope_note"] = ('These results match your query; they are not a complete list. To list every medication, '
+                             'call caduceus_search with kinds=["medication"] and no query.')
+    if any(item["kind"] == "medication" for item in found["results"]):
+        out["guidance"] = GUIDANCE
     if not found["results"]:
         out["note"] = "Nothing matched. Try fewer or different words, or import more data."
     return out
@@ -501,23 +518,48 @@ def trend_tool(ctx, args: dict) -> dict:
         metric = str(args.get("metric") or "").strip()
         if not metric:
             raise ToolError("give a metric, e.g. weight; op=metrics lists them")
+        drug = str(args.get("drug") or "").strip()
         if op == "series":
-            return _lane(_need("health.trends", "trend"), store.samples, metric,
-                         start=_date(args.get("start"), "start"), end=_date(args.get("end"), "end"),
-                         bucket=args.get("bucket") or "week")
-        before_days, after_days = _int(args, "before_days", 28, 1, 730), _int(args, "after_days", None, 1, 730)
-        pivot = _date(args.get("pivot"), "pivot")
-        if pivot is None:
-            if not args.get("drug"):
-                raise ToolError("give a pivot date or a drug whose start date is recorded")
-            pivot, hidden = _drug_start(store.vault, str(args["drug"]), policy)
-            if pivot is None:  # the drug's start is hidden: nothing about it, not even its date
-                return {"metric": metric, **_withheld(hidden)}
-        if after_days is None:
-            after_days = default_after_days(store.samples, metric, pivot)
-        result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
-                       before_days=before_days, after_days=after_days)
-        return {**result, "pivot": pivot.isoformat()}
+            end = _date(args.get("end"), "end")
+            result = _lane(_need("health.trends", "trend"), store.samples, metric,
+                           start=_date(args.get("start"), "start"), end=end,
+                           bucket=args.get("bucket") or "week")
+        else:
+            before_days, after_days = _int(args, "before_days", 28, 1, 730), _int(args, "after_days", None, 1, 730)
+            pivot = _date(args.get("pivot"), "pivot")
+            drug_pivot = pivot is None
+            if drug_pivot:
+                if not args.get("drug"):
+                    raise ToolError("give a pivot date or a drug whose start date is recorded")
+                pivot, hidden = _drug_start(store.vault, drug, policy)
+                if pivot is None:  # the drug's start is hidden: nothing about it, not even its date
+                    return {"metric": metric, **_withheld(hidden)}
+            explicit_after = after_days is not None
+            if not explicit_after:
+                after_days = default_after_days(store.samples, metric, pivot)
+            result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
+                           before_days=before_days, after_days=after_days)
+            result = {**result, "pivot": pivot.isoformat()}
+            end = pivot + timedelta(days=after_days - 1)
+            if drug_pivot:
+                result["next_step"] = (f"For gene–drug evidence about {drug}, "
+                                       f"call caduceus_genome op=pgx drug={drug}.")
+        if op == "compare" or drug:
+            result["guidance"] = GUIDANCE
+        first, last = store.samples.execute(
+            "SELECT min(day), max(day) FROM daily_rollup WHERE metric=?", (metric,)).fetchone()
+        if first is not None:
+            result["data_range"] = {"first_day": first, "last_day": last}
+            if end is not None and end.isoformat() < last:
+                if op == "compare":
+                    result["window_note"] = (
+                        f"This window ends on {end.isoformat()}; your data continues to {last}. "
+                        + ("Leave out after_days to cover the data after the start (up to 365 days)." if explicit_after
+                           else "A compare covers at most 365 days after the start by default; use op=series "
+                                "for the later data."))
+                else:
+                    result["window_note"] = f"This series ends on {end.isoformat()}; your data continues to {last}."
+        return result
 
 
 def default_after_days(samples, metric: str, pivot: date, today: date | None = None) -> int:
