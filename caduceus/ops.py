@@ -318,34 +318,52 @@ def genome_tool(ctx, args: dict) -> dict:
         raise ToolError("op must be one of " + ", ".join(_GENOME_OPS))
     policy = policy_for(ctx)
     with _Store() as store:
+        warning = {}
+        if op in ("lookup", "gene", "pgx", "derived", "summary"):
+            active = next((c for c in _need("genome.calls", "callsets")(store.vault) if c["complete"]), None)
+            if active and any(c.get("same_person") is False for c in json.loads(active["comparison_json"])):
+                file = store.vault.execute("SELECT original_name FROM source_artifact WHERE id=?",
+                                           (active["source_id"],)).fetchone()[0]
+                warning["warning"] = ("Your vault holds DNA files from more than one person. "
+                                      f"These results come from the newest file, {file}.")
         if op == "lookup":
-            return _lookup(store, policy, _strings(args, "rsids"))
+            return {**_lookup(store, policy, _strings(args, "rsids")), **warning}
         if op == "gene":
             gene = str(args.get("gene") or "").strip().upper()
             if not _GENE.match(gene):
                 raise ToolError("give a gene symbol such as GLP1R")
             if not allowed(policy, categorize(genes=[gene])):
-                return {"gene": gene, "results": [], **_withheld(1)}
+                return {"gene": gene, "results": [], **_withheld(1), **warning}
             rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), _int(args, "limit", 40, 1, 100))
             markers = sorted({r["marker"] for r in rows if r["marker"]})
+            if not rows:
+                # Which genes the pack covers is public, so check privacy only when it has markers.
+                markers = sorted({m["rsid"] for e in _pack().entries if e["gene"] == gene for m in e["markers"]})
+                if markers:
+                    if not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
+                        return {"gene": gene, "results": [], **_withheld(1), **warning}
+                    return {"gene": gene, **_lookup(store, policy, markers), **warning,
+                            "note": "From the built-in knowledge pack; your variant report has no rows for this gene."}
             if not markers:
-                return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report."}
-            return {"gene": gene, **_lookup(store, policy, markers)}
+                return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report.",
+                        **warning}
+            return {"gene": gene, **_lookup(store, policy, markers), **warning}
         if op == "pgx":
             drug = str(args.get("drug") or "").strip()
             if not drug:
                 raise ToolError("give a drug name")
             if not allowed(policy, Category.PGX):
-                return {"drug": drug, **_withheld(1)}
+                return {"drug": drug, **_withheld(1), **warning}
             pack, calls = _pack_calls(store.vault)
-            return _pgx(pack, drug, calls, policy)
+            return {**_pgx(pack, drug, calls, policy), **warning}
         if op == "derived":
             pack, calls = _pack_calls(store.vault)
             derived = _need("knowledge.pack", "derive")(pack, calls)
             shown = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
-            return {"derived": shown, "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(derived) - len(shown))}
+            return {"derived": shown, "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(derived) - len(shown)),
+                    **warning}
         if op == "summary":
-            return _genome_summary(store, policy)
+            return {**_genome_summary(store, policy), **warning}
         if op == "filter":
             return _filter(store, policy, args)
         try:
@@ -378,14 +396,31 @@ def _filter(store, policy, args) -> dict:
 def _genome_summary(store, policy) -> dict:
     vault = store.vault
     callsets = [dict(r) for r in vault.execute(
-        "SELECT c.id, c.vendor, c.chip_version, c.build, c.marker_count, s.original_name AS file, s.added_at "
+        "SELECT c.id, c.vendor, c.chip_version, c.build, c.marker_count, c.comparison_json, "
+        "s.original_name AS file, s.added_at "
         "FROM callset c JOIN source_artifact s ON s.id=c.source_id ORDER BY c.id DESC")]
+    for callset in callsets:
+        callset["comparisons"] = json.loads(callset.pop("comparison_json"))
     records = vault.execute("SELECT count(*) FROM annotation_snapshot WHERE kind IN ('snp','genoset')").fetchone()[0]
     top = _snapshot_rows(vault, "magnitude >= 3", (), 40)
     allowed_top = [r for r in top if allowed(policy, r["category"])]
     out = {"callsets": callsets, "variant_report_records": records,
            "top_findings": [_snapshot_dict(r) for r in allowed_top[:12]], "privacy_level": policy.level,
            "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(top) - len(allowed_top))}
+    if any(c["complete"] for c in _need("genome.calls", "callsets")(vault)):
+        if not allowed(policy, Category.PGX):
+            out.update(_withheld(out.get("withheld", 0) + 1))
+        else:
+            pack, calls = _pack_calls(vault)
+            shown = [e for e in pack.entries if allowed(policy, categorize(genes=[e["gene"]], default=Category.PGX))]
+            filtered = dataclasses.replace(pack, cpic=[e for e in pack.cpic if e in shown],
+                                           glp1=[e for e in pack.glp1 if e in shown])
+            result = _need("knowledge.pack", "profile")(filtered, calls)
+            derived = result["derived"]
+            result["derived"] = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
+            out["gene_drug_profile"] = result
+            out.update(_withheld(out.get("withheld", 0) + len(pack.entries) - len(shown)
+                                 + len(derived) - len(result["derived"])))
     if not callsets and not records:
         out["note"] = "Nothing imported yet. Use caduceus_capture op=import with the file's absolute path."
     return out

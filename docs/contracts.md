@@ -30,6 +30,7 @@ PARSER = "dtc"; PARSER_VERSION = "1"
 def import_dtc(conn, src, *, cancel=None) -> ImportResult
 def get_calls(conn, markers, *, callset_id=None) -> dict[str, Call]
 def callsets(conn) -> list[dict]
+def compare_callsets(conn, callset_id, other_id) -> dict
 ```
 
 **`import_dtc`:**
@@ -39,6 +40,15 @@ def callsets(conn) -> list[dict]
   - `markers`, `rs_ids`, `internal_ids`;
   - `no_calls`, `haploid`, `indel_codes`;
   - `skipped_lines`, `chromosomes`.
+- **Comparisons:** a successful nonempty import compares against every other complete callset and stores the list
+  in `callset.comparison_json` (default `[]`, added on open for older vaults). Warnings say same person, different
+  person, or too few shared markers; skipped re-imports do nothing. Warnings never include genotypes.
+
+**`compare_callsets`:** SQL compares only shared chromosome 1–22 markers with two ACGT alleles in both callsets,
+ignoring allele order. Returns `other_callset_id`, `other_file`, `compared`, `matching`, `concordance` (rounded to
+three places, or `None`), and `same_person` (`None` below 1,000 comparisons, otherwise whether the match rate is
+at least 95%). Tools warn when the active complete callset has a different-person comparison; summary includes
+each callset's stored comparisons. The active callset remains the newest complete one.
 
 **`get_calls`:**
 - **Callset:** uses the newest *complete* callset when `callset_id` is None: its source has a succeeded `dtc` import and at least one row. Rows from a running, cancelled or failed import stay stored, so the next run can resume them, but they are never looked up. When only incomplete callsets exist, `NoCallset` says the import has not finished. An explicit `callset_id` is used as given (diagnostics). `callsets()` rows carry `complete` (0 or 1).
@@ -161,6 +171,7 @@ PACK_VERSION = "2026.11.0"
 def load_pack() -> Pack
 def normalize_drug(name) -> str | None
 def pgx_check(pack, drug, calls) -> dict
+def profile(pack, calls) -> dict
 def derive(pack, calls) -> list[dict]
 def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> dict
 def default_watch(conn, *, topics=(), allow=None) -> dict
@@ -172,6 +183,15 @@ class UrllibHttp: get_json(url, params) -> dict
 - **Each entry carries** the evidence level (`CPIC A`, `CPIC B`, `research`, or `CPIC retired` for withdrawn guidance), sources (title, journal, year, PMID, DOI), limits, `chip_reliability`, `category` and `effect_counts`. Markers a chip cannot type (HLA, CYP2D6) are `unreliable` entries that always come back `not_assessed`.
 
 **`derive`:** APOE, CYP2C19, CYP2C9, SLCO1B1, VKORC1 and others, each with a confidence of `called`, `ambiguous` or `not_assessed`.
+
+**`profile`:** shares the per-entry status calculation with `pgx_check`, whose output is unchanged. Returns
+`flagged` (up to 20 sorted genes, each with up to 15 sorted generic drugs and its evidence labels), `derived`,
+`counts` over entries (`flag`, `no_flag`, `not_assessed`), and an informational `note`. Summary supplies a pack
+filtered by `allowed(policy, categorize(genes=[gene], default=Category.PGX))` before aggregation, filters each
+derived item's own category, and counts withheld items without naming them. If PGX is hidden, the whole profile
+is omitted and counted. Every complete DNA callset supports a profile even without a variant report; existing
+`top_findings` are unchanged. With no variant-report rows for a gene, the gene tool looks up that gene's pack
+markers with the existing privacy checks and identifies the pack fallback in its note.
 
 **`run_watch`:**
 - **Query terms** come from the pack's watch list, the user's medications and their topics, never from genotypes. With `allow` (a category predicate), medications the privacy settings hide are left out, so they never become search terms sent to the research services.

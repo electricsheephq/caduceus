@@ -21,6 +21,27 @@ def callsets(conn) -> list[dict]:
         f"SELECT c.*, ({_COMPLETE}) AS complete FROM callset c ORDER BY c.created_at DESC, c.id DESC")]
 
 
+def compare_callsets(conn, callset_id, other_id) -> dict:
+    """Compare shared diploid autosomal calls locally, without returning any genotype."""
+    other = conn.execute(
+        "SELECT s.original_name FROM callset c JOIN source_artifact s ON s.id=c.source_id WHERE c.id=?",
+        (other_id,),
+    ).fetchone()
+    autosomes = ",".join(f"'{n}'" for n in range(1, 23))
+    compared, matching = conn.execute(
+        "SELECT count(*), coalesce(sum(a.genotype=b.genotype OR "
+        "a.genotype=substr(b.genotype,2,1)||substr(b.genotype,1,1)),0) "
+        "FROM genotype_call a JOIN genotype_call b ON b.callset_id=? AND b.marker=a.marker "
+        f"WHERE a.callset_id=? AND a.chrom IN ({autosomes}) AND b.chrom IN ({autosomes}) "
+        "AND a.genotype GLOB '[ACGT][ACGT]' AND b.genotype GLOB '[ACGT][ACGT]'",
+        (other_id, callset_id),
+    ).fetchone()
+    ratio = matching / compared if compared else None
+    return {"other_callset_id": other_id, "other_file": other[0], "compared": compared,
+            "matching": matching, "concordance": round(ratio, 3) if ratio is not None else None,
+            "same_person": None if compared < 1000 else ratio >= 0.95}
+
+
 def get_calls(conn, markers, *, callset_id=None) -> dict[str, Call]:
     if callset_id is None:
         selected = conn.execute(
