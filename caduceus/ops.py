@@ -537,7 +537,8 @@ def _import(args: dict) -> dict:
         raise ToolError(str(exc)) from exc
     kind = sources.sniff_kind(path)
     if kind not in _IMPORTERS:
-        raise ToolError("not a recognised file: expected 23andMe or AncestryDNA raw data, a Promethease report, "
+        raise ToolError("not a recognised file: expected 23andMe, AncestryDNA, MyHeritage, FamilyTreeDNA or Living DNA raw data, "
+                        "a Promethease report, "
                         "an Apple Health export.zip or FHIR JSON")
     module, name, dbs = _IMPORTERS[kind]
     importer = _need(module, name)
@@ -784,7 +785,7 @@ def capture_tool(ctx, args: dict) -> dict:
 # ---------------------------------------------------------------- /caduceus
 
 _HELP = ("/caduceus [status] | privacy [open|standard] | hide <category> | show <category> | unlock <category> | "
-         "lock <category> | imports | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
+         "lock <category> | imports | demo | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
          "Ask your agent to import a file by its path, or to answer questions from your DNA, Apple Health and records.")
 
 
@@ -814,9 +815,72 @@ def _change_category(ctx, sub: str, name: str) -> str:
     return f"{cat.value} is now {state} (privacy level {policy.level})."
 
 
+DEMO_MARKERS = 600_000
+_DEMO_LOCK = threading.Lock()
+
+
+def _demo() -> str:
+    from .demo.persona import write_persona
+
+    names = {"persona-23andme-v5.zip", "persona-variant-report.zip", "persona-apple-health.zip"}
+    separate = ("To try the demo, create a separate Hermes profile (`hermes profile create caduceus-try`), "
+                "install Caduceus in it, and run /caduceus demo there.")
+    with _DEMO_LOCK:
+        with _Store() as store:
+            rows = store.vault.execute("SELECT id, original_name FROM source_artifact ORDER BY id").fetchall()
+            finishing = bool(rows)
+            if rows:
+                if not all(r['original_name'] in names for r in rows):
+                    noun = "file" if len(rows) == 1 else "files"
+                    return (f"Your vault already holds {len(rows)} imported {noun}, "
+                            f"so the demo persona would mix with your data. {separate}")
+                artifacts = [sources.get_source(store.vault, r['id']) for r in rows]
+                complete = {r['original_name'] for r in rows} == names and all(
+                    store.vault.execute("SELECT 1 FROM import_run WHERE source_id=? AND status='succeeded'",
+                                        (src.id,)).fetchone() for src in artifacts)
+                if complete:
+                    return 'The demo persona is already in this vault. Ask your agent: “Why isn\'t my Ozempic working?”'
+            else:
+                medications = store.vault.execute("SELECT count(*) FROM medication_event").fetchone()[0]
+                notes = store.vault.execute("SELECT count(*) FROM journal").fetchone()[0]
+                if medications or notes:
+                    med_word = "medication" if medications == 1 else "medications"
+                    note_word = "note" if notes == 1 else "notes"
+                    return (f"Your vault already holds records you added ({medications} {med_word}, {notes} {note_word}), "
+                            f"so the demo persona would mix with your data. {separate}")
+                files = write_persona(data_dir() / "demo-files", markers=DEMO_MARKERS)
+                artifacts = [sources.store_source(store.vault, path, sources.sniff_kind(path))[0]
+                             for path in files.values()]
+
+    def run():
+        with _Store() as store:
+            results = []
+            for src in artifacts:
+                module, name, dbs = _IMPORTERS[src.kind]
+                importer = _need(module, name)
+                result = (importer(store.samples, store.vault, src) if dbs == "both"
+                          else importer(store.vault, src))
+                results.append(result.as_dict())
+            return results
+
+    outcome = jobs.submit("demo:" + artifacts[0].sha256, run, wait_s=0)
+    if outcome['state'] == 'busy':
+        return "The demo persona is still importing. Check with /caduceus imports."
+    if finishing:
+        return ('Finishing the demo persona\'s import in the background. Check with /caduceus imports, '
+                'then ask your agent: “Why isn\'t my Ozempic working?”')
+    return ('Loading the demo persona (an invented person, not real data) in the background. '
+            'It takes about a minute. Check with /caduceus imports. Then ask your agent: '
+            '“Why isn\'t my Ozempic working?” or “Would Mounjaro be different for me?”')
+
+
 def command(ctx, raw: str) -> str:
     parts = raw.strip().split()
     sub = parts[0].lower() if parts else "status"
+    if sub == "demo":
+        if len(parts) != 1:
+            return "Usage: /caduceus demo"
+        return _demo()
     if sub == "privacy":
         if len(parts) > 2:
             return "Usage: /caduceus privacy [open|standard]"

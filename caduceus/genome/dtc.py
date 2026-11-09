@@ -1,6 +1,7 @@
 """Stream consumer DNA exports into the local vault; never read the original path."""
 from __future__ import annotations
 
+import gzip
 import re
 import zipfile
 from contextlib import contextmanager
@@ -20,6 +21,7 @@ _GENOTYPE = re.compile(r"(?:[ACGT]{1,2}|[DI]{1,2}|--)\Z")
 _BUILD = re.compile(r"(?:build\s*|grch\s*|assembly\s*(?:build\s*)?)(37|38)\b", re.I)
 _CHROMOSOMES = frozenset(map(str, range(1, 23))) | {"X", "Y", "MT"}
 _ANCESTRY_CHROMS = {"23": "X", "24": "Y", "25": "XY", "26": "MT"}
+_CSV_VENDORS = {"MyHeritage", "FamilyTreeDNA", "MyHeritage or FamilyTreeDNA (CSV)"}
 _INSERT = "INSERT OR IGNORE INTO genotype_call(callset_id, marker, chrom, pos, genotype) VALUES (?,?,?,?,?)"
 
 
@@ -51,7 +53,13 @@ def _open_text(path, *, max_inflate=None, max_line=None):
         raise DtcError("DTC byte limit must be nonnegative")
     if not zipfile.is_zipfile(path):
         with open(path, "rb") as raw:
-            yield _lines(raw, max_inflate, max_line), path.name
+            magic = raw.read(2)
+            raw.seek(0)
+            if magic == b"\x1f\x8b":
+                with gzip.GzipFile(fileobj=raw) as inflated:
+                    yield _lines(inflated, max_inflate, max_line), path.name
+            else:
+                yield _lines(raw, max_inflate, max_line), path.name
         return
     with zipfile.ZipFile(path) as archive:
         members = archive.infolist()
@@ -59,7 +67,7 @@ def _open_text(path, *, max_inflate=None, max_line=None):
             name = member.filename.replace("\\", "/")
             if name.startswith("/") or ".." in PurePosixPath(name).parts or ":" in name:
                 raise DtcError("Unsafe DTC archive member path")
-        texts = [m for m in members if not m.is_dir() and m.filename.lower().endswith(".txt")]
+        texts = [m for m in members if not m.is_dir() and m.filename.lower().endswith((".txt", ".csv", ".tsv"))]
         if not texts:
             raise DtcError("DTC archive has no text member")
         member = max(texts, key=lambda m: m.file_size)
@@ -69,16 +77,36 @@ def _open_text(path, *, max_inflate=None, max_line=None):
             yield _lines(raw, max_inflate, max_line), member.filename
 
 
-def _header(lines):
+def _header(lines, *names):
     build = "unknown"
+    hints = " ".join(names).lower()
+    myheritage = "myheritage" in hints
+    familytree = "familytreedna" in hints or "ftdna" in hints or "_autosomal_o37_results_" in hints
+    living = False
     for number, line in lines:
         text = line.strip()
+        if text.startswith("#"):
+            comment = text.lower()
+            myheritage |= "myheritage" in comment
+            familytree |= "familytreedna" in comment or "ftdna" in comment
+            living |= "living dna" in comment
         match = _BUILD.search(text) if text.startswith("#") else None
         if match:
             build = match[1]
+        csv_fields = [f.strip().strip('"').strip().lower() for f in text.split(",")]
+        if csv_fields == ["rsid", "chromosome", "position", "result"]:
+            if myheritage:
+                vendor = "MyHeritage"
+            elif familytree:
+                vendor = "FamilyTreeDNA"
+            else:
+                vendor = "MyHeritage or FamilyTreeDNA (CSV)"
+            if vendor == "FamilyTreeDNA" and build == "unknown" and any("o37" in n.lower() for n in names):
+                build = "37"
+            return vendor, build
         fields = text.lstrip("# ").lower().split("\t")
         if fields == ["rsid", "chromosome", "position", "genotype"]:
-            return "23andMe", build
+            return "Living DNA" if living else "23andMe", build
         if fields == ["rsid", "chromosome", "position", "allele1", "allele2"]:
             return "AncestryDNA", build
         if text and not text.startswith("#"):
@@ -87,7 +115,8 @@ def _header(lines):
 
 
 def _parse(line, vendor):
-    fields = line.strip().split("\t")
+    csv = vendor in _CSV_VENDORS
+    fields = ([f.strip().strip('"').strip() for f in line.split(",")] if csv else line.strip().split("\t"))
     if len(fields) != (5 if vendor == "AncestryDNA" else 4):
         return None
     marker, chrom, position = fields[:3]
@@ -107,7 +136,7 @@ def _parse(line, vendor):
         valid_chroms = _CHROMOSOMES | {"XY"}
     else:
         genotype = fields[3].upper()
-        valid_chroms = _CHROMOSOMES
+        valid_chroms = _CHROMOSOMES | {"XY"} if csv else _CHROMOSOMES
     if chrom not in valid_chroms or not _GENOTYPE.fullmatch(genotype):
         return None
     return marker, chrom, pos, genotype
@@ -163,7 +192,7 @@ def import_dtc(conn, src, *, cancel=None) -> ImportResult:
         else:
             with _open_text(sources.source_file(conn, src)) as (text, member_name):
                 lines = enumerate(text, 1)
-                vendor, build = _header(lines)
+                vendor, build = _header(lines, src.original_name, member_name)
                 if build == "unknown":
                     result.warnings.append("Reference build is unknown.")
                 elif build == "38":
@@ -178,6 +207,8 @@ def import_dtc(conn, src, *, cancel=None) -> ImportResult:
                     )
                 callset_id = conn.execute("SELECT id FROM callset WHERE source_id=?", (src.id,)).fetchone()[0]
                 counts.update(_stored_counts(conn, callset_id))
+                if vendor in _CSV_VENDORS or vendor == "Living DNA":
+                    counts["vendor"] = vendor
                 batch = []
                 for number, line in lines:
                     if cancel is not None and cancel.is_set() and not batch:
