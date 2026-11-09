@@ -2,6 +2,27 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.3 — 2026-11-10
+
+### Added
+- **A reminder for every model, so smaller ones answer from your vault.** Some smaller models answered "Why isn't my Ozempic working?" from general knowledge, without calling any Caduceus tool, so the guidance in the tool results never reached them. Now the first health, medication or DNA question in each chat carries one short fixed note for the model. It says:
+  - answer from the `caduceus_*` tools and cite them;
+  - never suggest starting, stopping, switching or changing a medication, its form or its dose, and say to talk to the prescriber.
+
+  The note:
+  - fires only on health, medication or DNA wording: drug names from the knowledge pack and from your recorded medications, words like genotype or HbA1c, and everyday words like sleep or weight only in a message with "I", "me" or "my";
+  - needs data in your vault;
+  - holds none of your data, and never blocks a message.
+
+  The new `vault_hint` setting (on by default) turns it off.
+
+### Docs
+- **The README opens with what Caduceus does for you, then gets you to a first result.**
+  - It installs with `hermes plugins install electricsheephq/caduceus --enable`.
+  - A "Try it" walkthrough runs the demo and shows the cited answer you get.
+- **New README sections:** a comparison with stock Hermes, the settings, where it works, troubleshooting, and how to report a bug.
+- **CONTRIBUTING.md** is new.
+
 ## 0.1.2 — 2026-11-09
 
 ### Added

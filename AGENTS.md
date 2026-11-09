@@ -50,7 +50,7 @@ python -m pytest
 - **Privacy:** the tools must filter what they show through `core/policy.allowed`. Never send genotypes over the network.
 - **Health statements are information with limits, never recommendations.** Don't overstate small genetic effects.
 - **Tests:** they never use the network or a real `HERMES_HOME`. Real-file checks are marked `private` and run only locally.
-- **Agents:** don't bump versions, tag, or edit the CHANGELOG release headings.
+- **Agents:** in a change, don't bump versions, tag, or edit the CHANGELOG release headings. The maintainer's release step does that.
 
 ## Security
 

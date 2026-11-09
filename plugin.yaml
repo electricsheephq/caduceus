@@ -1,5 +1,5 @@
 name: caduceus
-version: "0.1.2"
+version: "0.1.3"
 description: >-
   Caduceus: Personalized Health & DNA AI. A private, searchable memory of your DNA raw data,
   your Promethease report, Apple Health and health records, kept in SQLite on your own machine,
@@ -7,7 +7,7 @@ description: >-
   about your genes. Information with limits, not medical advice.
   Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
   whole; tool results (slices of your data) enter the conversation, so the model provider you
-  chose sees them; the research watch (on by default, runs when you or the agent ask for it or on a schedule you
+  chose sees them; a hook adds one fixed note, holding none of your data, to the first health, medication or DNA question of each chat when the vault has data (off with the `vault_hint` setting); the research watch (on by default, runs when you or the agent ask for it or on a schedule you
   create, off with the `research_watch` setting) sends gene and topic terms, the names of medications you recorded,
   and public marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed
   like any message;
@@ -43,9 +43,15 @@ config_schema:
     default: true
     label: "Research watch"
     description: "Let research-watch runs query Europe PMC and NCBI with gene, drug and topic terms. Genotypes are never sent."
+  vault_hint:
+    type: bool
+    default: true
+    label: "Vault hint"
+    description: "Add a short fixed note to the first health, medication or DNA question in each chat, telling the model to answer from your vault and to leave medication decisions to your prescriber. It holds none of your data."
   research_topics:
     type: list
     default: []
     label: "Extra research topics"
     description: "Topics to watch besides your genes and medications, for example 'GLP-1 receptor agonist response'."
 provides_tools: [caduceus_search, caduceus_genome, caduceus_trend, caduceus_capture]
+provides_hooks: [pre_llm_call]
