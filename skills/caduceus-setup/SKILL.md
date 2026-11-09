@@ -27,9 +27,16 @@ Ask which of these they have. They don't need all of them:
 |---|---|
 | 23andMe raw data (`.zip` or `.txt`) | Their 23andMe account settings: request a raw data download. |
 | AncestryDNA raw data (`.zip`) | Their AncestryDNA settings: download DNA data. |
+| MyHeritage raw data (`.zip` or `.csv`) | MyHeritage DNA settings: download raw DNA data. |
+| FamilyTreeDNA Family Finder raw data (`.csv.gz`) | FamilyTreeDNA → Family Finder → download raw data (the build 37 file). |
+| Living DNA raw data (`.zip` or `.txt`) | Living DNA settings: download raw data. |
 | Promethease report (`.zip` or `.html`) | The report file they downloaded from Promethease. |
 | Apple Health export (`export.zip`) | iPhone Health app → their picture → Export All Health Data, then AirDrop or save it to this machine. If Health Records is connected, the export includes their clinical records. |
 | Health records as FHIR JSON | Patient portals that offer a FHIR or "download my record" export. |
+
+**No files yet?** They can try Caduceus with an invented demo person: they type `/caduceus demo`, wait about a minute,
+then ask "Why isn't my Ozempic working?". The demo only loads into an empty vault, so it never mixes with their own
+data. Say it is not a real person.
 
 For each file:
 1. **Get its absolute path on this machine.**
@@ -66,7 +73,7 @@ The user changes these themselves; you cannot. They type:
 ## 4. Research watch and daily check
 
 Offer, and explain what each costs:
-- **Research watch:** `/blueprint caduceus:research-watch` sends a digest of new studies and ClinVar changes about their genes and medications (weekly by default). The first run shows the top 3 recent items. After that it reports only new ones, and stays silent when there is nothing new.
+- **Research watch:** `/blueprint caduceus:research-watch` sends a digest of new studies and ClinVar changes about their genes and medications (weekly by default). The first run shows 3 studies, led by any on their own gene–drug pairs (for example GLP1R and semaglutide). After that it reports only new ones, and stays silent when there is nothing new.
 - **Topics:** to add topics such as "APOE" or "GLP-1 receptor agonists", they set `research_topics` in the Caduceus settings, or you can pass `topics` to a one-off `op=watch_run`.
 - **Daily check:** `/blueprint caduceus:daily-check` checks their Apple Health trends once a day and messages them only when something is outside its threshold. It costs one model call a day.
 

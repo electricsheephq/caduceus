@@ -3,7 +3,7 @@
 ![Caduceus: Personalized Health & DNA AI](docs/media/banner.jpg)
 
 **Your Hermes agent's private health memory.** Caduceus brings these into one SQLite vault on your own machine:
-- your 23andMe or AncestryDNA raw data;
+- your 23andMe, AncestryDNA, MyHeritage, FamilyTreeDNA or Living DNA raw data;
 - your Promethease report;
 - your Apple Health export;
 - your US health records.
@@ -14,7 +14,7 @@ newest research. Answers are cited, with honest limits.
 - **One answer from all your data:** your genotype, your weight curve, your lab results and published research, each cited.
 - **Your vault stays on your machine:** search, imports and reports run locally. The agent reads only the slices a question needs.
 - **Rebuilds your variant report offline:** your Promethease report becomes a self-contained page in Caduceus' own design. It also writes a one-page health brief with charts to bring to your doctor.
-- **Keeps watching new research about your genes and medications:** a digest arrives only when something new appears.
+- **Keeps watching new research about your genes and medications:** studies on your own gene–drug pairs come first, and a digest arrives only when something new appears.
 
 > Information with limits, not medical advice. Caduceus never tells you to start, stop or change a medication.
 
@@ -39,12 +39,22 @@ Once it is in the plugin catalog, `hermes plugins install caduceus` works too. R
 3. choosing a privacy level;
 4. turning on the research watch.
 
+## Try it without your own data
+
+Type `/caduceus demo`. Caduceus writes three files for an invented person: a DNA raw-data file, a variant report and an
+Apple Health export with health records. It imports them in about a minute. Then ask your agent *"Why isn't my Ozempic
+working?"* or *"Would Mounjaro be different for me?"*. The demo loads only into an empty vault, so it never mixes with
+your own data.
+
 ## What it reads
 
 | File | How to get it |
 |---|---|
 | 23andMe raw data (v3, v4, v5), `.zip` or `.txt` | Request your raw data download in your 23andMe settings |
 | AncestryDNA raw data, `.zip` | Download your DNA data in your AncestryDNA settings |
+| MyHeritage raw data, `.zip` or `.csv` | Download your raw DNA data in your MyHeritage DNA settings |
+| FamilyTreeDNA Family Finder raw data, `.csv.gz` | Family Finder → download raw data (the build 37 file) |
+| Living DNA raw data, `.zip` or `.txt` | Download your raw data in your Living DNA settings |
 | Promethease report, `.zip` or `.html` | The report file you downloaded from Promethease |
 | Apple Health `export.zip` | iPhone Health app → your picture → Export All Health Data. With Health Records connected, it includes your clinical records |
 | FHIR R4 JSON (labs, conditions, medications) | A patient portal's FHIR or "download my record" export |
@@ -95,9 +105,9 @@ Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is 
 
 - **`/blueprint caduceus:research-watch`:**
   - **What it does:** a digest of new studies (Europe PMC, LitVar2) and ClinVar changes about your genes, medications and chosen topics, weekly by default.
-  - **First run:** shows the top 3 recent items.
-  - **After that:** only new ones, and nothing when there is nothing new.
-  - **What it sends:** gene, drug and topic words only.
+  - **First run:** 3 studies to start with. Studies on your own gene–drug pairs come first (for example GLP1R and semaglutide, from the last five years), then papers that mention your markers, then general results. Each item says why it was picked.
+  - **After that:** only new ones, in the same order, and nothing when there is nothing new.
+  - **What it sends:** gene, drug and topic words, marker IDs from the built-in knowledge pack, and article IDs. Which terms it sends depends only on your medications and topics, never on your genotypes.
 - **`/blueprint caduceus:daily-check`:** once a day, checks your Apple Health trends (resting heart rate, sleep, weight, steps) and messages you only when something is outside its threshold. It costs one model call a day.
 
 ## Accuracy and limits

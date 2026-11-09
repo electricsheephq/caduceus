@@ -2,6 +2,22 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.1 — UNRELEASED
+
+### Added
+- **`/caduceus demo`:** loads an invented demo person into an empty vault, so you can try Caduceus without your own data. It refuses when the vault already holds your files, so the two never mix.
+- **More DNA raw data:** MyHeritage and FamilyTreeDNA files (`.csv`, `.csv.gz`, or zipped). Living DNA files are labelled as Living DNA.
+
+### Changed
+- **The research watch puts your own gene–drug pairs first** (#2).
+  - The first digest runs one query per current medication (its knowledge-pack genes and markers, with genetic terms, over five years). Papers that mention your markers come next (LitVar2), then general results.
+  - Later digests use the same order, and every item says why it was picked.
+  - The search terms still depend only on your medications, your topics and the public knowledge pack, never on your genotypes.
+- **Doses:** answers mention a dose only as recorded, and never compare it with other doses.
+
+### Fixed
+- **A research watch run that fails after its call returned** is reported once, to the next run, instead of being lost (#1).
+
 ## 0.1.0 — 2026-11-08
 
 ### Added
