@@ -216,3 +216,83 @@ def test_byte_cap_is_read_when_called(vault, tmp_path, monkeypatch):
     monkeypatch.setattr(dtc, "MAX_INFLATE", 200)
     result = dtc.import_dtc(vault, _source(vault, path))
     assert result.status == "failed" and "byte limit exceeded" in result.warnings[0]
+
+
+def _csv_fixture(path, *, comments="", member=None, quoted=True):
+    import gzip
+
+    rows = ["RSID,CHROMOSOME,POSITION,RESULT", "rs1,1,1001,AA", "rs2,XY,1002,--",
+            "rs3,MT,1003,A", "i4,X,1004,DI", "rs5,Y,1005,DD", "rs6,22,1006,I"]
+    if quoted:
+        rows = [",".join(f' "{field}" ' for field in row.split(",")) for row in rows]
+    rows += ["bad", "rs7,99,1007,AA", "rs8,1,-1,AA", "bad-id,1,1009,AA",
+             "rs10,1,1010,AZ", "rs11,1,1011,AAA", "rs12,1,1012,AA,extra",
+             "rs13,1,9223372036854775808,AA", "rs14,1,0,AA"]
+    raw = (comments + "\r\n".join(rows) + "\r\n").encode()
+    if member:
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("notes.txt", "synthetic notes")
+            archive.writestr(member, raw)
+    elif path.suffix == ".gz":
+        path.write_bytes(gzip.compress(raw))
+    else:
+        path.write_bytes(raw)
+    return path
+
+
+@pytest.mark.parametrize("filename,comments,member,vendor,build", [
+    ("data.zip", "# MyHeritage synthetic; build 37; forward (+) strand\r\n", "data.csv", "MyHeritage", "37"),
+    ("FTDNA_Autosomal_o37_Results_demo.csv.gz", "", None, "FamilyTreeDNA", "37"),
+    ("data.zip", "", "demo_Autosomal_o37_Results_test.csv", "FamilyTreeDNA", "37"),
+    ("FamilyTreeDNA.csv.gz", "", None, "FamilyTreeDNA", "unknown"),
+    ("data.csv", "# FamilyTreeDNA synthetic; build 37\r\n", None, "FamilyTreeDNA", "37"),
+    ("myheritage.csv", "# build 37\r\n", None, "MyHeritage", "37"),
+    ("data.csv", "", None, "MyHeritage or FamilyTreeDNA (CSV)", "unknown"),
+])
+@pytest.mark.parametrize("quoted", [False, True])
+def test_csv_formats(vault, tmp_path, filename, comments, member, vendor, build, quoted):
+    path = _csv_fixture(tmp_path / filename, comments=comments, member=member, quoted=quoted)
+    assert sources.sniff_kind(path) == "dtc"
+    src = _source(vault, path)
+    result = dtc.import_dtc(vault, src)
+    assert result.status == "succeeded", result.warnings
+    assert result.as_dict()["counts"]["vendor"] == vendor
+    assert result.counts["markers"] == 6 and result.counts["skipped_lines"] == 9
+    assert (result.counts["no_calls"], result.counts["haploid"], result.counts["indel_codes"]) == (1, 2, 3)
+    assert vault.execute("SELECT vendor, build FROM callset").fetchone()[:] == (vendor, build)
+    assert ("Reference build is unknown." in result.warnings) == (build == "unknown")
+    assert dtc.import_dtc(vault, src).status == "skipped"
+    assert vault.execute("SELECT count(*) FROM import_run").fetchone()[0] == 1
+
+
+def test_living_dna_vendor(vault, tmp_path):
+    path = tmp_path / "living.tsv"
+    path.write_text("# Living DNA synthetic; build 37\n# rsid\tchromosome\tposition\tgenotype\nrs1\t1\t1001\tAG\n")
+    assert sources.sniff_kind(path) == "dtc"
+    assert dtc.import_dtc(vault, _source(vault, path)).status == "succeeded"
+    assert vault.execute("SELECT vendor, build FROM callset").fetchone()[:] == ("Living DNA", "37")
+
+
+def test_gzip_inflate_and_line_limits(vault, tmp_path, monkeypatch):
+    import gzip
+
+    path = tmp_path / "FTDNA.csv.gz"
+    header = b"rsid,chromosome,position,result\n"
+    path.write_bytes(gzip.compress(header + b"rs1,1,1001,AA\n" * 10000))
+    assert sources.sniff_kind(path) == "dtc"
+    monkeypatch.setattr(dtc, "MAX_INFLATE", 1000)
+    result = dtc.import_dtc(vault, _source(vault, path))
+    assert result.status == "failed" and any("byte limit exceeded" in w for w in result.warnings)
+    path.write_bytes(gzip.compress(header + b"A" * 10000))
+    with pytest.raises(dtc.DtcError, match="line is too long"):
+        with dtc._open_text(path, max_inflate=20000) as (lines, _):
+            list(lines)
+
+
+@pytest.mark.parametrize("head", [
+    "# invented preamble\n\"RsId\",\"Chromosome\",\"Position\",\"Result\"\n",
+    "# invented preamble\nrsid,chromosome,position,result\n",
+    "# synthetic MyHeritage export\n", "# synthetic FamilyTreeDNA export\n",
+])
+def test_csv_sniff_headers(head):
+    assert sources._looks_dtc(head)

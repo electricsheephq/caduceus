@@ -176,7 +176,7 @@ def sniff_kind(path: Path) -> str:
                 return SourceKind.PROMETHEASE.value
             texts = [i for i in infos if i.filename.lower().endswith((".txt", ".csv", ".tsv"))]
             if texts:
-                with zf.open(texts[0]) as fh:
+                with zf.open(max(texts, key=lambda i: i.file_size)) as fh:
                     head = _peek_text(fh.read(4096))
                 if _looks_dtc(head):
                     return SourceKind.DTC.value
@@ -187,6 +187,14 @@ def sniff_kind(path: Path) -> str:
                         return SourceKind.FHIR.value
         return SourceKind.OTHER.value
     with open(path, "rb") as fh:
+        magic = fh.read(2)
+        fh.seek(0)
+        if magic == b"\x1f\x8b":
+            import gzip
+
+            with gzip.GzipFile(fileobj=fh) as inflated:
+                head = _peek_text(inflated.read(4096))
+            return SourceKind.DTC.value if _looks_dtc(head) else SourceKind.OTHER.value
         head = _peek_text(fh.read(4096))
     if _looks_dtc(head):
         return SourceKind.DTC.value
@@ -202,5 +210,8 @@ def sniff_kind(path: Path) -> str:
 
 def _looks_dtc(head: str) -> bool:
     lowered = head.lower()
-    return ("23andme" in lowered or "ancestrydna" in lowered or lowered.lstrip("# \ufeff").startswith("rsid")
-            or "\nrsid\t" in lowered or "# rsid" in lowered)
+    return ("23andme" in lowered or "ancestrydna" in lowered or "myheritage" in lowered
+            or "familytreedna" in lowered or lowered.lstrip("# \ufeff").startswith("rsid")
+            or "\nrsid\t" in lowered or "# rsid" in lowered
+            or any([f.strip().strip('"').strip() for f in line.split(",")] ==
+                   ["rsid", "chromosome", "position", "result"] for line in lowered.splitlines()))
