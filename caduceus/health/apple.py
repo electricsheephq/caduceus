@@ -1,4 +1,4 @@
-"""Stream Apple Health exports from their stored zip, without extracting members."""
+"""Stream stored Apple Health XML files or exports in zips, without extracting members."""
 from __future__ import annotations
 
 import hashlib
@@ -21,6 +21,7 @@ PARSER_VERSION = "1"
 BATCH = 10_000
 MAX_MEMBER = 8 << 30
 MAX_TOTAL = 16 << 30
+EXPORT_XML_ERROR = "zip must contain exactly one Apple Health export XML"
 REPRODUCTIVE = frozenset({"MenstrualFlow", "IntermenstrualBleeding", "OvulationTestResult",
                          "CervicalMucusQuality", "SexualActivity", "Contraceptive", "Pregnancy",
                          "Lactation", "PregnancyTestResult", "ProgesteroneTestResult",
@@ -191,27 +192,46 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
         if cancel is not None and cancel.is_set():
             status = "cancelled"
         else:
-            with zipfile.ZipFile(sources.source_file(vault, src)) as archive:
-                members = _safe_members(archive)
-                exports = [m for m in members if PurePosixPath(m.filename).name == "export.xml"]
-                if len(exports) != 1:
-                    raise ValueError("zip must contain exactly one safe export.xml")
-                with archive.open(exports[0]) as stream:
+            stored = sources.source_file(vault, src)
+            if zipfile.is_zipfile(stored):
+                with zipfile.ZipFile(stored) as archive:
+                    members = _safe_members(archive)
+                    exports = [m for m in members if PurePosixPath(m.filename).name == "export.xml"]
+                    if len(exports) != 1:
+                        exports = []
+                        for member in members:
+                            name = member.filename.lower()
+                            if not name.endswith(".xml") or name.endswith("export_cda.xml"):
+                                continue
+                            with archive.open(member) as stream:
+                                head = stream.read(4096).decode("utf-8-sig", "replace")
+                            if "<!DOCTYPE HealthData" in head or "<HealthData" in head:
+                                exports.append(member)
+                    if len(exports) != 1:
+                        raise ValueError(EXPORT_XML_ERROR)
+                    with archive.open(exports[0]) as stream:
+                        _xml(samples, vault, stream, src.id, run.id, counts, cancel, warnings)
+                    for member in members:
+                        if cancel is not None and cancel.is_set():
+                            break
+                        path = PurePosixPath(member.filename)
+                        if "clinical-records" in path.parts and path.suffix.lower() == ".json":
+                            if member.file_size > fhir.MAX_JSON:
+                                raise ValueError("FHIR JSON exceeds size limit")
+                            with archive.open(member) as stream:
+                                raw = stream.read(fhir.MAX_JSON + 1)
+                            if len(raw) > fhir.MAX_JSON:
+                                raise ValueError("FHIR JSON exceeds inflate limit")
+                            clinical = fhir.ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
+                            for key, value in clinical.items():
+                                counts[key] = counts.get(key, 0) + value
+            else:
+                if stored.stat().st_size > MAX_MEMBER:
+                    raise ValueError("XML exceeds size limit")
+                warnings.append("Imported an Apple Health XML on its own. Health records are read only from the "
+                                "export zip (its clinical-records folder); import export.zip to include them.")
+                with stored.open("rb") as stream:
                     _xml(samples, vault, stream, src.id, run.id, counts, cancel, warnings)
-                for member in members:
-                    if cancel is not None and cancel.is_set():
-                        break
-                    path = PurePosixPath(member.filename)
-                    if "clinical-records" in path.parts and path.suffix.lower() == ".json":
-                        if member.file_size > fhir.MAX_JSON:
-                            raise ValueError("FHIR JSON exceeds size limit")
-                        with archive.open(member) as stream:
-                            raw = stream.read(fhir.MAX_JSON + 1)
-                        if len(raw) > fhir.MAX_JSON:
-                            raise ValueError("FHIR JSON exceeds inflate limit")
-                        clinical = fhir.ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
-                        for key, value in clinical.items():
-                            counts[key] = counts.get(key, 0) + value
             if cancel is not None and cancel.is_set():
                 status = "cancelled"
             sleep_warnings = recompute_rollups(samples)
@@ -222,6 +242,8 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
         status = "failed"
         # Input values may be personal: report the error class, not parser excerpts.
         errors = [f"{type(exc).__name__}: Apple Health import failed"]
+        if isinstance(exc, ValueError) and str(exc) == EXPORT_XML_ERROR:
+            errors = [EXPORT_XML_ERROR]  # Fixed selection error, with no input excerpts.
     warnings += fhir.warning_messages(counts) + errors
     sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
     return ImportResult(status, run.id, src.id, counts, warnings)

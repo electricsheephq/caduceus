@@ -539,7 +539,7 @@ def _import(args: dict) -> dict:
     if kind not in _IMPORTERS:
         raise ToolError("not a recognised file: expected 23andMe, AncestryDNA, MyHeritage, FamilyTreeDNA or Living DNA raw data, "
                         "a Promethease report, "
-                        "an Apple Health export.zip or FHIR JSON")
+                        "an Apple Health export.zip or FHIR JSON. Whole-genome VCF files are not supported yet.")
     module, name, dbs = _IMPORTERS[kind]
     importer = _need(module, name)
     with _Store() as store:
@@ -836,7 +836,7 @@ _DEMO_LOCK = threading.Lock()
 def _demo() -> str:
     from .demo.persona import write_persona
 
-    names = {"persona-23andme-v5.zip", "persona-variant-report.zip", "persona-apple-health.zip"}
+    names = ("persona-23andme-v5.zip", "persona-variant-report.zip", "persona-apple-health.zip")
     separate = ("To try the demo, create a separate Hermes profile (`hermes profile create caduceus-try`), "
                 "install Caduceus in it, and run /caduceus demo there.")
     with _DEMO_LOCK:
@@ -849,11 +849,16 @@ def _demo() -> str:
                     return (f"Your vault already holds {len(rows)} imported {noun}, "
                             f"so the demo persona would mix with your data. {separate}")
                 artifacts = [sources.get_source(store.vault, r['id']) for r in rows]
-                complete = {r['original_name'] for r in rows} == names and all(
+                stored_names = {r['original_name'] for r in rows}
+                complete = stored_names == set(names) and all(
                     store.vault.execute("SELECT 1 FROM import_run WHERE source_id=? AND status='succeeded'",
                                         (src.id,)).fetchone() for src in artifacts)
                 if complete:
                     return 'The demo persona is already in this vault. Ask your agent: “Why isn\'t my Ozempic working?”'
+                if stored_names != set(names):
+                    files = write_persona(data_dir() / "demo-files", markers=DEMO_MARKERS)
+                    artifacts.extend(sources.store_source(store.vault, path, sources.sniff_kind(path))[0]
+                                     for path in files.values() if path.name not in stored_names)
             else:
                 medications = store.vault.execute("SELECT count(*) FROM medication_event").fetchone()[0]
                 notes = store.vault.execute("SELECT count(*) FROM journal").fetchone()[0]
@@ -865,6 +870,7 @@ def _demo() -> str:
                 files = write_persona(data_dir() / "demo-files", markers=DEMO_MARKERS)
                 artifacts = [sources.store_source(store.vault, path, sources.sniff_kind(path))[0]
                              for path in files.values()]
+            artifacts.sort(key=lambda src: names.index(src.original_name))
 
     def run():
         with _Store() as store:
