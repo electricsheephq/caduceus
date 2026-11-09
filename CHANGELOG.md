@@ -10,7 +10,7 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
   - never suggest starting, stopping, switching or changing a medication, its form or its dose, and say to talk to the prescriber.
 
   The note:
-  - fires only on health, medication or DNA wording: drug names from the knowledge pack and from your recorded medications, words like genotype or HbA1c, and everyday words like sleep or weight only next to "I" or "my";
+  - fires only on health, medication or DNA wording: drug names from the knowledge pack and from your recorded medications, words like genotype or HbA1c, and everyday words like sleep or weight only in a message with "I", "me" or "my";
   - needs data in your vault;
   - holds none of your data, and never blocks a message.
 
