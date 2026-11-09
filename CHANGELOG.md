@@ -2,7 +2,7 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.1.2 — 2026-11-10
+## 0.1.2 — 2026-11-09
 
 ### Added
 - **A gene–drug profile in the DNA summary.** With or without a variant report, `caduceus_genome op=summary` lists:
