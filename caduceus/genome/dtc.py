@@ -237,13 +237,20 @@ def import_dtc(conn, src, *, cancel=None) -> ImportResult:
                     if counts["markers"] == 0:
                         raise DtcError("No genotype rows found in the file")
             if result.status == "succeeded" and counts["markers"]:
-                comparisons = [compare_callsets(conn, callset_id, row[0]) for row in conn.execute(
-                    f"SELECT c.id FROM callset c WHERE c.id != ? AND {_COMPLETE} ORDER BY c.id",
-                    (callset_id,),
-                ).fetchall()]
-                with write_txn(conn):
-                    conn.execute("UPDATE callset SET comparison_json=? WHERE id=?",
-                                 (json.dumps(comparisons), callset_id))
+                try:
+                    comparisons = [compare_callsets(conn, callset_id, row[0]) for row in conn.execute(
+                        f"SELECT c.id FROM callset c WHERE c.id != ? AND {_COMPLETE} ORDER BY c.id",
+                        (callset_id,),
+                    ).fetchall()]
+                    with write_txn(conn):
+                        conn.execute("UPDATE callset SET comparison_json=? WHERE id=?",
+                                     (json.dumps(comparisons), callset_id))
+                except Exception as exc:
+                    # The genotypes are stored; an optional check must not fail the import.
+                    comparisons = []
+                    result.warnings.append(
+                        f"Could not compare this DNA file with your earlier ones ({type(exc).__name__}). "
+                        "The import succeeded; answers use the newest DNA file.")
                 for comparison in comparisons:
                     other_file = comparison["other_file"]
                     compared = comparison["compared"]

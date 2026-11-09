@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import random
+import sqlite3
 
 import pytest
 
@@ -183,6 +184,23 @@ def test_hidden_pgx_omits_profile_and_counts_it(vault, tmp_path, fake_ctx):
     assert "gene_drug_profile" not in result and result["withheld"] == 1
     gene = ops.genome_tool(fake_ctx, {"op": "gene", "gene": "GLP1R"})
     assert gene["results"] == [] and gene["withheld"] == 1
+    unknown = ops.genome_tool(fake_ctx, {"op": "gene", "gene": "FOO1"})
+    assert unknown == {"gene": "FOO1", "results": [], "note": "No markers for this gene in your variant report."}
+
+
+def test_failed_comparison_keeps_the_import(vault, tmp_path, fake_ctx, monkeypatch):
+    dna(vault, tmp_path, "first.txt", inject={"rs5": "AA"})
+
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("caduceus.genome.dtc.compare_callsets", locked)
+    second, result, _ = dna(vault, tmp_path, "second.txt", seed=2, inject={"rs5": "CC"})
+    assert result.warnings == ["Could not compare this DNA file with your earlier ones (OperationalError). "
+                               "The import succeeded; answers use the newest DNA file."]
+    assert comparisons(vault, second) == []
+    out = ops.genome_tool(fake_ctx, {"op": "lookup", "rsids": ["rs5"]})
+    assert [r["genotype"] for r in out["results"]] == ["CC"] and "warning" not in out
 
 
 def test_sensitive_pack_genes_are_filtered_before_aggregation(vault, tmp_path, fake_ctx, monkeypatch):

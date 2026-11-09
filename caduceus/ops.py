@@ -337,10 +337,11 @@ def genome_tool(ctx, args: dict) -> dict:
             rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), _int(args, "limit", 40, 1, 100))
             markers = sorted({r["marker"] for r in rows if r["marker"]})
             if not rows:
-                if not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
-                    return {"gene": gene, "results": [], **_withheld(1), **warning}
+                # Which genes the pack covers is public, so check privacy only when it has markers.
                 markers = sorted({m["rsid"] for e in _pack().entries if e["gene"] == gene for m in e["markers"]})
                 if markers:
+                    if not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
+                        return {"gene": gene, "results": [], **_withheld(1), **warning}
                     return {"gene": gene, **_lookup(store, policy, markers), **warning,
                             "note": "From the built-in knowledge pack; your variant report has no rows for this gene."}
             if not markers:
