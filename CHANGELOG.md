@@ -16,6 +16,13 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 
   The new `vault_hint` setting (on by default) turns it off.
 
+### Docs
+- **The README opens with what Caduceus does for you, then gets you to a first result.**
+  - It installs with `hermes plugins install electricsheephq/caduceus --enable`.
+  - A "Try it" walkthrough runs the demo and shows the cited answer you get.
+- **New README sections:** a comparison with stock Hermes, the settings, where it works, troubleshooting, and how to report a bug.
+- **CONTRIBUTING.md** is new.
+
 ## 0.1.2 — 2026-11-09
 
 ### Added
