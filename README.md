@@ -124,6 +124,7 @@ Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is 
 - **Some genes can't be read from chips.** CYP2D6, HLA types and copy-number changes are reported as *not assessed*. An ambiguous APOE pattern stays ambiguous.
 - **Small effects, labelled evidence.** Genetic effects on drug response are usually small. Every result carries its evidence level (a CPIC guideline, or research association), its sources and its limits.
 - **No medical advice.** Caduceus never tells you to start, stop or change a medication. Talk to your prescriber.
+- **A reminder for every model.** The first health, medication or DNA question in each chat carries one short fixed note for the model: answer from your vault's tools, and leave medication decisions to your prescriber. It keeps smaller models from answering from general knowledge. The note holds none of your data; the `vault_hint` setting turns it off.
 
 ## Data sources and licences
 
