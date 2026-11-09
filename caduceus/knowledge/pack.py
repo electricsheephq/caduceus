@@ -89,37 +89,60 @@ def _genotype(calls, marker, effect, other, *, haploid=False):
     return value, None
 
 
+def _entry_result(entry, calls) -> dict:
+    """One status calculation shared by drug lookup and the whole-pack profile."""
+    result = copy.deepcopy(entry)
+    result["category"] = categorize(genes=[entry["gene"]], default=Category.PGX).value
+    result["disclaimer"] = DISCLAIMER
+    counts, reasons = {}, []
+    if entry["chip_reliability"] == "unreliable":
+        reasons.append(entry.get("not_assessed_reason", "not assessed: needs a dedicated test"))
+    for marker in entry["markers"]:
+        genotype, reason = _genotype(calls, marker["rsid"], marker["effect"], marker["other"],
+                                     haploid=entry["gene"] == "MT-RNR1")
+        if reason:
+            reasons.append(reason)
+        else:
+            counts[marker["rsid"]] = genotype.count(marker["effect"])
+    if not entry["markers"] and not reasons:
+        reasons.append("no validated chip marker in the pack")
+    result["status"] = "not_assessed" if reasons else ("flag" if any(counts.values()) else "no_flag")
+    result["effect_counts"] = counts
+    result["reason"] = "; ".join(reasons) or None
+    result["finding"] = ("Not assessed. " + result["reason"] + "." if reasons else
+                         entry["finding"] if result["status"] == "flag" else
+                         "The tested marker(s) lack the listed effect allele(s). This does not establish normal "
+                         "response or absence of other risks.")
+    return result
+
+
 def pgx_check(pack, drug, calls) -> dict:
     normalized = normalize_drug(drug)
     entries = []
     for entry in pack.entries:
         if normalized is None or normalized not in entry["drugs"]:
             continue
-        result = copy.deepcopy(entry)
-        result["category"] = categorize(genes=[entry["gene"]], default=Category.PGX).value
-        result["disclaimer"] = DISCLAIMER
-        counts, reasons = {}, []
-        if entry["chip_reliability"] == "unreliable":
-            reasons.append(entry.get("not_assessed_reason", "not assessed: needs a dedicated test"))
-        for marker in entry["markers"]:
-            genotype, reason = _genotype(calls, marker["rsid"], marker["effect"], marker["other"],
-                                         haploid=entry["gene"] == "MT-RNR1")
-            if reason:
-                reasons.append(reason)
-            else:
-                counts[marker["rsid"]] = genotype.count(marker["effect"])
-        if not entry["markers"] and not reasons:
-            reasons.append("no validated chip marker in the pack")
-        result["status"] = "not_assessed" if reasons else ("flag" if any(counts.values()) else "no_flag")
-        result["effect_counts"] = counts
-        result["reason"] = "; ".join(reasons) or None
-        result["finding"] = ("Not assessed. " + result["reason"] + "." if reasons else
-                             entry["finding"] if result["status"] == "flag" else
-                             "The tested marker(s) lack the listed effect allele(s). This does not establish normal "
-                             "response or absence of other risks.")
-        entries.append(result)
+        entries.append(_entry_result(entry, calls))
     return {"drug": normalized, "entries": entries, "pack_version": pack.version,
             "note": None if entries else "No evidence in the pack for this drug.", "disclaimer": DISCLAIMER}
+
+
+def profile(pack, calls) -> dict:
+    """Whole-pack gene–drug information; display callers apply the privacy policy first."""
+    counts = dict(flag=0, no_flag=0, not_assessed=0)
+    genes = {}
+    for entry in pack.entries:
+        result = _entry_result(entry, calls)
+        counts[result["status"]] += 1
+        if result["status"] == "flag":
+            gene = genes.setdefault(entry["gene"], {"drugs": set(), "evidence": set()})
+            gene["drugs"].update(entry["drugs"])
+            gene["evidence"].add(entry["evidence"])
+    flagged = [{"gene": gene, "drugs": sorted(genes[gene]["drugs"])[:15],
+                "evidence": sorted(genes[gene]["evidence"])} for gene in sorted(genes)[:20]]
+    return {"flagged": flagged, "derived": derive(pack, calls), "counts": counts,
+            "note": "A flag means published guidance covers that medicine for your genotype, if it is ever "
+                    "prescribed. It is not a diagnosis, and 'no flag' does not mean normal."}
 
 
 def _basis(calls, markers):

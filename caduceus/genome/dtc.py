@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 import re
 import zipfile
 from contextlib import contextmanager
@@ -10,6 +11,7 @@ from pathlib import PurePosixPath
 from ..core import sources
 from ..core.contracts import ImportResult
 from ..core.db import write_txn
+from .calls import _COMPLETE, compare_callsets
 
 PARSER = "dtc"
 PARSER_VERSION = "1"
@@ -234,6 +236,29 @@ def import_dtc(conn, src, *, cancel=None) -> ImportResult:
                         _flush(conn, run.id, callset_id, batch, counts)
                     if counts["markers"] == 0:
                         raise DtcError("No genotype rows found in the file")
+            if result.status == "succeeded" and counts["markers"]:
+                comparisons = [compare_callsets(conn, callset_id, row[0]) for row in conn.execute(
+                    f"SELECT c.id FROM callset c WHERE c.id != ? AND {_COMPLETE} ORDER BY c.id",
+                    (callset_id,),
+                ).fetchall()]
+                with write_txn(conn):
+                    conn.execute("UPDATE callset SET comparison_json=? WHERE id=?",
+                                 (json.dumps(comparisons), callset_id))
+                for comparison in comparisons:
+                    other_file = comparison["other_file"]
+                    compared = comparison["compared"]
+                    pct = f"{100 * comparison['matching'] / compared:.1f}" if compared else "0.0"
+                    if comparison["same_person"] is False:
+                        result.warnings.append(
+                            f"This DNA file looks like a different person from {other_file}: {pct}% of "
+                            f"{compared} shared markers match (files from the same person match over 95%). "
+                            "Caduceus answers from the newest DNA file, so answers now come from this file. "
+                            "Keep each person's DNA in their own Hermes profile (`hermes profile create <name>`).")
+                    elif comparison["same_person"] is True:
+                        result.warnings.append(f"Same person as {other_file} ({pct}% of {compared} shared markers "
+                                               "match). Answers use the newest file.")
+                    else:
+                        result.warnings.append(f"Could not compare with {other_file}: too few shared markers.")
     except DtcError as exc:
         result.status = "failed"
         result.warnings.append(f"DTC import failed: {exc}")

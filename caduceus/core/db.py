@@ -54,6 +54,10 @@ def open_vault(path=None) -> sqlite3.Connection:
 
 def _migrate_vault(conn: sqlite3.Connection) -> None:
     """Columns added after a vault was created. CREATE TABLE IF NOT EXISTS never adds them to an existing table."""
+    with write_txn(conn):
+        if "comparison_json" not in {row[1] for row in conn.execute("PRAGMA table_info(callset)")}:
+            conn.execute("ALTER TABLE callset ADD COLUMN comparison_json TEXT NOT NULL DEFAULT '[]'")
+
     def has_column():
         return "category" in {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}
 
