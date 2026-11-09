@@ -296,3 +296,29 @@ def test_gzip_inflate_and_line_limits(vault, tmp_path, monkeypatch):
 ])
 def test_csv_sniff_headers(head):
     assert sources._looks_dtc(head)
+
+
+@pytest.mark.parametrize('raw', [
+    b'\x1f\x8b', b'\x1f\x8bnot gzip',
+    b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03\x06',
+])
+def test_sniff_broken_gzip_is_unrecognised(tmp_path, raw):
+    from caduceus import ops
+    from caduceus.tools import ToolError
+
+    path = tmp_path / 'broken.csv.gz'
+    path.write_bytes(raw)
+    assert sources.sniff_kind(path) == SourceKind.OTHER
+    with pytest.raises(ToolError, match='not a recognised file'):
+        ops._import({'path': str(path)})
+
+
+@pytest.mark.parametrize('filename,head,kind', [
+    ('record.json', '{"resourceType": "Patient", "note": "MyHeritage"}', SourceKind.FHIR),
+    ('promethease.html', '<html>Promethease synthetic report mentions 23andMe</html>', SourceKind.PROMETHEASE),
+    ('export.xml', '<HealthData><Note>MyHeritage</Note></HealthData>', SourceKind.APPLE_HEALTH),
+])
+def test_sniff_plain_specific_formats_before_dtc(tmp_path, filename, head, kind):
+    path = tmp_path / filename
+    path.write_text(head)
+    assert sources.sniff_kind(path) == kind

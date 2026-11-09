@@ -191,20 +191,24 @@ def sniff_kind(path: Path) -> str:
         fh.seek(0)
         if magic == b"\x1f\x8b":
             import gzip
+            import zlib
 
-            with gzip.GzipFile(fileobj=fh) as inflated:
-                head = _peek_text(inflated.read(4096))
+            try:
+                with gzip.GzipFile(fileobj=fh) as inflated:
+                    head = _peek_text(inflated.read(4096))
+            except (OSError, EOFError, zlib.error):  # BadGzipFile is an OSError
+                return SourceKind.OTHER.value
             return SourceKind.DTC.value if _looks_dtc(head) else SourceKind.OTHER.value
         head = _peek_text(fh.read(4096))
-    if _looks_dtc(head):
-        return SourceKind.DTC.value
+    if '"resourceType"' in head:
+        return SourceKind.FHIR.value
     lowered = path.name.lower()
     if lowered.endswith((".html", ".htm")) and ("promethease" in lowered or "promethease" in head.lower()):
         return SourceKind.PROMETHEASE.value
-    if '"resourceType"' in head:
-        return SourceKind.FHIR.value
     if "<HealthData" in head:
         return SourceKind.APPLE_HEALTH.value
+    if _looks_dtc(head):
+        return SourceKind.DTC.value
     return SourceKind.OTHER.value
 
 
