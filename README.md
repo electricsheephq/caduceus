@@ -4,6 +4,8 @@
 
 Health answers that cite your own DNA, Apple Health and records, plus new research, from a vault on your machine.
 
+▶ **[Watch the demo on X](https://x.com/ElectricSheepIO/status/2120162156058407228)**
+
 [![Latest release](https://img.shields.io/github/v/release/electricsheephq/caduceus)](https://github.com/electricsheephq/caduceus/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Hermes 0.23.0 or newer](https://img.shields.io/badge/Hermes-%E2%89%A5%200.23.0-6f42c1)](https://github.com/NousResearch/hermes-agent)

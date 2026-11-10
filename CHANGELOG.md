@@ -2,6 +2,11 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.4 — 2026-11-11
+
+### Docs
+- **The README links to the launch video.** "Watch the demo on X" sits right under the opening sentence.
+
 ## 0.1.3 — 2026-11-10
 
 ### Added
