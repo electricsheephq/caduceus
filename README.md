@@ -6,6 +6,8 @@ Health answers that cite your own DNA, Apple Health and records, plus new resear
 
 ▶ **[Watch the demo on X](https://x.com/ElectricSheepIO/status/2120162156058407228)**
 
+https://github.com/user-attachments/assets/3a4fc6dc-913e-4c0b-8b0d-a36032022330
+
 [![Latest release](https://img.shields.io/github/v/release/electricsheephq/caduceus)](https://github.com/electricsheephq/caduceus/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Hermes 0.23.0 or newer](https://img.shields.io/badge/Hermes-%E2%89%A5%200.23.0-6f42c1)](https://github.com/NousResearch/hermes-agent)
