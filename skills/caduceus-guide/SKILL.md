@@ -47,6 +47,7 @@ and `no_flag` does not mean normal.
 | Top findings, or what is imported | `caduceus_genome op=summary`; `op=filter` with `min_magnitude`, `repute` or `topic` |
 | Rebuild the variant report | `caduceus_genome op=report` (returns a local file link) |
 | Weight, steps, sleep or heart rate over time | `caduceus_trend op=series metric=…`; `op=metrics` lists them |
+| Muscle, protein or waist on a weight-loss medicine | `caduceus_trend op=compare metric=lean_mass drug=…`, then `metric=weight`, `metric=protein` and `metric=waist` |
 | Before and after a medication | `caduceus_trend op=compare metric=… drug=…` (uses the recorded start date; the after window runs to the latest data, up to a year, unless you pass `after_days`) |
 | A lab over time (HbA1c, LDL …) | `caduceus_trend op=labs lab=…` |
 | Anything else in the vault | `caduceus_search query=…`, then `ref=…` for the full record |
@@ -65,6 +66,13 @@ and `no_flag` does not mean normal.
 6. End with the advice line from rule 6.
 
 A comparison such as "Would Mounjaro be different?" works the same way: call `op=pgx` for each drug. Report only the differences the entries show.
+
+## Example: "Am I losing muscle on Ozempic?"
+
+1. Call `caduceus_trend op=compare` with `metric=lean_mass` and with `metric=weight`, both with the drug. Give the lean mass change and the weight change, and the lean share of the loss (lean change divided by weight change) with units and dates.
+2. Call `op=compare metric=protein` if a food log is recorded: the daily grams before and after the start.
+3. Say these are their own measurements, a pattern and not a cause. Home scales estimate lean mass, so small changes are uncertain.
+4. Do not prescribe protein targets, diets or exercise. End with the advice line from rule 6, adding that a dietitian can help too.
 
 ## Answer layout for medication questions
 

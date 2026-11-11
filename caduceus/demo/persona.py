@@ -208,18 +208,43 @@ def _record(kind: str, value, start: datetime, end: datetime | None = None, *, s
     return "<Record " + " ".join(f"{k}={quoteattr(v)}" for k, v in attrs.items()) + "/>\n"
 
 
+def _loss(day: date) -> float:
+    """4.3 kg lost over the first 12 weeks on semaglutide, then level (a slow regain of 0.02 kg a week)."""
+    weeks = max(0, (day - START).days) / 7
+    return 4.3 * (1 - (1 - min(weeks, 12) / 12) ** 1.6) - 0.02 * max(0.0, weeks - 12)
+
+
 def weight_on(day: date, rng: random.Random) -> float:
     """About 104 kg, then 4.3 kg lost over the first 12 weeks on semaglutide, then level."""
-    weeks = max(0, (day - START).days) / 7
-    loss = 4.3 * (1 - (1 - min(weeks, 12) / 12) ** 1.6) - 0.02 * max(0.0, weeks - 12)
-    return round(104.2 - loss + rng.uniform(-0.35, 0.35), 1)
+    return round(104.2 - _loss(day) + rng.uniform(-0.35, 0.35), 1)
+
+
+def _companion_records(day: date, at, weighed_at):
+    """Lean mass with each weigh-in, a food log's protein and a twice-monthly waist entry. A per-day generator of
+    its own keeps every older series (and the demo answers built on them) exactly as before."""
+    extra = random.Random(day.toordinal() * 31 + 7)
+    if weighed_at is not None:  # about 36% of the weight lost is lean mass
+        yield _record("LeanBodyMass", round(62.8 - 0.36 * _loss(day) + extra.uniform(-0.2, 0.2), 1), weighed_at,
+                      source="Demo Scale", unit="kg")
+    if extra.random() < 0.85:
+        ramp = min(1.0, max(0, (day - START).days) / 21)  # appetite falls over the first three weeks
+        total = max(30.0, extra.gauss(86 - 26 * ramp, 8))
+        for hour, minute, share in ((8, 0, 0.25), (12, 30, 0.35), (19, 0, 0.40)):
+            yield _record("DietaryProtein", round(total * share, 1), at(hour, minute), source="Demo Food Log", unit="g")
+    if day.day in (1, 15):
+        yield _record("WaistCircumference", round(114.0 - 1.15 * _loss(day) + extra.uniform(-0.4, 0.4), 1), at(7, 40),
+                      source="Demo iPhone", unit="cm")
 
 
 def _day_records(day: date, rng: random.Random):
     at = lambda h, m=0: datetime.combine(day, time(h, m), ZONE)  # noqa: E731
     on = day >= START
+    weighed_at = None
     if rng.random() < 0.86:
-        yield _record("BodyMass", weight_on(day, rng), at(7, rng.randint(0, 25)), source="Demo Scale", unit="kg")
+        kg = weight_on(day, rng)
+        weighed_at = at(7, rng.randint(0, 25))
+        yield _record("BodyMass", kg, weighed_at, source="Demo Scale", unit="kg")
+    yield from _companion_records(day, at, weighed_at)
     yield _record("RestingHeartRate", round(rng.gauss(68 if on else 66, 1.5)), at(6, 30),
                   source="Demo Watch", unit="count/min")
     total = rng.randint(5200, 9400)

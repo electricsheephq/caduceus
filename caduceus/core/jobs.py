@@ -52,6 +52,12 @@ def is_active(key: str) -> bool:
         return thread is not None and thread.is_alive()
 
 
+def any_active() -> bool:
+    """True while any background job (an import, the demo or a research watch) is still running."""
+    with _LOCK:
+        return any(thread.is_alive() for thread in _ACTIVE.values())
+
+
 def join(key: str, timeout: float | None = None) -> bool:
     """Wait for the job under *key* to finish (tests and the dev CLI). True when nothing is running."""
     with _LOCK:

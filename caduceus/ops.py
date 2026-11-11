@@ -8,10 +8,13 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import json
+import os
 import re
+import shutil
 import sqlite3
 import threading
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from .core import jobs, search as search_index, sources
 from .core.contracts import SourceKind
@@ -877,7 +880,7 @@ def capture_tool(ctx, args: dict) -> dict:
 # ---------------------------------------------------------------- /caduceus
 
 _HELP = ("/caduceus [status] | privacy [open|standard] | hide <category> | show <category> | unlock <category> | "
-         "lock <category> | imports | demo | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
+         "lock <category> | imports | demo | erase [confirm] | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
          "Ask your agent to import a file by its path, or to answer questions from your DNA, Apple Health and records.")
 
 
@@ -972,6 +975,70 @@ def _demo() -> str:
             '“Why isn\'t my Ozempic working?” or “Would Mounjaro be different for me?”')
 
 
+# Only what Caduceus itself creates: both databases with SQLite's side files, copied sources, reports, demo files.
+_ERASE_FILES = tuple(name + suffix for name in ("vault.db", "samples.db") for suffix in ("", "-wal", "-shm", "-journal"))
+_ERASE_DIRS = ("sources", "reports", "demo-files")
+
+
+def _erase_targets(root: Path) -> list[Path]:
+    return [root / name for name in _ERASE_FILES + _ERASE_DIRS if os.path.lexists(root / name)]
+
+
+def _tree_bytes(path: Path) -> int:
+    try:
+        if path.is_symlink() or not path.is_dir():
+            return path.lstat().st_size
+    except OSError:
+        return 0
+    total = 0
+    for folder, _dirs, files in os.walk(path):  # os.walk does not descend into symlinked folders
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(folder, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def _size_text(n: int) -> str:
+    return f"{n / 1_000_000:.1f} MB" if n >= 100_000 else f"{n / 1000:.0f} KB"
+
+
+def _erase(ctx, confirm: bool) -> str:
+    """The user's own command (tools never call it): preview first, delete only with `confirm`."""
+    root = data_dir()
+    targets = _erase_targets(root)
+    if not targets:
+        return "There is nothing to erase: Caduceus has no files on this machine yet."
+    size = _size_text(sum(_tree_bytes(t) for t in targets))
+    if not confirm:
+        what = "your imported files and their copies, DNA calls, health samples, records, notes, research items and reports"
+        if (root / "vault.db").exists():
+            c = _settings(ctx)["counts"]
+            what = (f"{c['files']} imported files with their copies, {c['dna_callsets'] or 0} DNA callsets, "
+                    f"{c['variant_report_records'] or 0} variant report records, {c['lab_results']} lab results, "
+                    f"{c['medications']} medications, {c['notes']} notes, {c['research_items']} research items, "
+                    "every health sample, the reports and the demo files")
+        return (f"This deletes everything Caduceus stored on this machine: {what} ({size} in {root}). "
+                "Your Caduceus settings stay. It cannot be undone. To erase it, run: /caduceus erase confirm")
+    if jobs.any_active():
+        return ("An import, the demo or a research watch is still running. Wait until /caduceus imports shows "
+                "it finished, then run /caduceus erase confirm again.")
+    for target in targets:
+        try:
+            if target.is_dir() and not target.is_symlink():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        except OSError as exc:
+            return (f"Could not delete {target.name} ({type(exc).__name__}); nothing after it was removed. "
+                    f"Run /caduceus erase confirm again, or delete the folder {root} yourself.")
+    left = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
+    note = f" Left in place because Caduceus did not create them: {', '.join(left[:5])}." if left else ""
+    return (f"Erased the Caduceus vault ({size}) from {root}.{note} Your settings are unchanged. "
+            "A research watch you armed with /blueprint keeps its schedule; its next run starts a new vault.")
+
+
 def command(ctx, raw: str) -> str:
     parts = raw.strip().split()
     sub = parts[0].lower() if parts else "status"
@@ -1001,6 +1068,10 @@ def command(ctx, raw: str) -> str:
         if not runs:
             return "No imports yet."
         return "\n".join(f"#{r['import_run_id']} {r['file']} ({r['kind']}): {r['status']}" for r in runs)
+    if sub == "erase":
+        if len(parts) > 2 or (len(parts) == 2 and parts[1].lower() != "confirm"):
+            return "Usage: /caduceus erase [confirm]"
+        return _erase(ctx, confirm=len(parts) == 2)
     if sub == "help":
         return _HELP
     if sub != "status":

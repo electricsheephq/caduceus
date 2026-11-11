@@ -123,7 +123,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 
 **Trend results:**
 - **Every result carries** `unit`, `source_policy`, `coverage` (with gaps), and `calc_version`.
-- **Metric names** are friendly (`weight`, `steps`, `resting_heart_rate`, `sleep_hours`, …) and map to HealthKit identifiers.
+- **Metric names** are friendly (`weight`, `lean_mass`, `protein`, `waist`, `steps`, `resting_heart_rate`, `sleep_hours`, …) and map to HealthKit identifiers.
 - **`observation_series` points** carry `date`, `value`, `unit`, `reference_range`, `interpretation`, `source` and `category`. HbA1c is converted to % (NGSP); other mixed units are never pooled in `points`.
   - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
