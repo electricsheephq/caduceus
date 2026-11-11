@@ -180,6 +180,7 @@ def aged_rollups(health_samples):
     with write_txn(health_samples):
         health_samples.execute("UPDATE daily_rollup SET calc_version='trend/1'")
         health_samples.execute("DELETE FROM daily_rollup WHERE metric='lean_mass'")
+        health_samples.execute("PRAGMA user_version = 0")  # vaults from before 0.2.1 never carried the mark
     return health_samples
 
 
@@ -208,15 +209,15 @@ def test_current_rollups_do_not_submit_a_job(call, health_samples, monkeypatch):
 @pytest.fixture
 def slow_rebuild(aged_rollups, monkeypatch, call):
     entered, release = threading.Event(), threading.Event()
-    recompute = call.trends.recompute_rollups
+    scan = call.trends._rollup_rows
 
-    def slow(samples):
+    def slow(samples):  # the rebuild's scan, outside the writer lock
         entered.set()
         if not release.wait(10):
             raise TimeoutError("synthetic rebuild was not released")
-        return recompute(samples)
+        return scan(samples)
 
-    monkeypatch.setattr(call.trends, "recompute_rollups", slow)
+    monkeypatch.setattr(call.trends, "_rollup_rows", slow)
     monkeypatch.setattr(call.ops, "ROLLUP_WAIT_S", 0.2)
     try:
         yield entered, release
@@ -249,14 +250,31 @@ def test_slow_rebuild_reports_progress_and_blocks_erase(call, slow_rebuild, op):
     assert result["points"] and "rebuilding" not in result
 
 
-def test_rollups_stale_with_old_current_and_empty_rollups(samples):
-    assert not trends.rollups_stale(samples)
+def _sample(samples, kind, unit, value, key):
+    samples.execute("INSERT INTO sample(source_id,type,source_name,unit,start_utc,end_utc,tz_offset_min,local_day,"
+                    "value,value_text,dedupe_key) VALUES (1,?,?,?,?,?,0,?,?,?,?)",
+                    ("HKQuantityTypeIdentifier" + kind, "Synthetic", unit, "2026-09-01T00:00:00Z",
+                     "2026-09-01T00:00:00Z", "2026-09-01", value, str(value), key))
+
+
+def test_rollups_stale_with_old_current_and_missing_rollups(samples):
+    assert not trends.rollups_stale(samples)  # a new, empty vault
     with write_txn(samples):
         samples.execute("INSERT INTO daily_rollup VALUES ('weight','2026-09-01',100,1,'[]','trend/1')")
     assert trends.rollups_stale(samples)
     with write_txn(samples):
         samples.execute("UPDATE daily_rollup SET calc_version=?", (trends.CALC_VERSION,))
     assert not trends.rollups_stale(samples)
+    with write_txn(samples):
+        samples.execute("DELETE FROM daily_rollup")
+        _sample(samples, "SomethingNew", "x", 1, "unknown")
+    assert not trends.rollups_stale(samples)  # nothing Caduceus rolls up
+    with write_txn(samples):
+        _sample(samples, "LeanBodyMass", "kg", 60, "lean")
+    assert trends.rollups_stale(samples)  # samples of a known metric, no rollups at all
+    with write_txn(samples):
+        samples.execute(f"PRAGMA user_version = {trends.ROLLUP_MARK}")
+    assert not trends.rollups_stale(samples)  # this calculation already ran on the file
 
 
 def test_brief_warns_while_rollups_are_rebuilding(call, slow_rebuild):
@@ -271,21 +289,29 @@ def test_brief_warns_while_rollups_are_rebuilding(call, slow_rebuild):
     assert "rebuilding" not in call("caduceus_capture", op="brief")
 
 
-def test_failed_rebuild_keeps_stored_rollups_and_retries(call, aged_rollups, monkeypatch):
+def test_failed_rebuild_keeps_stored_rollups_and_waits_before_retrying(call, aged_rollups, monkeypatch):
     attempts = []
 
     def failed(samples):
         attempts.append(True)
         raise OSError("synthetic rebuild failure")
 
-    monkeypatch.setattr(call.trends, "recompute_rollups", failed)
+    monkeypatch.setattr(call.trends, "rebuild_rollups", failed)
     try:
         for _ in range(2):
             result = call("caduceus_trend", op="series", metric="weight")
-            assert result["points"] and "rebuilding" not in result
-        assert len(attempts) == 2 and trends.rollups_stale(aged_rollups)
+            assert result["points"] and result["rebuilding"] == ops._REBUILD_FAILED  # stored points, honest note
+            assert call.ops.jobs.join("rollup-rebuild", 5)
+        assert len(attempts) == 1 and trends.rollups_stale(aged_rollups)  # the second call did not rescan
+        brief = call("caduceus_capture", op="brief")
+        assert brief["rebuilding"] == ops._BRIEF_NOTES[ops._REBUILD_FAILED] and len(attempts) == 1
+        assert "rebuilding" not in call("caduceus_trend", op="check")  # the daily check stays quiet
+        monkeypatch.setattr(call.ops, "REBUILD_RETRY_S", 0.0)
+        call("caduceus_trend", op="series", metric="weight")
+        assert call.ops.jobs.join("rollup-rebuild", 5) and len(attempts) == 2
     finally:
         assert call.ops.jobs.join("rollup-rebuild", 5)
+        call.ops._rebuild_failed_at = None
 
 
 def test_request_arriving_mid_erase_sees_only_a_new_empty_vault(call, data_dir, monkeypatch):
@@ -342,8 +368,142 @@ def test_rebuild_keeps_samples_and_is_idempotent(call, aged_rollups):
         first = digest("daily_rollup", "metric, day")
         with write_txn(aged_rollups):  # mark the rebuilt rollups old again: a second rebuild must change nothing
             aged_rollups.execute("UPDATE daily_rollup SET calc_version='trend/1'")
+            aged_rollups.execute("PRAGMA user_version = 0")
         assert call("caduceus_trend", op="series", metric="lean_mass")["points"]
         assert digest("daily_rollup", "metric, day") == first
         assert digest("sample", "id") == samples_before
     finally:
         assert call.ops.jobs.join("rollup-rebuild", 5)
+
+
+def test_requests_carry_on_while_the_rebuild_scans(call, slow_rebuild):
+    entered, release = slow_rebuild
+    assert call("caduceus_trend", op="series", metric="weight")["rebuilding"] == ops._REBUILDING
+    assert entered.is_set()
+    done = []
+    worker = threading.Thread(target=lambda: done.append(call.command("imports")))
+    worker.start()
+    worker.join(3)  # every request opens the vault, which takes the writer lock the scan must not hold
+    assert done == ["No imports yet."]
+
+
+def test_rebuild_recomputes_inside_the_write_when_samples_arrive(call, aged_rollups, monkeypatch):
+    scan, scans = call.trends._rollup_rows, []
+
+    def scan_then_import(samples):
+        rows = scan(samples)
+        scans.append(len(rows[0]))
+        if len(scans) == 1:  # an import adds a sample after the scan, before the swap
+            with write_txn(aged_rollups):
+                _sample(aged_rollups, "LeanBodyMass", "kg", 59, "late-lean")
+                aged_rollups.execute("UPDATE sample SET local_day='2026-09-30' WHERE dedupe_key='late-lean'")
+        return rows
+
+    monkeypatch.setattr(call.trends, "_rollup_rows", scan_then_import)
+    try:
+        call("caduceus_trend", op="series", metric="lean_mass", bucket="day")
+    finally:
+        assert call.ops.jobs.join("rollup-rebuild", 5)
+    assert len(scans) == 2 and scans[1] == scans[0] + 1
+    assert aged_rollups.execute("SELECT value FROM daily_rollup WHERE metric='lean_mass' AND day='2026-09-30'"
+                                ).fetchone()[0] == 59
+
+
+def test_samples_without_any_rollups_are_rebuilt_once(call, samples, monkeypatch):
+    with write_txn(samples):
+        for i in range(3):
+            _sample(samples, "LeanBodyMass", "kg", 60 - i, f"lean-{i}")
+            samples.execute("UPDATE sample SET local_day=? WHERE dedupe_key=?", (f"2026-09-0{i + 1}", f"lean-{i}"))
+        _sample(samples, "WaistCircumference", "furlong", 1, "odd-unit")  # a unit no rollup takes
+    try:
+        assert len(call("caduceus_trend", op="series", metric="lean_mass", bucket="day")["points"]) == 3
+    finally:
+        assert call.ops.jobs.join("rollup-rebuild", 5)
+    assert samples.execute("PRAGMA user_version").fetchone()[0] == trends.ROLLUP_MARK
+    submit = call.ops.jobs.submit
+
+    def checked(key, fn, **kwargs):
+        assert key != "rollup-rebuild", "a file this calculation already ran on is not rebuilt again"
+        return submit(key, fn, **kwargs)
+
+    monkeypatch.setattr(call.ops.jobs, "submit", checked)
+    call("caduceus_trend", op="series", metric="waist")
+
+
+def test_no_rebuild_while_another_job_runs(call, aged_rollups):
+    release = threading.Event()
+    assert call.ops.jobs.submit("v021-import", release.wait, wait_s=0)["state"] == "running"
+    try:
+        result = call("caduceus_trend", op="series", metric="weight")
+        assert "rebuilding" not in result and not call.ops.jobs.is_active("rollup-rebuild")
+        assert trends.rollups_stale(aged_rollups)
+    finally:
+        release.set()
+        assert call.ops.jobs.join("v021-import", 5)
+    try:
+        assert call("caduceus_trend", op="series", metric="lean_mass")["points"]
+    finally:
+        assert call.ops.jobs.join("rollup-rebuild", 5)
+    assert not trends.rollups_stale(aged_rollups)
+
+
+def test_brief_is_written_without_a_trends_lane(call, aged_rollups, monkeypatch):
+    need = call.ops._need
+
+    def missing_trends(module, name):
+        if module == "health.trends":
+            raise call.ops.ToolError("the trends lane is missing")
+        return need(module, name)
+
+    monkeypatch.setattr(call.ops, "_need", missing_trends)
+    result = call("caduceus_capture", op="brief")
+    assert Path(result["path"]).is_file() and "rebuilding" not in result
+
+
+def test_samples_that_roll_up_to_nothing_are_rebuilt_only_once(call, samples, monkeypatch):
+    with write_txn(samples):
+        _sample(samples, "WaistCircumference", "furlong", 1, "odd-unit")  # a known metric in a unit no rollup takes
+    assert trends.rollups_stale(samples)
+    try:
+        assert call("caduceus_trend", op="series", metric="waist")["points"] == []
+    finally:
+        assert call.ops.jobs.join("rollup-rebuild", 5)
+    assert samples.execute("SELECT count(*) FROM daily_rollup").fetchone()[0] == 0
+    assert not trends.rollups_stale(samples)  # the mark says this calculation already ran
+    submit = call.ops.jobs.submit
+
+    def checked(key, fn, **kwargs):
+        assert key != "rollup-rebuild", "a file whose samples give no rollups is not rebuilt on every call"
+        return submit(key, fn, **kwargs)
+
+    monkeypatch.setattr(call.ops.jobs, "submit", checked)
+    call("caduceus_trend", op="series", metric="waist")
+
+
+def test_erase_refuses_while_a_held_watch_result_is_handed_over(call, data_dir, monkeypatch):
+    (data_dir / "vault.db").write_bytes(b"x")
+    entered, release = threading.Event(), threading.Event()
+    deliver = call.ops._filter_watch
+
+    def slow_deliver(result, policy):
+        entered.set()
+        assert release.wait(5)
+        return deliver(result, policy)
+
+    monkeypatch.setattr(call.ops, "_filter_watch", slow_deliver)
+    with call.ops._WATCH_LOCK:
+        call.ops._WATCH_PENDING.append({"result": {"new_items": [{"title": "synthetic study"}]}})
+    results = []
+    worker = threading.Thread(target=lambda: results.append(call("caduceus_capture", op="watch_run")))
+    worker.start()
+    try:
+        assert entered.wait(5)
+        assert "still running" in call.command("erase confirm")  # the result taken from memory is still in flight
+        assert (data_dir / "vault.db").exists()
+    finally:
+        release.set()
+        worker.join(5)
+        with call.ops._WATCH_LOCK:
+            call.ops._WATCH_PENDING.clear()
+    assert results and results[0]["new_items"] == [{"title": "synthetic study"}]
+    assert call.command("erase confirm").startswith("Erased")

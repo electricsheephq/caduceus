@@ -13,6 +13,7 @@ import re
 import shutil
 import sqlite3
 import threading
+import time
 from contextlib import ExitStack, closing
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -28,8 +29,18 @@ from .tools import LIMITS, ToolError
 IMPORT_WAIT_S = 45.0       # Hermes cuts a tool call off at 420 s; imports keep going in the background
 WATCH_WAIT_S = 300.0
 ROLLUP_WAIT_S = 20.0       # the one-time rebuild after an update; most vaults finish well inside this
+REBUILD_RETRY_S = 600.0    # after a failed rebuild, reads use the stored rollups this long before it is tried again
+_rebuild_failed_at: float | None = None
 _REBUILDING = ("Caduceus is rebuilding its daily health summaries from the samples already stored. This happens once, "
                "after an update. Until it finishes, lean mass, protein and waist may be missing. Ask again in a minute.")
+_REBUILD_FAILED = ("Caduceus could not rebuild its daily health summaries after an update, so lean mass, protein and "
+                   "waist may be missing. It tries again in a few minutes.")
+_BRIEF_NOTES = {
+    _REBUILDING: ("The daily health summaries were still being rebuilt after an update, so this brief may lack lean mass, "
+                  "protein and waist. Write it again in a minute."),
+    _REBUILD_FAILED: ("The daily health summaries could not be rebuilt after an update, so this brief may lack lean mass, "
+                      "protein and waist."),
+}
 _RSID = re.compile(r"^rs\d+$", re.I)
 _GENE = re.compile(r"^[A-Z0-9-]{2,15}$")
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -519,21 +530,40 @@ def _drug_start(vault, drug: str, policy) -> tuple[date | None, int]:
 
 
 def _refresh_rollups(store) -> str | None:
-    """Rebuild older daily summaries once in the background; reads keep the stored rollups until it commits."""
-    stale = _need("health.trends", "rollups_stale")
+    """Start the one-time rebuild when the stored rollups predate this calculation. It runs as a background job, so
+    erase waits for it; its scan holds no writer lock, so other requests carry on and reads see the old rollups until
+    the swap. Returns a note while it runs, or when it failed and waits before trying again."""
+    if jobs.is_active("rollup-rebuild"):
+        return _REBUILDING
+    if jobs.any_active():  # an import builds its own rollups when it ends; try again on a later call
+        return None
+    try:
+        stale = _need("health.trends", "rollups_stale")
+        rebuild = _need("health.trends", "rebuild_rollups")
+    except ToolError:  # no trends lane: nothing to rebuild (the brief leaves its trends out)
+        return None
     if not stale(store.samples):
         return None
-    recompute = _need("health.trends", "recompute_rollups")
+    if _rebuild_failed_at is not None and time.monotonic() - _rebuild_failed_at < REBUILD_RETRY_S:
+        return _REBUILD_FAILED  # the stored rollups stay in use; no rescan on every call
 
-    def rebuild():
-        samples = open_samples()
+    def job():
+        global _rebuild_failed_at
         try:
-            if stale(samples):  # another call's rebuild may have finished first
-                recompute(samples)
-        finally:
-            samples.close()
+            samples = open_samples()
+            try:
+                if stale(samples):  # another call's rebuild may have finished first
+                    rebuild(samples)
+            finally:
+                samples.close()
+        except Exception:
+            _rebuild_failed_at = time.monotonic()
+            raise
+        _rebuild_failed_at = None
 
-    outcome = jobs.submit("rollup-rebuild", rebuild, wait_s=ROLLUP_WAIT_S)
+    outcome = jobs.submit("rollup-rebuild", job, wait_s=ROLLUP_WAIT_S)
+    if outcome["state"] == "error":
+        return _REBUILD_FAILED
     return _REBUILDING if outcome["state"] in ("running", "busy") else None
 
 
@@ -802,15 +832,16 @@ def _watch_run(ctx, args: dict) -> dict:
     if _cfg(ctx, "research_watch", True) is False:
         return {"disabled": True, "note": "The research watch is turned off in the Caduceus settings."}
     policy = policy_for(ctx)
-    with _WATCH_LOCK:
-        pending, _WATCH_PENDING[:] = list(_WATCH_PENDING), []
-    if pending:
-        if "error" in pending[-1]:
-            return {"status": "failed", "error": pending[-1]["error"],
-                    "note": "The last research watch run failed in the background after its call returned. "
-                            "Nothing new was saved from it. Run the watch again."}
-        return {**_filter_watch(pending[-1]["result"], policy),
-                "note": "These are from a watch run that finished in the background."}
+    with jobs.preparing():  # erase refuses while a held result is handed over, so none is delivered after an erase
+        with _WATCH_LOCK:
+            pending, _WATCH_PENDING[:] = list(_WATCH_PENDING), []
+        if pending:
+            if "error" in pending[-1]:
+                return {"status": "failed", "error": pending[-1]["error"],
+                        "note": "The last research watch run failed in the background after its call returned. "
+                                "Nothing new was saved from it. Run the watch again."}
+            return {**_filter_watch(pending[-1]["result"], policy),
+                    "note": "These are from a watch run that finished in the background."}
     run_watch = _need("research.watch", "run_watch")
     default_watch = _need("research.watch", "default_watch")
     http_cls = _need("research.http", "UrllibHttp")
@@ -913,8 +944,7 @@ def capture_tool(ctx, args: dict) -> dict:
             path = _need("brief", "write_brief")(store.vault, store.samples, reports_dir(), policy=policy)
         result = {**_file_url(path), "note": "Your health brief was written on this machine. Open it in a browser."}
         if note:
-            result["rebuilding"] = ("The daily health summaries were still being rebuilt after an update, so this brief "
-                                    "may lack lean mass, protein and waist. Write it again in a minute.")
+            result["rebuilding"] = _BRIEF_NOTES[note]
         return result
     with _Store() as store:
         if op == "status":
