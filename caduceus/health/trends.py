@@ -10,7 +10,9 @@ from statistics import mean, median
 
 from ..core.db import write_txn
 
-CALC_VERSION = "trend/1"
+# 2 adds lean_mass, protein and waist (0.2.0); rollups from an older calculation are rebuilt once.
+CALC_VERSION = "trend/2"
+ROLLUP_MARK = int(CALC_VERSION.rsplit("/", 1)[1])  # stored as samples.db's user_version by every rollup write
 # Friendly name: HealthKit suffix, canonical unit, aggregation policy.
 METRICS = {
     "weight": ("BodyMass", "kg", "mean"), "bmi": ("BodyMassIndex", "count", "mean"),
@@ -30,8 +32,30 @@ METRICS = {
 }
 
 
-def recompute_rollups(samples):
-    """One SQL scan; choose one daily source for sums, all sources for means.
+def _known_types() -> tuple[str, ...]:
+    return tuple("HK" + ("Category" if m == "sleep_hours" else "Quantity") + "TypeIdentifier" + spec[0]
+                 for m, spec in METRICS.items())
+
+
+def rollups_stale(samples) -> bool:
+    """True when the stored rollups came from an older calculation, or when samples of a known metric have no rollups
+    at all. An export imported before 0.2.0 kept its raw lean mass, protein and waist samples but got no rollups for
+    them; one that held only those metrics, or an import cut off before its rollups, left none."""
+    if samples.execute("PRAGMA user_version").fetchone()[0] >= ROLLUP_MARK:
+        return False  # this calculation already ran on this file, even if the samples gave it nothing to roll up
+    if samples.execute("SELECT 1 FROM daily_rollup WHERE calc_version <> ? LIMIT 1", (CALC_VERSION,)).fetchone():
+        return True
+    if samples.execute("SELECT 1 FROM daily_rollup LIMIT 1").fetchone():
+        return False
+    types = _known_types()
+    return samples.execute(f"SELECT 1 FROM sample WHERE type IN ({','.join('?' * len(types))}) LIMIT 1",
+                           types).fetchone() is not None
+
+
+def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
+    """Every daily rollup computed from the stored samples, and the sleep warnings. Reads only.
+
+    One SQL scan; choose one daily source for sums, all sources for means.
 
     Unknown units stay in raw samples but do not enter a mixed-unit rollup.
     Sleep unions asleep intervals per night/source, then selects one source.
@@ -48,57 +72,86 @@ def recompute_rollups(samples):
     }
     normal = " ".join("WHEN '" + m + "' THEN CASE " + conversions.get(m, "WHEN unit='" + spec[1] + "' THEN value") + " END" for m, spec in METRICS.items())
     summed = ",".join("'" + m + "'" for m, spec in METRICS.items() if spec[2] == "max_source_sum")
+    rows = [tuple(row) for row in samples.execute(
+        "WITH mapped AS (SELECT *, CASE type " + cases + " END AS metric FROM sample), "
+        "normalized AS (SELECT metric,local_day AS day,source_name,CASE metric " + normal + " END AS v FROM mapped WHERE metric IS NOT NULL), "
+        "per_source AS (SELECT metric,day,source_name,SUM(v) AS total,COUNT(v) AS n FROM normalized WHERE v IS NOT NULL GROUP BY metric,day,source_name), "
+        "ranked AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY metric,day ORDER BY total DESC,source_name) AS rank FROM per_source), "
+        "rollups AS (SELECT metric,day,SUM(total)/SUM(n) AS value,SUM(n) AS n,json_group_array(source_name) AS names FROM per_source "
+        "WHERE metric NOT IN (" + summed + ") GROUP BY metric,day "
+        "UNION ALL SELECT metric,day,total,n,json_array(source_name) FROM ranked WHERE metric IN (" + summed + ") AND rank=1) "
+        "SELECT metric,day,value,n,names,? FROM rollups", (CALC_VERSION,))]
+    stages = ("1", "3", "4", "5", "HKCategoryValueSleepAnalysisAsleep",
+              "HKCategoryValueSleepAnalysisAsleepUnspecified", "HKCategoryValueSleepAnalysisAsleepCore",
+              "HKCategoryValueSleepAnalysisAsleepDeep", "HKCategoryValueSleepAnalysisAsleepREM")
+    asleep = samples.execute(
+        "SELECT tz_offset_min,source_name,start_utc,end_utc FROM sample "
+        "WHERE type='HKCategoryTypeIdentifierSleepAnalysis' AND value_text IN ("+
+        ",".join("?" for _ in stages)+")", stages)
+    grouped = {}
+    for row in asleep:
+        offset = timezone(timedelta(minutes=row[0]))
+        start = datetime.fromisoformat(row[2]).astimezone(offset)
+        end = datetime.fromisoformat(row[3]).astimezone(offset)
+        while start < end:
+            morning = start.date() + timedelta(days=1 if start.hour >= 12 else 0)
+            noon = datetime.combine(morning, time(12), tzinfo=offset)
+            stop = min(end, noon)
+            grouped.setdefault((morning.isoformat(), row[1]), []).append((start, stop))
+            start = stop
+    nights = {}
+    for (night, source), intervals in sorted(grouped.items()):
+        left = right = None
+        seconds, n = 0, 0
+        for start, end in sorted(intervals):
+            if end < start:
+                continue
+            n += 1
+            if right is None or start > right:
+                if right is not None:
+                    seconds += (right-left).total_seconds()
+                left, right = start, end
+            else:
+                right = max(right, end)
+        if right is not None:
+            seconds += (right-left).total_seconds()
+            if night not in nights or seconds > nights[night][0]:
+                nights[night] = (seconds, n, source)
+    rows += [("sleep_hours", day, min(seconds/3600, 20), n, json.dumps([source]), CALC_VERSION)
+             for day, (seconds, n, source) in nights.items()]
+    return rows, ["sleep_hours: clipped a night at 20 h" for seconds, _, _ in nights.values() if seconds > 20*3600]
+
+
+def _replace_rollups(samples, rows) -> None:
+    samples.execute("DELETE FROM daily_rollup")
+    samples.executemany("INSERT INTO daily_rollup(metric,day,value,n,source_name,calc_version) VALUES (?,?,?,?,?,?)",
+                        rows)
+    samples.execute(f"PRAGMA user_version = {ROLLUP_MARK}")  # in the same transaction as the rows
+
+
+def recompute_rollups(samples):
+    """Rebuild every daily rollup inside one write transaction (the end of an import). Returns the sleep warnings."""
     with write_txn(samples):
-        samples.execute("DELETE FROM daily_rollup")
-        samples.execute(
-            "WITH mapped AS (SELECT *, CASE type " + cases + " END AS metric FROM sample), "
-            "normalized AS (SELECT metric,local_day AS day,source_name,CASE metric " + normal + " END AS v FROM mapped WHERE metric IS NOT NULL), "
-            "per_source AS (SELECT metric,day,source_name,SUM(v) AS total,COUNT(v) AS n FROM normalized WHERE v IS NOT NULL GROUP BY metric,day,source_name), "
-            "ranked AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY metric,day ORDER BY total DESC,source_name) AS rank FROM per_source), "
-            "rollups AS (SELECT metric,day,SUM(total)/SUM(n) AS value,SUM(n) AS n,json_group_array(source_name) AS names FROM per_source "
-            "WHERE metric NOT IN (" + summed + ") GROUP BY metric,day "
-            "UNION ALL SELECT metric,day,total,n,json_array(source_name) FROM ranked WHERE metric IN (" + summed + ") AND rank=1) "
-            "INSERT INTO daily_rollup(metric,day,value,n,source_name,calc_version) SELECT metric,day,value,n,names,? FROM rollups", (CALC_VERSION,))
-        stages = ("1", "3", "4", "5", "HKCategoryValueSleepAnalysisAsleep",
-                  "HKCategoryValueSleepAnalysisAsleepUnspecified", "HKCategoryValueSleepAnalysisAsleepCore",
-                  "HKCategoryValueSleepAnalysisAsleepDeep", "HKCategoryValueSleepAnalysisAsleepREM")
-        rows = samples.execute(
-            "SELECT tz_offset_min,source_name,start_utc,end_utc FROM sample "
-            "WHERE type='HKCategoryTypeIdentifierSleepAnalysis' AND value_text IN ("+
-            ",".join("?" for _ in stages)+")", stages)
-        grouped = {}
-        for row in rows:
-            offset = timezone(timedelta(minutes=row[0]))
-            start = datetime.fromisoformat(row[2]).astimezone(offset)
-            end = datetime.fromisoformat(row[3]).astimezone(offset)
-            while start < end:
-                morning = start.date() + timedelta(days=1 if start.hour >= 12 else 0)
-                noon = datetime.combine(morning, time(12), tzinfo=offset)
-                stop = min(end, noon)
-                grouped.setdefault((morning.isoformat(), row[1]), []).append((start, stop))
-                start = stop
-        nights = {}
-        for (night, source), intervals in sorted(grouped.items()):
-            left = right = None
-            seconds, n = 0, 0
-            for start, end in sorted(intervals):
-                if end < start:
-                    continue
-                n += 1
-                if right is None or start > right:
-                    if right is not None:
-                        seconds += (right-left).total_seconds()
-                    left, right = start, end
-                else:
-                    right = max(right, end)
-            if right is not None:
-                seconds += (right-left).total_seconds()
-                if night not in nights or seconds > nights[night][0]:
-                    nights[night] = (seconds, n, source)
-        samples.executemany("INSERT INTO daily_rollup VALUES ('sleep_hours',?,?,?,?,?)",
-                            [(day, min(seconds/3600, 20), n, json.dumps([source]), CALC_VERSION)
-                             for day, (seconds, n, source) in nights.items()])
-    return ["sleep_hours: clipped a night at 20 h" for seconds, _, _ in nights.values() if seconds > 20*3600]
+        rows, warnings = _rollup_rows(samples)
+        _replace_rollups(samples, rows)
+    return warnings
+
+
+def rebuild_rollups(samples) -> bool:
+    """The one-time rebuild of rollups from an older calculation. Every scan runs outside the process's writer lock, so
+    other requests carry on; only the swap is a write. If samples arrived during a scan (an import), it scans again,
+    still outside the lock; if an import rebuilt the rollups meanwhile, its own result stands. Returns True when it
+    replaced the rollups."""
+    for _attempt in range(3):
+        marker = samples.execute("SELECT max(id) FROM sample").fetchone()[0]
+        rows, _warnings = _rollup_rows(samples)
+        with write_txn(samples):
+            if samples.execute("PRAGMA user_version").fetchone()[0] >= ROLLUP_MARK:
+                return False  # an import rebuilt them while this scan ran: this scan is obsolete
+            if samples.execute("SELECT max(id) FROM sample").fetchone()[0] == marker:
+                _replace_rollups(samples, rows)
+                return True
+    return False  # an import is still adding samples; it builds the rollups when it ends
 
 
 def _day(value):

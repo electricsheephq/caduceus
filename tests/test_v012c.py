@@ -8,7 +8,7 @@ from conftest import FakeCtx, load_plugin_package
 from caduceus.core import search
 from caduceus.core.db import write_txn
 from caduceus.core.policy import Policy
-from caduceus.health.trends import compare_windows, trend
+from caduceus.health.trends import CALC_VERSION, compare_windows, trend
 from synth import persona
 
 
@@ -37,8 +37,8 @@ def plugin():
 def series(samples):
     with write_txn(samples):
         samples.executemany("INSERT INTO daily_rollup VALUES (?,?,?,?,?,?)",
-                            [("weight", day, 98.123, 1, '["Synthetic"]', "trend/1") for day in DAYS]
-                            + [("steps", "2026-12-01", 4321, 1, '["Synthetic"]', "trend/1")])
+                            [("weight", day, 98.123, 1, '["Synthetic"]', CALC_VERSION) for day in DAYS]
+                            + [("steps", "2026-12-01", 4321, 1, '["Synthetic"]', CALC_VERSION)])
     return samples
 
 

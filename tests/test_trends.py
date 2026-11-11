@@ -6,7 +6,7 @@ import pytest
 from caduceus.core import sources
 from caduceus.core.db import write_txn
 from caduceus.health.apple import import_apple_health
-from caduceus.health.trends import (compare_windows, daily_check, metrics, recompute_rollups,
+from caduceus.health.trends import (CALC_VERSION, compare_windows, daily_check, metrics, recompute_rollups,
                                     trend, trend_svg)
 from tests.synth.apple import PIVOT, make_export
 
@@ -14,7 +14,7 @@ from tests.synth.apple import PIVOT, make_export
 def _rollup(samples, metric, day, value):
     with write_txn(samples):
         samples.execute("INSERT INTO daily_rollup VALUES (?,?,?,?,?,?)",
-                        (metric, str(day), value, 1, '["Synthetic"]', "trend/1"))
+                        (metric, str(day), value, 1, '["Synthetic"]', CALC_VERSION))
 
 
 def test_buckets_daily_means_and_gaps(samples):
@@ -53,7 +53,7 @@ def test_compare_weight_drop_and_plateau(samples, vault, tmp_path):
     assert halves[0]["weekly_slope"] == pytest.approx(-1)
     assert halves[1]["weekly_slope"] == pytest.approx(0, abs=1e-10)
     assert result["after"]["last_value"] == pytest.approx(88)
-    assert result["unit"] == "kg" and result["calc_version"] == "trend/1"
+    assert result["unit"] == "kg" and result["calc_version"] == CALC_VERSION
     with pytest.raises(ValueError):
         compare_windows(samples, "weight", pivot=PIVOT, after_days=0)
 
