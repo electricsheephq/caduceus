@@ -1025,9 +1025,10 @@ def _erase_preview(ctx, root: Path) -> str:
         except (sqlite3.Error, OSError):  # a damaged vault still gets the plain wording
             c = None
         if c is not None:
-            what = (f"{c['files']} imported files with their copies, {c['dna_callsets'] or 0} DNA callsets, "
-                    f"{c['variant_report_records'] or 0} variant report records, {c['lab_results']} lab results, "
-                    f"{c['medications']} medications, {c['notes']} notes, {c['research_items']} research items, "
+            n = {key: value or 0 for key, value in c.items()}  # a missing table counts as none
+            what = (f"{n['files']} imported files with their copies, {n['dna_callsets']} DNA callsets, "
+                    f"{n['variant_report_records']} variant report records, {n['lab_results']} lab results, "
+                    f"{n['medications']} medications, {n['notes']} notes, {n['research_items']} research items, "
                     "every health sample, the reports and the demo files")
     return (f"This deletes everything Caduceus stored on this machine: {what} ({size} in {root}). "
             "Your Caduceus settings stay. It cannot be undone. To erase it, run: /caduceus erase confirm")
@@ -1040,8 +1041,8 @@ def _erase(ctx, confirm: bool) -> str:
         return _erase_preview(ctx, root)
     with jobs.erasing() as free:  # no import, demo or research watch can start until the files are gone
         if not free:
-            return ("An import, the demo or a research watch is still running. Wait until /caduceus imports shows "
-                    "it finished, then run /caduceus erase confirm again.")
+            return ("An import, the demo, a research watch or another erase is still running. Wait until "
+                    "/caduceus imports shows it finished, then run /caduceus erase confirm again.")
         targets = _erase_targets(root)
         if not targets:
             return _NOTHING_TO_ERASE
@@ -1056,7 +1057,9 @@ def _erase(ctx, confirm: bool) -> str:
             except OSError as exc:
                 return (f"Could not delete {target.name} ({type(exc).__name__}); nothing after it was removed. "
                         f"Run /caduceus erase confirm again, or delete the folder {root} yourself.")
-    left = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
+        with _WATCH_LOCK:  # a watch result kept in memory for the next watch_run came from the erased vault
+            _WATCH_PENDING.clear()
+        left = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
     note = f" Left in place because Caduceus did not create them: {', '.join(left[:5])}." if left else ""
     if links:
         note += (f" {', '.join(links)} {'was a link' if len(links) == 1 else 'were links'}: only the link was removed, "

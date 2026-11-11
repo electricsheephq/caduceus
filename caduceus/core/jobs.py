@@ -37,10 +37,11 @@ def preparing() -> Iterator[None]:
 
 @contextmanager
 def erasing() -> Iterator[bool]:
-    """For erase: yields True when no job is being prepared or running; none can start until the block ends."""
+    """For erase: yields True when no job is being prepared or running and no other erase is deleting; no job can
+    start until the block ends."""
     global _ERASING
     with _GATE:
-        free = _PREPARING == 0 and not any_active()
+        free = not _ERASING and _PREPARING == 0 and not any_active()
         if free:
             _ERASING = True
     try:

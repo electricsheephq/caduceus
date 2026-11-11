@@ -70,8 +70,8 @@ A comparison such as "Would Mounjaro be different?" works the same way: call `op
 
 ## Example: "Am I losing muscle on Ozempic?"
 
-1. Call `caduceus_trend op=compare` with `metric=lean_mass` and with `metric=weight`, both with the drug and the same `after_days`, so the two windows cover the same days. Give the lean mass change and the weight change, and the lean share of the loss (lean change divided by weight change) with units and dates.
-2. Call `op=compare metric=protein` if a food log is recorded: the daily grams before and after the start.
+1. Call `caduceus_trend op=compare` with `metric=lean_mass` and with `metric=weight`, both with the drug and the same `after_days`, so the two windows cover the same days. Give the lean mass change and the weight change with units and dates. Give the lean share of the loss (lean change divided by weight change) only when weight fell in that window; otherwise give the two changes on their own.
+2. Call `op=compare metric=protein` if a food log is recorded: the average grams per logged day before and after the start, with the number of logged days in each window (`n_days`).
 3. Say these are their own measurements, a pattern and not a cause. Home scales estimate lean mass, so small changes are uncertain.
 4. Do not prescribe protein targets, diets or exercise. End with the advice line from rule 6, adding that a dietitian can help too.
 

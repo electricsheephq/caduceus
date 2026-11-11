@@ -49,7 +49,7 @@ turns it on.
    - **Next step:** bring these numbers to the prescriber.
 
    Then try *"Would Mounjaro be different for me?"* and *"Am I losing muscle on Ozempic?"*.
-4. When you are done, `/caduceus erase confirm` clears the demo from the vault.
+4. When you are done, `/caduceus erase` shows what would be deleted. `/caduceus erase confirm` then deletes everything Caduceus stored on this machine, the demo included.
 
 ## What you get
 

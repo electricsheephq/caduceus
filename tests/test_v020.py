@@ -191,3 +191,40 @@ def test_demo_answers_am_i_losing_muscle(tmp_path):
     assert lean["unit"] == "kg" and 0.4 < lean_drop < weight_drop
     protein = call("caduceus_trend", op="compare", metric="protein", drug="Ozempic", after_days=84)
     assert protein["unit"] == "g" and protein["after"]["mean"] < protein["before"]["mean"] - 10
+
+
+def test_overlapping_erases_keep_the_gate_closed(data_dir):
+    ran = threading.Event()
+    with jobs.erasing() as first:
+        assert first
+        with jobs.erasing() as second:
+            assert not second  # a second erase is refused
+        worker = threading.Thread(target=lambda: jobs.submit("v020-gate2", ran.set, wait_s=5))
+        worker.start()
+        assert not ran.wait(0.3)  # and leaving it did not reopen the gate for new jobs
+    worker.join(5)
+    assert ran.is_set()
+
+
+def test_erase_clears_watch_results_kept_in_memory(data_dir):
+    from caduceus import ops
+
+    _seed(data_dir)
+    with ops._WATCH_LOCK:
+        ops._WATCH_PENDING.append({"result": {"new_items": ["from the old vault"]}})
+    try:
+        assert tools.command(FakeCtx(), "erase confirm").startswith("Erased")
+        with ops._WATCH_LOCK:
+            assert ops._WATCH_PENDING == []
+    finally:
+        with ops._WATCH_LOCK:
+            ops._WATCH_PENDING.clear()
+
+
+def test_erase_preview_counts_a_missing_table_as_none(data_dir, vault, monkeypatch):
+    from caduceus import ops
+
+    real = ops._settings
+    monkeypatch.setattr(ops, "_settings", lambda ctx: {**real(ctx), "counts": dict.fromkeys(real(ctx)["counts"])})
+    text = tools.command(FakeCtx(), "erase")
+    assert "None" not in text and "0 imported files" in text
