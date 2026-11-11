@@ -10,7 +10,8 @@ from statistics import mean, median
 
 from ..core.db import write_txn
 
-CALC_VERSION = "trend/1"
+# 2 adds lean_mass, protein and waist (0.2.0); rollups from an older calculation are rebuilt once.
+CALC_VERSION = "trend/2"
 # Friendly name: HealthKit suffix, canonical unit, aggregation policy.
 METRICS = {
     "weight": ("BodyMass", "kg", "mean"), "bmi": ("BodyMassIndex", "count", "mean"),
@@ -28,6 +29,12 @@ METRICS = {
     "active_energy": ("ActiveEnergyBurned", "kcal", "max_source_sum"),
     "sleep_hours": ("SleepAnalysis", "h", "max_source_sum"),
 }
+
+
+def rollups_stale(samples) -> bool:
+    """Older rollups can lack lean mass, protein and waist despite having their raw samples from before 0.2.0."""
+    return samples.execute("SELECT 1 FROM daily_rollup WHERE calc_version <> ? LIMIT 1",
+                           (CALC_VERSION,)).fetchone() is not None
 
 
 def recompute_rollups(samples):

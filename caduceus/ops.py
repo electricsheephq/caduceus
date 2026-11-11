@@ -13,6 +13,7 @@ import re
 import shutil
 import sqlite3
 import threading
+from contextlib import ExitStack, closing
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -26,6 +27,9 @@ from .tools import LIMITS, ToolError
 
 IMPORT_WAIT_S = 45.0       # Hermes cuts a tool call off at 420 s; imports keep going in the background
 WATCH_WAIT_S = 300.0
+ROLLUP_WAIT_S = 20.0       # the one-time rebuild after an update; most vaults finish well inside this
+_REBUILDING = ("Caduceus is rebuilding its daily health summaries from the samples already stored. This happens once, "
+               "after an update. Until it finishes, lean mass, protein and waist may be missing. Ask again in a minute.")
 _RSID = re.compile(r"^rs\d+$", re.I)
 _GENE = re.compile(r"^[A-Z0-9-]{2,15}$")
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -55,22 +59,27 @@ class _Store:
     """Opens the vault (and samples on demand) for one tool call and closes them after."""
 
     def __init__(self):
-        self.vault = open_vault()
+        self._stack = ExitStack()
+        self.vault = None
         self._samples = None
 
     @property
     def samples(self):
         if self._samples is None:
-            self._samples = open_samples()
+            self._samples = self._stack.enter_context(closing(open_samples()))
         return self._samples
 
     def __enter__(self):
+        try:
+            self._stack.enter_context(jobs.preparing())
+            self.vault = self._stack.enter_context(closing(open_vault()))
+        except BaseException:
+            self._stack.close()
+            raise
         return self
 
     def __exit__(self, *exc):
-        self.vault.close()
-        if self._samples is not None:
-            self._samples.close()
+        return self._stack.__exit__(*exc)
 
 
 def _need(module: str, name: str):
@@ -459,6 +468,15 @@ def canonical_drug(text) -> str | None:
         return None
 
 
+def glp1_drugs() -> frozenset[str]:
+    """The knowledge pack's GLP-1 drugs by canonical name; empty without the pack."""
+    try:
+        pack = _need("knowledge.pack", "load_pack")()
+    except ToolError:
+        return frozenset()
+    return frozenset(d for entry in pack.glp1 for d in entry.get("drugs") or ())
+
+
 def display_drug(text) -> str:
     """A medication as written in the record, tidied for display: "ozempic (semaglutide) …" -> "Ozempic (semaglutide) …"."""
     text = " ".join(str(text or "").split())
@@ -500,6 +518,25 @@ def _drug_start(vault, drug: str, policy) -> tuple[date | None, int]:
     raise ToolError(f"no start date recorded for {drug}: record it with caduceus_capture op=medication")
 
 
+def _refresh_rollups(store) -> str | None:
+    """Rebuild older daily summaries once in the background; reads keep the stored rollups until it commits."""
+    stale = _need("health.trends", "rollups_stale")
+    if not stale(store.samples):
+        return None
+    recompute = _need("health.trends", "recompute_rollups")
+
+    def rebuild():
+        samples = open_samples()
+        try:
+            if stale(samples):  # another call's rebuild may have finished first
+                recompute(samples)
+        finally:
+            samples.close()
+
+    outcome = jobs.submit("rollup-rebuild", rebuild, wait_s=ROLLUP_WAIT_S)
+    return _REBUILDING if outcome["state"] in ("running", "busy") else None
+
+
 def trend_tool(ctx, args: dict) -> dict:
     op = args.get("op")
     if op not in _TREND_OPS:
@@ -514,8 +551,12 @@ def trend_tool(ctx, args: dict) -> dict:
                               end=_date(args.get("end"), "end"))
         if not allowed(policy, Category.WELLNESS):
             return _withheld(1)
+        note = _refresh_rollups(store)
         if op == "metrics":
-            return {"metrics": _lane(_need("health.trends", "metrics"), store.samples)}
+            result = {"metrics": _lane(_need("health.trends", "metrics"), store.samples)}
+            if note:
+                result["rebuilding"] = note
+            return result
         if op == "check":
             return _lane(_need("health.trends", "daily_check"), store.samples)
         metric = str(args.get("metric") or "").strip()
@@ -536,7 +577,10 @@ def trend_tool(ctx, args: dict) -> dict:
                     raise ToolError("give a pivot date or a drug whose start date is recorded")
                 pivot, hidden = _drug_start(store.vault, drug, policy)
                 if pivot is None:  # the drug's start is hidden: nothing about it, not even its date
-                    return {"metric": metric, **_withheld(hidden)}
+                    result = {"metric": metric, **_withheld(hidden)}
+                    if note:
+                        result["rebuilding"] = note
+                    return result
             explicit_after = after_days is not None
             if not explicit_after:
                 after_days = default_after_days(store.samples, metric, pivot)
@@ -562,6 +606,8 @@ def trend_tool(ctx, args: dict) -> dict:
                                 "for the later data."))
                 else:
                     result["window_note"] = f"This series ends on {end.isoformat()}; your data continues to {last}."
+        if note:
+            result["rebuilding"] = note
         return result
 
 
@@ -863,8 +909,13 @@ def capture_tool(ctx, args: dict) -> dict:
     if op == "brief":
         policy = policy_for(ctx)
         with _Store() as store:
+            note = _refresh_rollups(store) if allowed(policy, Category.WELLNESS) else None
             path = _need("brief", "write_brief")(store.vault, store.samples, reports_dir(), policy=policy)
-        return {**_file_url(path), "note": "Your health brief was written on this machine. Open it in a browser."}
+        result = {**_file_url(path), "note": "Your health brief was written on this machine. Open it in a browser."}
+        if note:
+            result["rebuilding"] = ("The daily health summaries were still being rebuilt after an update, so this brief "
+                                    "may lack lean mass, protein and waist. Write it again in a minute.")
+        return result
     with _Store() as store:
         if op == "status":
             if args.get("run_id") not in (None, ""):
@@ -1039,10 +1090,13 @@ def _erase(ctx, confirm: bool) -> str:
     root = data_dir()
     if not confirm:
         return _erase_preview(ctx, root)
-    with jobs.erasing() as free:  # no import, demo or research watch can start until the files are gone
+    with jobs.erasing() as free:
+        # Never open a _Store here: it would wait for its own erase to finish.
         if not free:
-            return ("An import, the demo, a research watch or another erase is still running. Wait until "
-                    "/caduceus imports shows it finished, then run /caduceus erase confirm again.")
+            return ("An import, the demo, a research watch, a summary rebuild or another Caduceus request is still running. "
+                    "Wait until it finishes (/caduceus imports shows imports), then run /caduceus erase confirm again.")
+        with _WATCH_LOCK:  # even an empty vault or a failed delete must discard the old watch result
+            _WATCH_PENDING.clear()
         targets = _erase_targets(root)
         if not targets:
             return _NOTHING_TO_ERASE
@@ -1057,8 +1111,6 @@ def _erase(ctx, confirm: bool) -> str:
             except OSError as exc:
                 return (f"Could not delete {target.name} ({type(exc).__name__}); nothing after it was removed. "
                         f"Run /caduceus erase confirm again, or delete the folder {root} yourself.")
-        with _WATCH_LOCK:  # a watch result kept in memory for the next watch_run came from the erased vault
-            _WATCH_PENDING.clear()
         left = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
     note = f" Left in place because Caduceus did not create them: {', '.join(left[:5])}." if left else ""
     if links:

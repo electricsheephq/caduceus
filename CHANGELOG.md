@@ -2,6 +2,13 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 — 2026-11-12
+
+### Fixed
+- The brief's weight and lean mass panels now compare around the start of your GLP-1 medicine when one is recorded, so they match the chat. Before, a later start of any other medicine moved them. (#9)
+- `/caduceus erase confirm` also waits for Caduceus requests already running in another chat (a brief, a report, a record being saved). Requests that arrive during an erase wait until it finishes. Research results kept in memory are cleared every time. (#10)
+- Vaults whose Apple Health export was imported before 0.2.0 now get lean mass, protein and waist from the samples already stored. Caduceus rebuilds its daily summaries once, in the background, the first time you ask about a trend, so no new export is needed. (#11)
+
 ## 0.2.0 — 2026-11-11
 
 ### Added

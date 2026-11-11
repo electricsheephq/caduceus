@@ -168,6 +168,17 @@ def _compare_text(cmp: dict, unit: str, drug: str) -> str:
             "the medication caused it.</p>")
 
 
+def _pivot_start(starts):
+    """Prefer the latest GLP-1 start for weight and lean mass, matching the chat; otherwise use the latest start."""
+    if not starts:
+        return None
+    from .ops import canonical_drug, glp1_drugs
+
+    glp1 = glp1_drugs()
+    chosen = [m for m in starts if canonical_drug(m["drug"]) in glp1 or canonical_drug(m.get("brand") or "") in glp1]
+    return (chosen or starts)[-1]
+
+
 def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
     trends_mod = _module("health.trends")
     if trends_mod is None:
@@ -176,6 +187,7 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
         return "", 1
     blocks, start = [], today - timedelta(days=365)
     starts = [m for m in meds if m["event"] == "start" and _is_day(m["occurred_on"])]
+    latest = _pivot_start(starts)
     markers = _markers(starts)
     for metric, label in TREND_METRICS:
         series, _err = _try(_lane(trends_mod.trend), samples, metric, start=start, end=today, bucket="week")
@@ -186,8 +198,7 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
                                    markers=markers)
         cov = series.get("coverage") or {}
         text = ""
-        if starts and metric in ("weight", "lean_mass"):
-            latest = starts[-1]
+        if latest and metric in ("weight", "lean_mass"):
             pivot = date.fromisoformat(latest["occurred_on"][:10])
             from .ops import default_after_days, short_drug
 
