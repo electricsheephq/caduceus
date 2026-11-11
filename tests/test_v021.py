@@ -387,13 +387,19 @@ def test_requests_carry_on_while_the_rebuild_scans(call, slow_rebuild):
     assert done == ["No imports yet."]
 
 
-def test_rebuild_recomputes_inside_the_write_when_samples_arrive(call, aged_rollups, monkeypatch):
-    scan, scans = call.trends._rollup_rows, []
+def test_rebuild_rescans_outside_the_lock_when_samples_arrive(call, aged_rollups, monkeypatch):
+    scan, scans, blocked = call.trends._rollup_rows, [], []
 
     def scan_then_import(samples):
+        if scans:  # the second scan must not hold the writer lock either: a request finishes meanwhile
+            done = []
+            worker = threading.Thread(target=lambda: done.append(call.command("imports")))
+            worker.start()
+            worker.join(3)
+            blocked.append(not done)
         rows = scan(samples)
         scans.append(len(rows[0]))
-        if len(scans) == 1:  # an import adds a sample after the scan, before the swap
+        if len(scans) == 1:  # an import adds a sample after the first scan, before the swap
             with write_txn(aged_rollups):
                 _sample(aged_rollups, "LeanBodyMass", "kg", 59, "late-lean")
                 aged_rollups.execute("UPDATE sample SET local_day='2026-09-30' WHERE dedupe_key='late-lean'")
@@ -404,9 +410,32 @@ def test_rebuild_recomputes_inside_the_write_when_samples_arrive(call, aged_roll
         call("caduceus_trend", op="series", metric="lean_mass", bucket="day")
     finally:
         assert call.ops.jobs.join("rollup-rebuild", 5)
-    assert len(scans) == 2 and scans[1] == scans[0] + 1
+    assert len(scans) == 2 and scans[1] == scans[0] + 1 and blocked == [False]
     assert aged_rollups.execute("SELECT value FROM daily_rollup WHERE metric='lean_mass' AND day='2026-09-30'"
                                 ).fetchone()[0] == 59
+
+
+def test_rebuild_drops_its_scan_when_an_import_rebuilt_meanwhile(call, aged_rollups, monkeypatch):
+    scan, scans = call.trends._rollup_rows, []
+
+    def scan_then_import(samples):
+        rows = scan(samples)
+        scans.append(rows)
+        if len(scans) == 1:  # an import adds a sample and builds the rollups itself before the swap
+            with write_txn(aged_rollups):
+                _sample(aged_rollups, "LeanBodyMass", "kg", 58, "import-lean")
+                aged_rollups.execute("UPDATE sample SET local_day='2026-09-29' WHERE dedupe_key='import-lean'")
+            trends.recompute_rollups(aged_rollups)
+        return rows
+
+    monkeypatch.setattr(call.trends, "_rollup_rows", scan_then_import)
+    try:
+        call("caduceus_trend", op="series", metric="lean_mass", bucket="day")
+    finally:
+        assert call.ops.jobs.join("rollup-rebuild", 5)
+    assert len(scans) == 1  # no second scan: the import's rollups stand
+    assert aged_rollups.execute("SELECT value FROM daily_rollup WHERE metric='lean_mass' AND day='2026-09-29'"
+                                ).fetchone()[0] == 58
 
 
 def test_samples_without_any_rollups_are_rebuilt_once(call, samples, monkeypatch):

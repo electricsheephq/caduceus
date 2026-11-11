@@ -137,16 +137,21 @@ def recompute_rollups(samples):
     return warnings
 
 
-def rebuild_rollups(samples) -> None:
-    """The one-time rebuild of rollups from an older calculation. The scan runs outside the process's writer lock, so
-    other requests carry on while it runs; only the swap is a write. If samples arrived meanwhile (an import), the rows
-    are computed again inside the write transaction, so the new samples are never left out."""
-    marker = samples.execute("SELECT max(id) FROM sample").fetchone()[0]
-    rows, _warnings = _rollup_rows(samples)
-    with write_txn(samples):
-        if samples.execute("SELECT max(id) FROM sample").fetchone()[0] != marker:
-            rows, _warnings = _rollup_rows(samples)
-        _replace_rollups(samples, rows)
+def rebuild_rollups(samples) -> bool:
+    """The one-time rebuild of rollups from an older calculation. Every scan runs outside the process's writer lock, so
+    other requests carry on; only the swap is a write. If samples arrived during a scan (an import), it scans again,
+    still outside the lock; if an import rebuilt the rollups meanwhile, its own result stands. Returns True when it
+    replaced the rollups."""
+    for _attempt in range(3):
+        marker = samples.execute("SELECT max(id) FROM sample").fetchone()[0]
+        rows, _warnings = _rollup_rows(samples)
+        with write_txn(samples):
+            if samples.execute("PRAGMA user_version").fetchone()[0] >= ROLLUP_MARK:
+                return False  # an import rebuilt them while this scan ran: this scan is obsolete
+            if samples.execute("SELECT max(id) FROM sample").fetchone()[0] == marker:
+                _replace_rollups(samples, rows)
+                return True
+    return False  # an import is still adding samples; it builds the rollups when it ends
 
 
 def _day(value):
