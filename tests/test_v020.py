@@ -51,8 +51,71 @@ def test_erase_never_follows_a_symlinked_folder(data_dir, tmp_path):
     (outside / "keep.txt").write_text("keep")
     (data_dir / "vault.db").write_bytes(b"x")
     (data_dir / "sources").symlink_to(outside, target_is_directory=True)
-    tools.command(FakeCtx(), "erase confirm")
+    text = tools.command(FakeCtx(), "erase confirm")
     assert not (data_dir / "sources").exists() and (outside / "keep.txt").read_text() == "keep"
+    assert "sources was a link: only the link was removed" in text
+
+
+def test_erase_preview_never_opens_a_linked_vault(data_dir, tmp_path):
+    import sqlite3
+
+    outside = tmp_path / "elsewhere.db"
+    conn = sqlite3.connect(outside)
+    conn.execute("CREATE TABLE t (x)")
+    conn.commit()
+    conn.close()
+    before = (outside.read_bytes(), outside.stat().st_mtime_ns)
+    (data_dir / "vault.db").symlink_to(outside)
+    text = tools.command(FakeCtx(), "erase")
+    assert "/caduceus erase confirm" in text and "imported files with their copies" not in text
+    assert (outside.read_bytes(), outside.stat().st_mtime_ns) == before
+    assert sorted(q.name for q in tmp_path.iterdir() if q.name.startswith("elsewhere")) == ["elsewhere.db"]
+
+
+def test_erase_preview_with_a_damaged_vault(data_dir):
+    (data_dir / "vault.db").write_bytes(b"not a database " * 300)
+    text = tools.command(FakeCtx(), "erase")
+    assert text.startswith("This deletes everything Caduceus stored") and "error" not in text.lower()
+
+
+def test_erase_deletes_side_files_before_their_database():
+    from caduceus.ops import _ERASE_FILES
+
+    for db in ("vault.db", "samples.db"):
+        assert all(_ERASE_FILES.index(db + side) < _ERASE_FILES.index(db) for side in ("-wal", "-shm", "-journal"))
+
+
+def test_erase_refuses_while_a_job_is_being_prepared(data_dir):
+    _seed(data_dir)
+    entered, release = threading.Event(), threading.Event()
+
+    def importing():  # an import copying its file before it starts its job
+        with jobs.preparing():
+            entered.set()
+            release.wait(5)
+
+    worker = threading.Thread(target=importing)
+    worker.start()
+    try:
+        assert entered.wait(5)
+        assert "still running" in tools.command(FakeCtx(), "erase confirm")
+        assert (data_dir / "vault.db").exists()
+    finally:
+        release.set()
+        worker.join(5)
+    assert tools.command(FakeCtx(), "erase confirm").startswith("Erased")
+
+
+def test_new_jobs_wait_until_an_erase_finishes(data_dir):
+    ran = threading.Event()
+    results = []
+    with jobs.erasing() as free:
+        assert free
+        worker = threading.Thread(target=lambda: results.append(jobs.submit("v020-gate", ran.set, wait_s=5)))
+        worker.start()
+        assert not ran.wait(0.3)  # the job waits while files are being deleted
+    worker.join(5)
+    assert ran.is_set() and results[0]["state"] == "done"
 
 
 def test_erase_refuses_while_a_job_runs(data_dir):
