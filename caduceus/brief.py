@@ -18,7 +18,8 @@ from .core.policy import Category, allowed
 
 BRIEF_VERSION = "brief/1"
 TREND_METRICS = (
-    ("weight", "Weight"), ("resting_heart_rate", "Resting heart rate"), ("steps", "Steps per day"),
+    ("weight", "Weight"), ("lean_mass", "Lean mass"), ("protein", "Protein per day"),
+    ("resting_heart_rate", "Resting heart rate"), ("steps", "Steps per day"),
     ("sleep_hours", "Sleep per night"), ("blood_glucose", "Blood glucose (Apple Health)"),
 )
 LABS = (("HbA1c", "HbA1c"), ("glucose", "Glucose"), ("LDL", "LDL cholesterol"))
@@ -185,7 +186,7 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
                                    markers=markers)
         cov = series.get("coverage") or {}
         text = ""
-        if starts and metric == "weight":
+        if starts and metric in ("weight", "lean_mass"):
             latest = starts[-1]
             pivot = date.fromisoformat(latest["occurred_on"][:10])
             from .ops import default_after_days, short_drug

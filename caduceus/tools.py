@@ -78,7 +78,7 @@ TOOLS = (
         ),
         "parameters": _obj({
             "op": {"type": "string", "enum": ["metrics", "series", "compare", "labs", "check"]},
-            "metric": {"type": "string", "description": "e.g. weight, steps, resting_heart_rate, sleep_hours."},
+            "metric": {"type": "string", "description": "e.g. weight, lean_mass, protein, waist, steps, resting_heart_rate, sleep_hours."},
             "lab": {"type": "string", "description": "Lab name or LOINC code, e.g. 'HbA1c' or '4548-4'."},
             "start": {"type": "string", "description": "ISO date."},
             "end": {"type": "string", "description": "ISO date."},

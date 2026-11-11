@@ -2,6 +2,17 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.0 — 2026-11-11
+
+### Added
+- **`/caduceus erase`.** It lists what Caduceus stored on this machine. `/caduceus erase confirm` deletes the vault, the samples, the copied files, the reports and the demo files, and nothing else. It refuses while an import, the demo or a research watch is running in the same Hermes process. Settings stay. Only the user can run it; no tool erases.
+- **GLP-1 companion metrics.** `lean_mass`, `protein` (grams a day, one source a day) and `waist` from Apple Health work in every trend operation, including before-and-after comparisons around a medication start. Pounds, inches and milligrams are converted. The health brief adds lean mass and protein panels.
+- **The demo persona has a smart scale's lean mass, a food log's protein and waist entries**, so *"Am I losing muscle on Ozempic?"* has an answer. Earlier demo numbers are unchanged. In a vault that already holds the old demo, run `/caduceus erase confirm` and then `/caduceus demo` to see them.
+- The guide skill covers muscle and protein questions: numbers and dates, no diet or exercise prescriptions.
+
+### Notes
+- Existing vaults get the new metrics when you import a new Apple Health export.
+
 ## 0.1.5 — 2026-11-11
 
 ### Docs

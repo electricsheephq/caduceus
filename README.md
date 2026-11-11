@@ -48,7 +48,8 @@ turns it on.
    - **Genome:** one marker linked to how people respond to this kind of drug is flagged. Its evidence is small and mixed: one 2023 study found an effect, and a 2026 study found none. The answer also cites a 2026 *Nature* study on genetics and weight loss with this drug class.
    - **Next step:** bring these numbers to the prescriber.
 
-   Then try *"Would Mounjaro be different for me?"*.
+   Then try *"Would Mounjaro be different for me?"* and *"Am I losing muscle on Ozempic?"*.
+4. When you are done, `/caduceus erase` shows what would be deleted. `/caduceus erase confirm` then deletes everything Caduceus stored on this machine, the demo included.
 
 ## What you get
 
@@ -60,6 +61,7 @@ Caduceus brings these into one SQLite vault on your own machine:
 
 What that gives you:
 - **One answer from all your data:** your genotype, your weight curve, your lab results and published research, each cited.
+- **A GLP-1 companion:** lean mass, protein and waist from Apple Health sit beside your weight, so "Am I losing muscle on Ozempic?" gets your own numbers before and after the start date.
 - **Your vault stays on your machine:** search, imports and reports run locally. The agent reads only the slices a question needs.
 - **Your variant report, rebuilt offline:** your Promethease report becomes a self-contained page in Caduceus' own design. Caduceus also writes a one-page health brief with charts to bring to your doctor.
 - **It keeps watching new research about your genes and medications:** studies on your own gene–drug pairs come first, and a digest arrives only when something new appears.
@@ -140,6 +142,8 @@ like any message;
 no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
 check it holds no health data, and files it to this repository with `gh` only after you
 approve the draft.
+
+To delete everything Caduceus stored, run `/caduceus erase`: it shows what would go, and `/caduceus erase confirm` deletes it. Your settings stay.
 
 Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is not encrypted at rest; encrypted and local-model levels are planned for v0.4. See [SECURITY.md](SECURITY.md) for the boundaries.
 

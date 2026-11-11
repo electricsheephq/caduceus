@@ -8,10 +8,13 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import json
+import os
 import re
+import shutil
 import sqlite3
 import threading
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from .core import jobs, search as search_index, sources
 from .core.contracts import SourceKind
@@ -619,8 +622,6 @@ def _import(args: dict) -> dict:
                         "an Apple Health export.zip or FHIR JSON. Whole-genome VCF files are not supported yet.")
     module, name, dbs = _IMPORTERS[kind]
     importer = _need(module, name)
-    with _Store() as store:
-        src, existed = sources.store_source(store.vault, path, kind)
 
     def run():
         vault = open_vault()
@@ -635,7 +636,10 @@ def _import(args: dict) -> dict:
         finally:
             vault.close()
 
-    outcome = jobs.submit(src.sha256, run, wait_s=IMPORT_WAIT_S)
+    with jobs.preparing():  # /caduceus erase refuses until the copy is made and its job has started
+        with _Store() as store:
+            src, existed = sources.store_source(store.vault, path, kind)
+        outcome = jobs.submit(src.sha256, run, wait_s=IMPORT_WAIT_S)
     base = {"file": src.original_name, "kind": kind, "source_id": src.id, "already_in_vault": existed}
     if outcome["state"] == "done":
         return {**base, **outcome["result"]}
@@ -877,7 +881,7 @@ def capture_tool(ctx, args: dict) -> dict:
 # ---------------------------------------------------------------- /caduceus
 
 _HELP = ("/caduceus [status] | privacy [open|standard] | hide <category> | show <category> | unlock <category> | "
-         "lock <category> | imports | demo | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
+         "lock <category> | imports | demo | erase [confirm] | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
          "Ask your agent to import a file by its path, or to answer questions from your DNA, Apple Health and records.")
 
 
@@ -912,6 +916,11 @@ _DEMO_LOCK = threading.Lock()
 
 
 def _demo() -> str:
+    with jobs.preparing():  # /caduceus erase refuses until the demo files are written and the import has started
+        return _start_demo()
+
+
+def _start_demo() -> str:
     from .demo.persona import write_persona
 
     names = ("persona-23andme-v5.zip", "persona-variant-report.zip", "persona-apple-health.zip")
@@ -972,6 +981,93 @@ def _demo() -> str:
             '“Why isn\'t my Ozempic working?” or “Would Mounjaro be different for me?”')
 
 
+# Only what Caduceus itself creates: both databases with SQLite's side files, copied sources, reports, demo files.
+# Side files go before their database, so a failed delete never leaves a journal beside a new database.
+_ERASE_FILES = tuple(name + suffix for name in ("vault.db", "samples.db") for suffix in ("-wal", "-shm", "-journal", ""))
+_NOTHING_TO_ERASE = "There is nothing to erase: Caduceus has no files on this machine yet."
+_ERASE_DIRS = ("sources", "reports", "demo-files")
+
+
+def _erase_targets(root: Path) -> list[Path]:
+    return [root / name for name in _ERASE_FILES + _ERASE_DIRS if os.path.lexists(root / name)]
+
+
+def _tree_bytes(path: Path) -> int:
+    try:
+        if path.is_symlink() or not path.is_dir():
+            return path.lstat().st_size
+    except OSError:
+        return 0
+    total = 0
+    for folder, _dirs, files in os.walk(path):  # os.walk does not descend into symlinked folders
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(folder, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def _size_text(n: int) -> str:
+    return f"{n / 1_000_000:.1f} MB" if n >= 100_000 else f"{n / 1000:.0f} KB"
+
+
+def _erase_preview(ctx, root: Path) -> str:
+    targets = _erase_targets(root)
+    if not targets:
+        return _NOTHING_TO_ERASE
+    size = _size_text(sum(_tree_bytes(t) for t in targets))
+    what = "your imported files and their copies, DNA calls, health samples, records, notes, research items and reports"
+    vault_file = root / "vault.db"
+    if vault_file.is_file() and not vault_file.is_symlink():  # never open (or migrate) a database a link points to
+        try:
+            c = _settings(ctx)["counts"]
+        except (sqlite3.Error, OSError):  # a damaged vault still gets the plain wording
+            c = None
+        if c is not None:
+            n = {key: value or 0 for key, value in c.items()}  # a missing table counts as none
+            what = (f"{n['files']} imported files with their copies, {n['dna_callsets']} DNA callsets, "
+                    f"{n['variant_report_records']} variant report records, {n['lab_results']} lab results, "
+                    f"{n['medications']} medications, {n['notes']} notes, {n['research_items']} research items, "
+                    "every health sample, the reports and the demo files")
+    return (f"This deletes everything Caduceus stored on this machine: {what} ({size} in {root}). "
+            "Your Caduceus settings stay. It cannot be undone. To erase it, run: /caduceus erase confirm")
+
+
+def _erase(ctx, confirm: bool) -> str:
+    """The user's own command (tools never call it): preview first, delete only with `confirm`."""
+    root = data_dir()
+    if not confirm:
+        return _erase_preview(ctx, root)
+    with jobs.erasing() as free:  # no import, demo or research watch can start until the files are gone
+        if not free:
+            return ("An import, the demo, a research watch or another erase is still running. Wait until "
+                    "/caduceus imports shows it finished, then run /caduceus erase confirm again.")
+        targets = _erase_targets(root)
+        if not targets:
+            return _NOTHING_TO_ERASE
+        size = _size_text(sum(_tree_bytes(t) for t in targets))
+        links = [t.name for t in targets if t.is_symlink()]
+        for target in targets:
+            try:
+                if target.is_dir() and not target.is_symlink():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            except OSError as exc:
+                return (f"Could not delete {target.name} ({type(exc).__name__}); nothing after it was removed. "
+                        f"Run /caduceus erase confirm again, or delete the folder {root} yourself.")
+        with _WATCH_LOCK:  # a watch result kept in memory for the next watch_run came from the erased vault
+            _WATCH_PENDING.clear()
+        left = sorted(p.name for p in root.iterdir()) if root.is_dir() else []
+    note = f" Left in place because Caduceus did not create them: {', '.join(left[:5])}." if left else ""
+    if links:
+        note += (f" {', '.join(links)} {'was a link' if len(links) == 1 else 'were links'}: only the link was removed, "
+                 "not what it points to.")
+    return (f"Erased the Caduceus vault ({size}) from {root}.{note} Your settings are unchanged. "
+            "A research watch you armed with /blueprint keeps its schedule; its next run starts a new vault.")
+
+
 def command(ctx, raw: str) -> str:
     parts = raw.strip().split()
     sub = parts[0].lower() if parts else "status"
@@ -1001,6 +1097,10 @@ def command(ctx, raw: str) -> str:
         if not runs:
             return "No imports yet."
         return "\n".join(f"#{r['import_run_id']} {r['file']} ({r['kind']}): {r['status']}" for r in runs)
+    if sub == "erase":
+        if len(parts) > 2 or (len(parts) == 2 and parts[1].lower() != "confirm"):
+            return "Usage: /caduceus erase [confirm]"
+        return _erase(ctx, confirm=len(parts) == 2)
     if sub == "help":
         return _HELP
     if sub != "status":

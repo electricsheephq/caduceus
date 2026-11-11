@@ -15,6 +15,8 @@ CALC_VERSION = "trend/1"
 METRICS = {
     "weight": ("BodyMass", "kg", "mean"), "bmi": ("BodyMassIndex", "count", "mean"),
     "body_fat": ("BodyFatPercentage", "%", "mean"),
+    "lean_mass": ("LeanBodyMass", "kg", "mean"), "waist": ("WaistCircumference", "cm", "mean"),
+    "protein": ("DietaryProtein", "g", "max_source_sum"),
     "resting_heart_rate": ("RestingHeartRate", "count/min", "mean"),
     "heart_rate": ("HeartRate", "count/min", "mean"),
     "hrv": ("HeartRateVariabilitySDNN", "ms", "mean"),
@@ -40,6 +42,9 @@ def recompute_rollups(samples):
         "weight": "WHEN unit IN ('kg','g','lb','lbs') THEN value * CASE unit WHEN 'g' THEN 0.001 WHEN 'lb' THEN 0.45359237 WHEN 'lbs' THEN 0.45359237 ELSE 1 END",
         "blood_glucose": "WHEN unit='mg/dL' THEN value WHEN unit='mmol/L' OR unit GLOB 'mmol<*>/L' THEN value*18.016",
         "active_energy": "WHEN unit IN ('kcal','kJ') THEN value * CASE unit WHEN 'kJ' THEN 1.0/4.184 ELSE 1 END",
+        "lean_mass": "WHEN unit IN ('kg','g','lb','lbs') THEN value * CASE unit WHEN 'g' THEN 0.001 WHEN 'lb' THEN 0.45359237 WHEN 'lbs' THEN 0.45359237 ELSE 1 END",
+        "waist": "WHEN unit IN ('cm','in','m','mm') THEN value * CASE unit WHEN 'in' THEN 2.54 WHEN 'm' THEN 100 WHEN 'mm' THEN 0.1 ELSE 1 END",
+        "protein": "WHEN unit IN ('g','mg') THEN value * CASE unit WHEN 'mg' THEN 0.001 ELSE 1 END",
     }
     normal = " ".join("WHEN '" + m + "' THEN CASE " + conversions.get(m, "WHEN unit='" + spec[1] + "' THEN value") + " END" for m, spec in METRICS.items())
     summed = ",".join("'" + m + "'" for m, spec in METRICS.items() if spec[2] == "max_source_sum")

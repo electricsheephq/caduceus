@@ -39,7 +39,9 @@ The same disclosure appears in the README and the manifest.
   - `vault.db`: genome, records, research and the search index;
   - `samples.db`: Apple Health samples;
   - `sources/`: one copy of each imported file, by SHA-256, never overwritten;
-  - `reports/`: rebuilt variant reports and health briefs.
+  - `reports/`: rebuilt variant reports and health briefs;
+  - `demo-files/`: the synthetic demo persona's files, if you ran `/caduceus demo`.
+- `/caduceus erase` lists what would be deleted. `/caduceus erase confirm` deletes those files and folders, and nothing else in the directory. It refuses while an import, the demo or a research watch is running in the same Hermes process. Only the user can run it: no tool can erase. Plugin settings stay.
 - Nothing is encrypted at rest in v0.1. Encrypted levels arrive in v0.4. Protect the profile directory as you would the original files.
 
 **Reading files**

@@ -6,10 +6,51 @@ One job per key at a time (the key is the source sha256). Each job opens its own
 from __future__ import annotations
 
 import threading
-from typing import Callable
+from contextlib import contextmanager
+from typing import Callable, Iterator
 
 _LOCK = threading.Lock()
 _ACTIVE: dict[str, threading.Thread] = {}
+
+# Erase and job admission exclude each other. Code that prepares a job (copies a file into sources/, writes the
+# demo files) and starts it runs inside preparing(); erase deletes only inside erasing(), which refuses while any
+# job is being prepared or running, and makes new jobs wait until the files are gone. Lock order: _GATE, then _LOCK.
+_GATE = threading.Condition()
+_PREPARING = 0
+_ERASING = False
+
+
+@contextmanager
+def preparing() -> Iterator[None]:
+    """Hold while preparing and starting a background job. Waits while an erase is deleting files."""
+    global _PREPARING
+    with _GATE:
+        while _ERASING:
+            _GATE.wait()
+        _PREPARING += 1
+    try:
+        yield
+    finally:
+        with _GATE:
+            _PREPARING -= 1
+
+
+@contextmanager
+def erasing() -> Iterator[bool]:
+    """For erase: yields True when no job is being prepared or running and no other erase is deleting; no job can
+    start until the block ends."""
+    global _ERASING
+    with _GATE:
+        free = not _ERASING and _PREPARING == 0 and not any_active()
+        if free:
+            _ERASING = True
+    try:
+        yield free
+    finally:
+        if free:
+            with _GATE:
+                _ERASING = False
+                _GATE.notify_all()
 
 
 def submit(key: str, fn: Callable[[], object], *, wait_s: float = 45.0) -> dict:
@@ -20,7 +61,7 @@ def submit(key: str, fn: Callable[[], object], *, wait_s: float = 45.0) -> dict:
     with this key is already running."""
     box: dict = {}
     finished = threading.Event()
-    with _LOCK:
+    with preparing(), _LOCK:
         current = _ACTIVE.get(key)
         if current is not None and current.is_alive():
             return {"state": "busy"}
@@ -50,6 +91,12 @@ def is_active(key: str) -> bool:
     with _LOCK:
         thread = _ACTIVE.get(key)
         return thread is not None and thread.is_alive()
+
+
+def any_active() -> bool:
+    """True while any background job (an import, the demo or a research watch) is still running."""
+    with _LOCK:
+        return any(thread.is_alive() for thread in _ACTIVE.values())
 
 
 def join(key: str, timeout: float | None = None) -> bool:
