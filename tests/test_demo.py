@@ -52,8 +52,8 @@ def test_demo_empty_and_repeat(data_dir, monkeypatch):
     try:
         assert {r[0] for r in vault.execute("SELECT original_name FROM source_artifact")} == NAMES
         runs = sources.recent_runs(vault)
-        assert len(runs) == 4 and all(r["status"] == "succeeded" for r in runs)  # Apple samples and clinical run separately
-        counts = {r["parser"]: r["counts"] for r in runs}
+        assert len(runs) == 3 and all(r["status"] == "succeeded" for r in runs)
+        counts = {r["kind"]: r["counts"] for r in runs}
         expected_markers = len(list(persona._filler(300, 7))) + len(persona.GENOTYPES)
         assert counts["dtc"]["markers"] == expected_markers
         assert vault.execute("SELECT count(*) FROM annotation_snapshot WHERE kind!='genotype_info'").fetchone()[0] == (

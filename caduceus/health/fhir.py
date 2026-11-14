@@ -14,7 +14,7 @@ from ..core.db import write_txn
 from ..core.policy import Category, SENSITIVE, categorize, medication_category
 
 PARSER = "fhir"
-PARSER_VERSION = "2"
+PARSER_VERSION = "1"
 MAX_JSON = 64 << 20
 LOINC = "http://loinc.org"
 ALIASES = {"hba1c": ("4548-4", "17856-6", "59261-8"),

@@ -117,18 +117,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 ```
 
 **`import_apple_health`:**
-- **Runs:** `apple_health` version `1` tracks samples; zip clinical records have a separate `apple_clinical`
-  run keyed by `fhir.PARSER_VERSION` (`2`). Runs live in the vault; samples go to `samples`. Each part skips
-  independently after success. Re-importing a pre-0.3.1 zip runs only its clinical members: it never opens
-  sample XML or recomputes rollups, and creates no sample-import run. A first import still reads both parts
-  in one call. A failed/cancelled sample part returns immediately; a failed/cancelled clinical part can retry
-  without re-reading successful samples. A lone XML has only a sample run.
-- **Reporting:** completed `op=import` returns summed counts for the parts that ran, with `counts.parts`
-  mapping `apple_health` and `apple_clinical` to `{status, run_id}`. A skipped part has null `run_id` and adds
-  no counts. Clinical-only recovery thus reports samples skipped plus clinical rows added; its top-level
-  `run_id` and status are the clinical run's. When only samples run, those identify the sample run. When
-  both skip, the result is `skipped` with no new run. `op=status` lists the separate parser/version runs and
-  their own counts/progress/errors; selecting the returned run id shows the clinical recovery counts.
+- **Run:** the `import_run` lives in the vault; samples go to `samples`.
 - **Parsing:** streams a lone Apple Health XML or a safe XML member from a zip. A single `export.xml` takes
   precedence; otherwise exactly one non-`export_cda.xml` XML must contain `<!DOCTYPE HealthData` or `<HealthData`
   in its first 4096 bytes. Localized names are supported; size limits and entity guards apply to both paths.
@@ -230,13 +219,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
 **Records semantics:**
-- **Parser recovery.** `fhir.PARSER_VERSION` is `2`: re-importing a file successfully read by version `1`
-  runs again once, recovering recorded-only Conditions and previously merged uncoded concepts. Existing
-  rows still dedupe; correction/retraction state and ignored superseded copies keep their usual rules.
-  An already-corrected/amended observation with the same content key is upserted without deleting it or
-  counting another insertion/supersession; its superseded-copy references remain intact.
-  `open_vault` runs `fhir_uncoded_names_v1` before returning the connection to either importer, so re-imports
-  match the re-keyed observations. Subsequent imports of the same source/version skip.
+- **Repeated corrections.** A file that re-sends an already stored corrected/amended observation with the same
+  content key upserts it without deleting it or counting another insertion or supersession; its superseded-copy
+  references remain intact. Re-importing a file already read by this parser version is skipped, so records that
+  earlier versions skipped or merged are not recovered by a re-import.
 - **Uncoded observations.** When both `code_system` and `code` are NULL, the content key appends the concept's
   lowercased, whitespace-collapsed, stripped name (the component's own name for panel rows); non-string names
   are converted with `str()` before normalization. Identity-based correction lookups also match that normalized
