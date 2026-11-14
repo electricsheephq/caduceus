@@ -225,7 +225,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 **Records semantics:**
 - **Repeated corrections.** A file that re-sends an already stored corrected/amended observation with the same
   content key upserts it without deleting it or counting another insertion or supersession; its superseded-copy
-  references remain intact. Re-importing a file already read by this parser version is skipped, so records that
+  references remain intact. Its reference-range low/high bounds and interpretation refresh from its incoming
+  part using the same extraction as an insert; non-corrected updates are unchanged.
+  Re-importing a file already read by this parser version is skipped, so records that
   earlier versions skipped or merged are not recovered by a re-import.
 - **Uncoded observations.** When both `code_system` and `code` are NULL, the content key appends the concept's
   lowercased, whitespace-collapsed, stripped name (the component's own name for panel rows); non-string names
@@ -247,7 +249,12 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   clinical/verification status may still update. When the incoming document wins, its recorded values apply.
   Identity-based retraction removes a matching NULL-onset row even when the retraction gives an onset.
   A known onset withdraws the same identity's matching unknown-onset assertion through the same removal path,
-  including its search document; other identities' assertions remain. A recorded-only copy arriving after a
+  including its search document; other identities' assertions remain. Before withdrawal, the sensitive category
+  on the lowest-id matching unknown-onset row, if any, applies through `_stricter`. A sensitive-category conflict
+  keeps that row's document, recorded date/precision, title text and search body, with incoming clinical and
+  verification statuses and onset fields; rejected incoming text is not indexed under any category. An existing
+  known-onset row also applies its own category through the usual update path. Without a sensitive withdrawn
+  category, the incoming category still applies. A recorded-only copy arriving after a
   matching known-onset row adds nothing, but applies its incoming clinical and verification statuses through
   the existing update path, preserving the stored onset, recorded date and their precisions. The search document
   receives the updated status too; the incoming identity is retained without restoring withdrawn assertions.

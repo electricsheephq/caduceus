@@ -350,6 +350,9 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         num, text, unit = _observation_value(part)
         rr = (part.get("referenceRange") or [{}])[0]
         interpretations = [_concept(c)[2] for c in part.get("interpretation", [])]
+        ref_low = _number((rr.get("low") or {}).get("value"))
+        ref_high = _number((rr.get("high") or {}).get("value"))
+        interpretation = "; ".join(interpretations) or None
         # The value can carry the diagnosis too ("Symptom" = depression), so it counts toward the category.
         category = _category([resource.get("code") or {}, concept, part.get("valueCodeableConcept") or {}],
                              Category.RECORDS)
@@ -409,8 +412,7 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         cur = vault.execute(
             "INSERT OR IGNORE INTO observation(code_system,code,name,value_num,value_text,unit,effective_at,"
             "ref_low,ref_high,interpretation,category,source,source_id,dedupe_key,raw_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (system, code, name, num, text, unit, when, _number((rr.get("low") or {}).get("value")),
-             _number((rr.get("high") or {}).get("value")), "; ".join(interpretations) or None,
+            (system, code, name, num, text, unit, when, ref_low, ref_high, interpretation,
              category.value, "fhir", source_id, key, raw))
         if cur.rowcount:
             search.index_doc(vault, kind="observation", ref=str(cur.lastrowid), title=name,
@@ -419,8 +421,9 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         elif existing:
             # Natural-key dedupe must retain all resource ids for later corrections.
             if corrected:
-                vault.execute("UPDATE observation SET raw_json=?,name=?,category=?,source_id=? WHERE id=?",
-                              (raw, name, category.value, source_id, existing["id"]))
+                vault.execute("UPDATE observation SET raw_json=?,name=?,category=?,source_id=?,"
+                              "ref_low=?,ref_high=?,interpretation=? WHERE id=?",
+                              (raw, name, category.value, source_id, ref_low, ref_high, interpretation, existing["id"]))
             else:
                 vault.execute("UPDATE observation SET raw_json=? WHERE id=?", (raw, existing["id"]))
             search.index_doc(vault, kind="observation", ref=str(existing["id"]),
@@ -515,10 +518,11 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
     current = False if clinical in ("resolved", "inactive", "remission") else (
         True if clinical in ("active", "recurrence", "relapse") else None)
     identity = _identity(resource, full_url)
+    inherited_category = False
     if identity:
         same = [row for row in vault.execute(
-            "SELECT id,onset,name,raw_json FROM condition WHERE source='fhir' AND code_system IS ? AND code IS ? "
-            "AND EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)",
+            "SELECT id,onset,name,raw_json,category FROM condition WHERE source='fhir' AND code_system IS ? AND code IS ? "
+            "AND EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?) ORDER BY id",
             (system, code, identity)).fetchall()
             if system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name)]
         known = [row for row in same if row["onset"] is not None]
@@ -532,9 +536,21 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
                            counts, full_url)
             return
         if when is not None:
-            for row in same:
-                if row["onset"] is None:
-                    _withdraw_row(vault, "condition", row, identity)
+            unknown = [row for row in same if row["onset"] is None]
+            stored = next((row for row in unknown if row["category"] in {c.value for c in SENSITIVE}), None)
+            if stored is not None:
+                inherited_category = True
+                category, conflict = _stricter(category, stored["category"])
+                if conflict:
+                    old = json.loads(stored["raw_json"])
+                    moving = ("clinicalStatus", "verificationStatus", "onsetDateTime", "onsetPeriod")
+                    document = {k: v for k, v in old.items() if k not in moving}
+                    document.update({k: resource[k] for k in moving if k in resource})
+                    resource = document
+                    name = _concept(resource.get("code"))[2]
+                    recorded, recorded_precision = _date_value(resource.get("recordedDate"))
+            for row in unknown:
+                _withdraw_row(vault, "condition", row, identity)
     scope = {"full_url": full_url} if full_url else {}
     title = name + (f" [verification: {verification}]" if verification else "")
     if current is False:
@@ -554,12 +570,13 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
     old = json.loads(previous["raw_json"])
     ids = _resource_ids(old) | ({identity} if identity else set())
     if (previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification
-            or previous["recorded"] != recorded):
+            or previous["recorded"] != recorded or inherited_category):
         category, conflict = _stricter(category, previous["category"])
         document = resource
         if conflict:  # the stored text stays under its own category; only the status moves
             document = {key: value for key, value in old.items() if key not in ("clinicalStatus", "verificationStatus")}
             document.update({key: resource[key] for key in ("clinicalStatus", "verificationStatus") if key in resource})
+            title = _concept(old.get("code"))[2] + title[len(name):]
             recorded = previous["recorded"]
             recorded_precision = old.get("_caduceus", {}).get("recorded_precision")
             if when is None:
