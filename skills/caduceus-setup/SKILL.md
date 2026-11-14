@@ -59,7 +59,9 @@ For each file:
 - **JSON export:** in HAE, export metrics as JSON using Manual Export, or an automation that saves JSON files to a
   folder. Import that file with `caduceus_capture op=import`.
 - **Live sync:** if the HAE app's MCP server is running and configured in Hermes, the operator adds its server name
-  to `plugins.entries.caduceus.mcp_allowlist` in `config.yaml`. Then call `caduceus_capture op=sync`;
+  to `plugins.entries.caduceus.mcp_allowlist` in `config.yaml`. If that name is not `health-auto-export`, also set
+  the Caduceus setting `hae_mcp_server` to the same name: the allowlist grants access, the setting picks the server.
+  Then call `caduceus_capture op=sync`;
   `/blueprint caduceus:hae-sync` keeps it current.
 - `.hae` AutoSync files are HAE's private format and cannot be imported.
 
