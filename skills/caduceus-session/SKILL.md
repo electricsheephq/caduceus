@@ -15,7 +15,7 @@ Cover one area per turn and let the user set the pace. Before each area, ask whe
    - `caduceus_genome op=summary` and `op=derived` for the derived calls;
    - `caduceus_genome op=filter` for the largest findings, good and bad;
    - `caduceus_trend op=metrics` for wearable series;
-   - `caduceus_search kinds=["observation"]` to list lab results, then `caduceus_trend op=labs lab=<name or LOINC code>` for each lab worth a trend;
+   - `caduceus_search kinds=["observation"] limit=25` to list lab results. It shows only the 25 newest, so also search by name (`caduceus_search query="<lab>" kinds=["observation"]`) for common labs it may miss, such as HbA1c, cholesterol, TSH, vitamin D, ferritin and creatinine, before deciding a lab has no results. Then `caduceus_trend op=labs lab=<name or LOINC code>` for each lab worth a trend;
    - the medications and supplements recorded.
 2. Order the findings by what the user can act on, not by magnitude. For each, note:
    - the evidence tier: a CPIC guideline, a research association, or weak or just for fun;
