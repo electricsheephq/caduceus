@@ -19,7 +19,7 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 - **FHIR results without a code stay apart (#20).** Two results with no LOINC or other code, on the same date with the same value, used to be stored as one. Their names now keep them apart.
   - The first time 0.3.1 opens an older vault, it re-keys these rows once. Corrections made before the upgrade still hold.
 - **Conditions with only a recorded date are kept (#23).** A FHIR Condition with no onset date but a `recordedDate` used to be skipped. It is now stored with its onset unknown, and search shows it as "onset unknown; recorded <date>".
-  - When a later export gives the onset, the condition keeps a single row, with that onset. A later copy without the onset still updates its status.
+  - When a later export gives the onset, the condition keeps a single row, with that onset, and a sensitive privacy category stays. A later copy without the onset still updates its status.
   - A retraction removes it whether or not the retraction gives an onset.
   - No date is invented, and a Condition with neither date is still skipped.
 - **Erase names the schedules that keep running (#26).** `/caduceus erase` and its confirmation say that schedules armed with `/blueprint` keep running, and what each one's next run does:
