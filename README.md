@@ -135,10 +135,10 @@ Then call `caduceus_capture op=sync`. `/blueprint caduceus:hae-sync` keeps it cu
 sync fails, including one that failed in the background after its call returned. The `hae_mcp_server` setting
 defaults to `health-auto-export`. If your server has another name, put that name in the allowlist and set
 `hae_mcp_server` to it too: the allowlist grants access, and the setting picks the server. `hae_backfill_days`
-defaults to 90 for the first sync, and a first sync that fails keeps that start for the next try. Later syncs start
-two days before the last day read in full. A day whose reply was too large or could not be read is read again by the
-next sync. When the server answers with an error, Caduceus reports a fixed message and never passes on the
-server's own text.
+defaults to 90 for the first sync, and a first sync that fails or is interrupted keeps that start for the next try.
+Later syncs start two days before the last day read in full. A day whose reply was too large is read again by the
+next sync. A sync in which no reply could be read fails and says so, and the next one reads those days again. When
+the server answers with an error, Caduceus reports a fixed message and never passes on the server's own text.
 
 ## Tools
 
