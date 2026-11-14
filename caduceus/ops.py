@@ -144,6 +144,25 @@ def _float(args: dict, key: str) -> float | None:
         raise ToolError(f"{key} must be a finite number")
     return number
 
+REPUTES = ("good", "bad", "neutral")
+
+
+def _repute_out(value) -> str:
+    """The one spelling results use, which is also what op=filter accepts: good, bad or neutral."""
+    text = str(value or "").strip().lower()
+    return text if text in ("good", "bad") else "neutral"
+
+
+def _repute_arg(args: dict) -> str | None:
+    """The repute filter, in any casing; an unknown value is an error, never an unfiltered list."""
+    value = args.get("repute")
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str) or value.strip().lower() not in REPUTES:
+        raise ToolError("repute must be good, bad or neutral")
+    return value.strip().lower()
+
+
 def _strings(args: dict, key: str) -> list[str]:
     """A list-of-strings argument; one string is taken as a one-item list."""
     value = args.get(key)
@@ -261,7 +280,7 @@ def _snapshot_dict(row) -> dict:
         genes = []
     return {
         "marker": row["marker"] or row["title"], "your_genotype": row["geno"], "magnitude": row["magnitude"],
-        "repute": row["repute"] or "neutral", "summary": row["summary"], "genes": genes,
+        "repute": _repute_out(row["repute"]), "summary": row["summary"], "genes": genes,
         "category": row["category"], "source": "your variant report (SNPedia text, CC BY-NC-SA 3.0)",
     }
 
@@ -419,12 +438,12 @@ def _filter(store, policy, args) -> dict:
     if minimum is not None:
         where.append("magnitude >= ?")
         params.append(minimum)
-    repute = args.get("repute")
+    repute = _repute_arg(args)
     if repute in ("good", "bad"):
-        where.append("lower(repute) = ?")
+        where.append("lower(trim(repute)) = ?")
         params.append(repute)
-    elif repute == "neutral":
-        where.append("(repute IS NULL OR repute = '' OR lower(repute) = 'none')")
+    elif repute == "neutral":  # exactly the rows that results show as neutral
+        where.append("(repute IS NULL OR lower(trim(repute)) NOT IN ('good', 'bad'))")
     if args.get("topic"):
         where.append("(record_json LIKE ? OR summary LIKE ?)")
         params += [f"%{args['topic']}%"] * 2
@@ -963,6 +982,7 @@ def capture_tool(ctx, args: dict) -> dict:
 
 _HELP = ("/caduceus [status] | privacy [open|standard] | hide <category> | show <category> | unlock <category> | "
          "lock <category> | imports | demo | erase [confirm] | help.\nCategories: " + ", ".join(c.value for c in Category) + ".\n"
+         "Type these in Hermes chat; there is no `hermes caduceus` shell command.\n"
          "Ask your agent to import a file by its path, or to answer questions from your DNA, Apple Health and records.")
 
 

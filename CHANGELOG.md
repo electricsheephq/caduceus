@@ -2,6 +2,14 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.2 — 2026-11-14
+
+### Fixed
+- Genome results now give repute as `good`, `bad` or `neutral`, the same values `caduceus_genome op=filter` accepts, so a returned value can be passed straight back. The filter accepts any casing (`Bad`, `bad`, `BAD`). An unknown value is now an error instead of an unfiltered list. The rebuilt report keeps its "Good" and "Bad" labels. (#14)
+
+### Docs
+- The README and the setup skill say where each part runs: `/caduceus …` commands in Hermes chat, the `caduceus_*` tools for the agent, and only `hermes plugins …` in a shell. There is no `hermes caduceus` shell command. `/caduceus help` says so too. (#15)
+
 ## 0.2.1 — 2026-11-12
 
 ### Fixed
