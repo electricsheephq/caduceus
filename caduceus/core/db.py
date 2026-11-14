@@ -6,6 +6,7 @@ applied in name order, and must be idempotent (``IF NOT EXISTS`` everywhere).
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -63,6 +64,23 @@ def _migrate_vault(conn: sqlite3.Connection) -> None:
                          "WHERE status='succeeded' AND parser <> 'hae_sync'")
         if "comparison_json" not in {row[1] for row in conn.execute("PRAGMA table_info(callset)")}:
             conn.execute("ALTER TABLE callset ADD COLUMN comparison_json TEXT NOT NULL DEFAULT '[]'")
+        if "recorded" not in {row[1] for row in conn.execute("PRAGMA table_info(condition)")}:
+            conn.execute("ALTER TABLE condition ADD COLUMN recorded TEXT")
+        if not conn.execute("SELECT 1 FROM settings WHERE key='migration:fhir_uncoded_names_v1'").fetchone():
+            from ..health.fhir import _observation_key, _observation_value
+
+            for row in conn.execute("SELECT id,name,effective_at,value_num,value_text,unit,raw_json FROM observation "
+                                    "WHERE source='fhir' AND code_system IS NULL AND code IS NULL").fetchall():
+                num, text, unit = row["value_num"], row["value_text"], row["unit"]
+                document = json.loads(row["raw_json"] or "{}")
+                part = (document.get("component") or [document])[0]
+                if any(key.startswith("value") for key in part):
+                    num, text, unit = _observation_value(part)
+                key = _observation_key(None, None, row["effective_at"], num, text, unit, False, row["name"])
+                # A colliding row keeps its old key and all its data.
+                conn.execute("UPDATE OR IGNORE observation SET dedupe_key=? WHERE id=?", (key, row["id"]))
+            conn.execute("INSERT INTO settings(key,value_json,updated_at) "
+                         "VALUES ('migration:fhir_uncoded_names_v1','true',strftime('%Y-%m-%dT%H:%M:%SZ','now'))")
 
     def has_column():
         return "category" in {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}

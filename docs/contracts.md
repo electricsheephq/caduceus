@@ -135,16 +135,43 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 - **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
   cleared once per run. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
   morning in the end's offset (which still supplies `tz_offset_min`). Sleep nights in `run_state["sleep_keep"]`
-  (a set of ISO dates) are upsert-only, as are nights before `run_state["sleep_clear_from"]` when that local `date`
-  cutoff is set. Other metric types keep the usual replacement rule. In `counts["metrics_ignored"]`, unknown
+  (a set of ISO dates) preserve stored rows except for each source whose summary the file uses on that night:
+  its HAE sleep rows are cleared before insertion, once per run per night/source using
+  `run_state["sleep_sources_cleared"]`. Other sources and Apple rows stay. Nights before
+  `run_state["sleep_clear_from"]` when that local `date` cutoff is set are upsert-only; nights outside these
+  protections still replace the whole HAE night. Sync sets no `sleep_keep`, so is unchanged.
+  Other metric types keep the usual replacement rule. In `counts["metrics_ignored"]`, unknown
   metrics keep their names only when they match `^[a-z][a-z0-9_]{0,63}$`, up to 50 distinct names per run;
   repeats of kept names keep counting there. Every other unknown metric counts under `"other"`, for files and sync.
+  Entry dates use `date` when present, otherwise `start`; missing or invalid dates are skipped. Offset-bearing
+  24-hour and ISO timestamps and locale-independent 12-hour AM/PM timestamps (hours 1–12, optional dots and
+  colon in the offset) are accepted. `source` still defaults to `"Health Auto Export"`; merged `sources` is ignored.
+  Sleep segments with `value` keep their explicit interval. Summaries without `value` use `totalSleep` when
+  above zero, otherwise sum `asleep`, `core`, `deep` and `rem`. All supplied duration fields (including `inBed`)
+  must be finite, nonnegative numbers, and the chosen sleep total must not exceed 24 hours. A valid zero-sleep
+  summary counts as parsed but returns no rows, stores nothing and does not clear stored nights; both ingestion
+  and the file pre-scan accept that empty row list. Export summaries keep `sleepEnd`/`inBedEnd` as the end and
+  subtract the hours. Other summaries use `_sleep_bucket_start(entry, hours)` and add the hours, ignoring the
+  bucket's `end`: the interval ends at noon of the bucket start's day in its offset and starts `hours` earlier,
+  so even a night over 12 hours stays in that day's noon-to-noon night.
 - **`import_hae`:** imports a stored JSON file or safe JSON zip members. Before ingesting, scans valid sleep entries
-  across the whole file, including every JSON member. Sets `sleep_keep` to the earliest and latest segment nights,
-  except any night with a summary entry, which replaces its night even at an edge. Does not set `sleep_clear_from`.
+  across the whole file, including every JSON member, tracking segment and summary sources per night. Sets
+  `sleep_keep` to the earliest and latest segment nights, except when every segment source on an edge night also
+  has a summary for that night in the file. A summary from another source cannot remove that protection.
+  For each night and source with both formats in the file, uses the summary and omits that source's segments;
+  `counts.sleep_segments_omitted` counts the omitted valid segment entries (absent when zero), and a warning
+  lists only the affected night dates, never source names. `run_state["sleep_summaries"]` maps nights to summary
+  source sets for this file-only selection. Does not set `sleep_clear_from`.
   Non-JSON members are skipped unopened.
 - **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
-  `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Only truncated replies split
+  `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Quantity windows span 14 days,
+  workout windows 31 days. A logical window S–E sends plain-date `start=S`, `end=E+1 day`, including after
+  truncation splits, so the boundary day is requested on both sides when end dates are inclusive and no day is
+  lost when they are exclusive. Duplicate buckets upsert the same natural key without doubling rollups.
+  The quantity request includes every `MAPPING` name except `body_mass` and `sleep_analysis`, using
+  `weight_body_mass` for weight; files still accept both weight names. Sleep requests keep `aggregate=False`
+  and accept both summaries and segments. The phone interprets request dates in its own time zone;
+  `local_offset` is retained for caller compatibility but no longer affects requests. Only truncated replies split
   a window. An unusable non-truncated reply counts as `windows_empty` and warns using only request dates;
   usable empty data objects count as readable and give no warning. A run with some readable replies may succeed
   despite unreadable windows. A run with unreadable windows and no readable replies fails, appending last:
@@ -156,7 +183,17 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   `through`, with the same 3,650-day floor. Stores ISO `since` and `through` in the running import's `counts_json`
   inside `write_txn` before its first MCP request, so an interrupted first sync also preserves its start;
   `finish_import` replaces these with the full counts.
-  `local_offset` overrides the machine's local offset for tests. A permission-denied run with no sample/workout
+  Sync-only `counts.entries_by_kind` holds run-wide `parsed` and `skipped` entry totals for `metrics`, `sleep`
+  and `workouts`, collected only from readable replies; unknown metrics in `metrics_ignored` count as neither.
+  A parsed entry counts even when it upserts an existing row. `run_state["sync_entries"]` shares these totals;
+  `sync_kind` identifies the request kind for malformed metric containers with no usable name. After all windows,
+  any kind with skipped > 0 and parsed == 0 fails the run and appears in `counts.unreadable_kinds` (a list of
+  kind keys, absent when empty). Each gets the fixed warning: "Health Auto Export sent <kind> data that Caduceus
+  cannot read, so none was imported. The next sync reads these days again." The label is `health metric`, `sleep`
+  or `workout`, with no server text. Already written rows stay, and the failed run never moves the watermark;
+  retrying replaces them. A kind with some parsed entries keeps the usual malformed-entry warnings and does
+  not fail for partial skips. Empty metrics lists succeed. This failure rule does not apply to file imports.
+  A permission-denied run with no sample/workout
   writes and no other runs for its virtual source removes its run and source together; the failure still comes
   back in the result. Other failures retain the run so the next sync can report it, even on a first empty sync.
   An `ok=false` server envelope fails with exactly: "Health Auto Export did not answer the request. Check that
@@ -186,11 +223,41 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
 **Records semantics:**
+- **Repeated corrections.** A file that re-sends an already stored corrected/amended observation with the same
+  content key upserts it without deleting it or counting another insertion or supersession; its superseded-copy
+  references remain intact. Re-importing a file already read by this parser version is skipped, so records that
+  earlier versions skipped or merged are not recovered by a re-import.
+- **Uncoded observations.** When both `code_system` and `code` are NULL, the content key appends the concept's
+  lowercased, whitespace-collapsed, stripped name (the component's own name for panel rows); non-string names
+  are converted with `str()` before normalization. Identity-based correction lookups also match that normalized
+  name. Coded observation keys are unchanged. On open,
+  `db._migrate_vault` recomputes existing uncoded FHIR observation keys from their stored name, effective date,
+  numeric/text value and unit with the same key helper. Values come from the row's own resource or component
+  in `raw_json` when present, preserving negative zero and numeric text/unit types that SQLite columns coerce;
+  value extraction is shared with the importer, whose keys do not change. Collisions keep the existing key and data. The settings row
+  `migration:fhir_uncoded_names_v1` guards this migration once, in the same write transaction. Previously merged
+  concepts cannot be reconstructed; the kept row survives, and re-import adds the other concept.
+- **Condition dates.** `condition.recorded` is nullable and is added on open for older vaults. `recordedDate`
+  is validated with the same precision-preserving normalization as onset, stored even when onset is present,
+  and its precision is kept in `raw_json._caduceus.recorded_precision`. A Condition with no onset but a valid
+  recorded date has NULL onset and key `_key([system, code, None, name])`; known-onset keys are unchanged.
+  Its search timestamp uses the recorded date and its title appends ` [onset unknown; recorded <date>]`.
+  When a sensitive-category conflict keeps the stored Condition document, its `recorded` column,
+  `_caduceus.recorded_precision`, search timestamp and recorded-date title also stay with that document;
+  clinical/verification status may still update. When the incoming document wins, its recorded values apply.
+  Identity-based retraction removes a matching NULL-onset row even when the retraction gives an onset.
+  A known onset withdraws the same identity's matching unknown-onset assertion through the same removal path,
+  including its search document; other identities' assertions remain. A recorded-only copy arriving after a
+  matching known-onset row adds nothing, but applies its incoming clinical and verification statuses through
+  the existing update path, preserving the stored onset, recorded date and their precisions. The search document
+  receives the updated status too; the incoming identity is retained without restoring withdrawn assertions.
+  Conditions with neither valid date are skipped; no
+  missing year/month/day or onset is invented.
 - **Identity.** A resource is named by its Bundle entry's `fullUrl` when there is one, absolute URL or `urn:uuid` alike (ids repeat across providers and bundles), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
 - **Statuses.**
   - Observations with status `entered-in-error` or `cancelled`, Conditions verified `entered-in-error` or `refuted`, and medications `entered-in-error` or `cancelled`, are skipped.
   - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. A row that another resource still asserts is kept, without the withdrawn identity.
-  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value. Each copy's resource is listed in `_caduceus.superseded` with the content key of the copy it sent, so a re-send of that same copy is ignored as stale, a different value from it is stored as its own, and a later retraction of the correction removes it.
+  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value. Each copy's resource is listed in `_caduceus.superseded` with the content key of the copy it sent, so a re-send of that same copy is ignored as stale, a different value from it is stored as its own, and a later retraction of the correction removes it. For uncoded observations, stale matching accepts both the current key and the pre-0.3.1 key without the normalized name, preserving superseded references across migration; coded matching is unchanged.
 - **Panels.** Each component row stores only its own component, without the panel's own value, interpretation, reference range or notes, so neither a sibling's nor the panel's content sits under another row's category. No row of a panel keeps the narrative (`text`), which describes every part.
 - **Medications.**
   - `completed` and `stopped` with an end date give a start and a stop.
@@ -205,6 +272,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - mental-health and pregnancy LOINC codes.
 
   A code with no system is matched by its shape, so privacy fails closed. The SNOMED list is not exhaustive: unlisted child concepts with no display text are not caught.
+- **Erase backfill disclosure.** Erase preview and confirmation use the same `hae_backfill_days` validation as
+  sync: an integer from 1 through 3,650, excluding booleans; other values fall back to 90. The schedule text thus
+  describes the backfill the next sync would actually use. Erase targets and settings are unchanged.
 - **Known limits (follow-ups):**
   - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time (medication retractions also check the drug and start).
   - A resource imported with a `fullUrl` and retracted without one (or the reverse) is not matched: identities are compared as given.
@@ -242,15 +312,31 @@ class UrllibHttp: get_json(url, params) -> dict
 - **Each entry carries** the evidence level (`CPIC A`, `CPIC B`, `research`, or `CPIC retired` for withdrawn guidance), sources (title, journal, year, PMID, DOI), limits, `chip_reliability`, `category` and `effect_counts`. Markers a chip cannot type (HLA, CYP2D6) are `unreliable` entries that always come back `not_assessed`.
 
 **`derive`:** APOE, CYP2C19, CYP2C9, SLCO1B1, VKORC1 and others, each with a confidence of `called`, `ambiguous` or `not_assessed`.
+The five marker definitions live in module-level `DERIVED_MARKERS`, shared by `derive` and the gene tool.
 
 **`profile`:** shares the per-entry status calculation with `pgx_check`, whose output is unchanged. Returns
 `flagged` (up to 20 sorted genes, each with up to 15 sorted generic drugs and its evidence labels), `derived`,
 `counts` over entries (`flag`, `no_flag`, `not_assessed`), and an informational `note`. Summary supplies a pack
 filtered by `allowed(policy, categorize(genes=[gene], default=Category.PGX))` before aggregation, filters each
-derived item's own category, and counts withheld items without naming them. If PGX is hidden, the whole profile
+entry's markers through `_marker_visible` before its flags and counts are aggregated, filters derived items
+through `_derived_visible`, and counts withheld entries and derived items without naming them. The `op=pgx`
+reply likewise withholds the whole entry (including `your_genotypes` and its status flag) unless every marker
+it reports or uses passes `_marker_visible`, as well as its own category. `_pgx` requires the caller's vault
+for these checks; the genome tool and medication brief both pass it. With nothing hidden, outputs are unchanged.
+If PGX is hidden, the whole profile
 is omitted and counted. Every complete DNA callset supports a profile even without a variant report; existing
-`top_findings` are unchanged. With no variant-report rows for a gene, the gene tool looks up that gene's pack
-markers with the existing privacy checks and identifies the pack fallback in its note.
+`top_findings` are unchanged. The gene tool keeps the gene-level policy check first (using PGX as the default
+for genes with pack or derived markers even when report rows exist), then looks up the ordered,
+deduplicated union of derived-definition markers, knowledge-pack markers and annotated report markers.
+`_lookup` still caps results at 50, and every result includes `annotations` (an empty list when none are visible),
+for both gene and lookup operations. A reverse marker-to-genes index is built once on first use from the pack
+and `DERIVED_MARKERS`. Lookup markers must pass their annotation category and every indexed gene's
+`categorize(genes=[gene], default=Category.PGX)` category; aliases check both requested and resolved markers.
+Markers outside that index keep their annotation-only rule. When `derive` has a row for the gene, the gene reply
+puts that single row under `derived` before `results`. Both gene and derived operations use one visibility helper:
+the row's own category and every basis marker's annotation and indexed gene categories must be allowed.
+Hidden markers and derived rows are omitted and counted in `withheld`, without naming them. A note identifies
+markers supplied by the pack or derived definitions that have no report row. APOE stays hidden at standard level.
 
 **`run_watch`:**
 - **Query terms** come from the pack's watch list, the user's medications and their topics, never from genotypes. With `allow` (a category predicate), medications the privacy settings hide are left out, so they never become search terms sent to the research services.
@@ -279,6 +365,9 @@ markers with the existing privacy checks and identifies the pack fallback in its
 ## Orchestrator glue (`caduceus/tools.py`, `caduceus/registration.py`, `caduceus/brief.py`)
 
 The tools call the functions above and run imports through `core.jobs.submit`. They filter every result through the policy.
+Both erase preview and confirmation explain that schedules armed with `/blueprint` keep running: the next research
+watch starts a new vault, Health Auto Export sync re-imports the configured `hae_backfill_days` (default 90), and the
+daily check finds nothing until data returns. Settings stay unchanged.
 Search distinguishes query matches from kind listings with `scope_note`; medication hits carry prescriber `guidance`.
 Trend `compare`/`series` add the metric's full stored `data_range` when present, without changing window `coverage`;
 `window_note` flags an earlier end. Compares carry `guidance`; drug pivots also suggest a local `op=pgx` call.

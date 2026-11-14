@@ -1,4 +1,4 @@
-"""Registration: four tools, ``/caduceus``, four skills, the vault-hint hook and two automation blueprints.
+"""Registration: four tools, ``/caduceus``, five skills, the vault-hint hook and two automation blueprints.
 
 Import-light and I/O-free: nothing opens a database until a tool or command runs.
 """
@@ -11,6 +11,7 @@ SKILLS = (
     ("caduceus-setup", "Set up Caduceus: import DNA, health and records files, then choose privacy and research watches."),
     ("caduceus-guide", "Answer health and DNA questions from the local Caduceus vault, with sources and honest limits."),
     ("caduceus-research", "Run a Caduceus research watch and write its digest."),
+    ("caduceus-session", "Walk someone through their DNA and health data for the first time, with consent before sensitive results."),
     ("caduceus-report-problem", "Caduceus: report a bug or problem"),
 )
 

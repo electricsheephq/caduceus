@@ -16,6 +16,7 @@ import threading
 import time
 from contextlib import ExitStack, closing
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 
 from .core import jobs, search as search_index, sources
@@ -267,6 +268,30 @@ def _marker_category(vault, marker: str) -> str:
     return row["category"] if row else Category.GENERAL.value
 
 
+@lru_cache(maxsize=1)
+def _marker_genes():
+    """Reverse index of the pack and derived definitions, built on first use (never at registration)."""
+    genes = {}
+    for entry in _pack().entries:
+        for marker in entry["markers"]:
+            genes.setdefault(marker["rsid"].lower(), set()).add(entry["gene"])
+    for gene, markers in _need("knowledge.pack", "DERIVED_MARKERS"):
+        for marker, *_ in markers:
+            genes.setdefault(marker.lower(), set()).add(gene)
+    return genes
+
+
+def _marker_visible(vault, policy, marker):
+    return (allowed(policy, _marker_category(vault, marker))
+            and all(allowed(policy, categorize(genes=[gene], default=Category.PGX))
+                    for gene in _marker_genes().get(marker.lower(), ())))
+
+
+def _derived_visible(vault, policy, row):
+    return (allowed(policy, row.get("category", Category.PGX))
+            and all(_marker_visible(vault, policy, marker) for marker in row.get("basis", {})))
+
+
 def _snapshot_rows(vault, where: str, params=(), limit=50):
     return vault.execute(
         "SELECT id, marker, title, geno, magnitude, repute, summary, genes_json, category, kind "
@@ -296,15 +321,13 @@ def _lookup(store, policy, markers) -> dict:
     for name in wanted:
         call = calls.get(name)
         key = call.resolved_marker if call is not None and call.resolved_marker else name
-        if not (allowed(policy, _marker_category(store.vault, key))
-                and allowed(policy, _marker_category(store.vault, name))):
+        if not (_marker_visible(store.vault, policy, key) and _marker_visible(store.vault, policy, name)):
             withheld += 1
             continue
         entry = call.as_dict() if call is not None else {"marker": name, "state": "not_on_chip"}
         notes = [_snapshot_dict(r) for r in _snapshot_rows(store.vault, "marker=? COLLATE NOCASE", (key,), 5)
                  if allowed(policy, r["category"])]
-        if notes:
-            entry["annotations"] = notes
+        entry["annotations"] = notes
         results.append(entry)
     return {"results": results, "limits": [CHIP_LIMITS, LIMITS], **_withheld(withheld)}
 
@@ -346,11 +369,16 @@ def _pack_calls(vault):
     return pack, _get_calls(vault, sorted(set(_pack_rsids(pack)) | set(_SENSITIVE_MARKERS)))
 
 
-def _pgx(pack, drug: str, calls, policy) -> dict:
+def _pgx_entry_visible(vault, policy, entry):
+    return (allowed(policy, entry.get("category", categorize(genes=[entry["gene"]], default=Category.PGX)))
+            and all(_marker_visible(vault, policy, marker["rsid"]) for marker in entry.get("markers", ())))
+
+
+def _pgx(pack, drug: str, calls, policy, *, vault) -> dict:
     """Gene–drug entries for *drug*, filtered by the policy, with the user's own genotypes beside each marker."""
     result = _need("knowledge.pack", "pgx_check")(pack, drug, calls)
     entries = list(result.get("entries") or [])
-    shown = [e for e in entries if allowed(policy, e.get("category", Category.PGX))]
+    shown = [e for e in entries if _pgx_entry_visible(vault, policy, e)]
     for entry in shown:
         mine = {}
         for marker in entry.get("markers") or ():
@@ -396,19 +424,33 @@ def genome_tool(ctx, args: dict) -> dict:
             if not allowed(policy, categorize(genes=[gene])):
                 return {"gene": gene, "results": [], **_withheld(1), **warning}
             rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), _int(args, "limit", 40, 1, 100))
-            markers = sorted({r["marker"] for r in rows if r["marker"]})
-            if not rows:
-                # Which genes the pack covers is public, so check privacy only when it has markers.
-                markers = sorted({m["rsid"] for e in _pack().entries if e["gene"] == gene for m in e["markers"]})
-                if markers:
-                    if not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
-                        return {"gene": gene, "results": [], **_withheld(1), **warning}
-                    return {"gene": gene, **_lookup(store, policy, markers), **warning,
-                            "note": "From the built-in knowledge pack; your variant report has no rows for this gene."}
+            pack = _pack()
+            definitions = _need("knowledge.pack", "DERIVED_MARKERS")
+            derived_markers = [m[0] for name, ms in definitions if name == gene for m in ms]
+            pack_markers = [m["rsid"] for e in pack.entries if e["gene"] == gene for m in e["markers"]]
+            report_markers = [r["marker"] for r in rows if r["marker"]]
+            markers = list(dict.fromkeys(derived_markers + pack_markers + report_markers))
+            if (derived_markers or pack_markers) and not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
+                return {"gene": gene, "results": [], **_withheld(1), **warning}
             if not markers:
                 return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report.",
                         **warning}
-            return {"gene": gene, **_lookup(store, policy, markers), **warning}
+            derived = next((d for d in _need("knowledge.pack", "derive")(
+                pack, _get_calls(store.vault, derived_markers)) if d["name"] == gene), None) if derived_markers else None
+            result = {"gene": gene}
+            hidden = 0
+            if derived is not None:
+                if _derived_visible(store.vault, policy, derived):
+                    result["derived"] = derived
+                else:
+                    hidden = 1
+            result.update(_lookup(store, policy, markers))
+            if hidden:
+                result.update(_withheld(result.get("withheld", 0) + hidden))
+            if (set(derived_markers) | set(pack_markers)) - set(report_markers):
+                result["note"] = ("Includes markers from the built-in knowledge pack or derived-call definitions "
+                                  "that have no rows in your variant report.")
+            return {**result, **warning}
         if op == "pgx":
             drug = str(args.get("drug") or "").strip()
             if not drug:
@@ -416,11 +458,11 @@ def genome_tool(ctx, args: dict) -> dict:
             if not allowed(policy, Category.PGX):
                 return {"drug": drug, **_withheld(1), **warning}
             pack, calls = _pack_calls(store.vault)
-            return {**_pgx(pack, drug, calls, policy), **warning}
+            return {**_pgx(pack, drug, calls, policy, vault=store.vault), **warning}
         if op == "derived":
             pack, calls = _pack_calls(store.vault)
             derived = _need("knowledge.pack", "derive")(pack, calls)
-            shown = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
+            shown = [d for d in derived if _derived_visible(store.vault, policy, d)]
             return {"derived": shown, "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(derived) - len(shown)),
                     **warning}
         if op == "summary":
@@ -473,12 +515,12 @@ def _genome_summary(store, policy) -> dict:
             out.update(_withheld(out.get("withheld", 0) + 1))
         else:
             pack, calls = _pack_calls(vault)
-            shown = [e for e in pack.entries if allowed(policy, categorize(genes=[e["gene"]], default=Category.PGX))]
+            shown = [e for e in pack.entries if _pgx_entry_visible(vault, policy, e)]
             filtered = dataclasses.replace(pack, cpic=[e for e in pack.cpic if e in shown],
                                            glp1=[e for e in pack.glp1 if e in shown])
             result = _need("knowledge.pack", "profile")(filtered, calls)
             derived = result["derived"]
-            result["derived"] = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
+            result["derived"] = [d for d in derived if _derived_visible(vault, policy, d)]
             out["gene_drug_profile"] = result
             out.update(_withheld(out.get("withheld", 0) + len(pack.entries) - len(shown)
                                  + len(derived) - len(result["derived"])))
@@ -750,6 +792,11 @@ def _import(args: dict) -> dict:
     return {**base, "status": "running", "import_run_id": run_id, "note": note}
 
 
+def _hae_backfill_days(ctx) -> int:
+    value = _cfg(ctx, "hae_backfill_days")
+    return value if not isinstance(value, bool) and isinstance(value, int) and 1 <= value <= 3650 else 90
+
+
 def _sync(ctx) -> dict:
     call_mcp = getattr(ctx, "call_mcp", None)
     if not callable(call_mcp):
@@ -757,9 +804,7 @@ def _sync(ctx) -> dict:
     server = _cfg(ctx, "hae_mcp_server")
     if not isinstance(server, str) or not server.strip():
         server = _CONFIG_DEFAULTS["hae_mcp_server"]
-    backfill = _cfg(ctx, "hae_backfill_days")
-    if isinstance(backfill, bool) or not isinstance(backfill, int) or not 1 <= backfill <= 3650:
-        backfill = 90
+    backfill = _hae_backfill_days(ctx)
     sync = _need("health.hae", "sync_hae")
 
     def run():
@@ -1163,6 +1208,12 @@ def _size_text(n: int) -> str:
     return f"{n / 1_000_000:.1f} MB" if n >= 100_000 else f"{n / 1000:.0f} KB"
 
 
+def _erase_schedules(ctx) -> str:
+    return ("Schedules armed with /blueprint keep running: the next research watch starts a new vault; "
+            f"the next Health Auto Export sync imports the last {_hae_backfill_days(ctx)} days again; "
+            "the daily check finds nothing until data returns.")
+
+
 def _erase_preview(ctx, root: Path) -> str:
     targets = _erase_targets(root)
     if not targets:
@@ -1182,7 +1233,8 @@ def _erase_preview(ctx, root: Path) -> str:
                     f"{n['medications']} medications, {n['notes']} notes, {n['research_items']} research items, "
                     "every health sample, the reports and the demo files")
     return (f"This deletes everything Caduceus stored on this machine: {what} ({size} in {root}). "
-            "Your Caduceus settings stay. It cannot be undone. To erase it, run: /caduceus erase confirm")
+            f"Your Caduceus settings stay. {_erase_schedules(ctx)} "
+            "It cannot be undone. To erase it, run: /caduceus erase confirm")
 
 
 def _erase(ctx, confirm: bool) -> str:
@@ -1217,7 +1269,7 @@ def _erase(ctx, confirm: bool) -> str:
         note += (f" {', '.join(links)} {'was a link' if len(links) == 1 else 'were links'}: only the link was removed, "
                  "not what it points to.")
     return (f"Erased the Caduceus vault ({size}) from {root}.{note} Your settings are unchanged. "
-            "A research watch you armed with /blueprint keeps its schedule; its next run starts a new vault.")
+            f"{_erase_schedules(ctx)}")
 
 
 def command(ctx, raw: str) -> str:
