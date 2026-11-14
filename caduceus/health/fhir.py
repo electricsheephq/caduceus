@@ -143,6 +143,17 @@ def _key(parts):
     return hashlib.sha1(json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _normalized_name(name):
+    return " ".join(name.lower().split())
+
+
+def _observation_key(system, code, when, num, text, unit, component, name):
+    parts = ["Observation", system, code, when, [num, text], unit, code if component else None]
+    if system is None and code is None:
+        parts.append(_normalized_name(name))
+    return _key(parts)
+
+
 def _raw(resource, precision, **metadata):
     return json.dumps({**resource, "_caduceus": {"date_precision": precision, **metadata}}, sort_keys=True, separators=(",", ":"))
 
@@ -336,15 +347,16 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         # The value can carry the diagnosis too ("Symptom" = depression), so it counts toward the category.
         category = _category([resource.get("code") or {}, concept, part.get("valueCodeableConcept") or {}],
                              Category.RECORDS)
-        key = _key(["Observation", system, code, when, [num, text], unit, code if component is not None else None])
+        key = _observation_key(system, code, when, num, text, unit, component is not None, name)
         identities = {identity} if identity else set()
         superseded = {}  # resource -> content key of its identical copy that a correction replaced
         if identity:
             previous = [row for row in vault.execute(
-                "SELECT id,dedupe_key,raw_json,effective_at FROM observation WHERE source='fhir' AND code_system IS ? "
+                "SELECT id,dedupe_key,raw_json,effective_at,name FROM observation WHERE source='fhir' AND code_system IS ? "
                 "AND code IS ? AND (EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?) "
                 "OR EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.superseded') WHERE key=?))",
-                (system, code, identity, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)]
+                (system, code, identity, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)
+                and (system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name))]
             if not corrected and any(_stale(json.loads(row["raw_json"]), identity, key) for row in previous):
                 counts["observation_ignored_after_correction"] = counts.get("observation_ignored_after_correction", 0)+1
                 continue
@@ -482,6 +494,7 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
     system, code, name = _concept(concept)
     category = _category([concept], Category.RECORDS)
     key = _key([system, code, when, name])
+    recorded, recorded_precision = _date_value(resource.get("recordedDate"))
     clinical = _status(resource.get("clinicalStatus"))
     verification = _status(resource.get("verificationStatus"))
     current = False if clinical in ("resolved", "inactive", "remission") else (
@@ -491,29 +504,33 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
     title = name + (f" [verification: {verification}]" if verification else "")
     if current is False:
         title += f" [not current: {clinical}]"
-    previous = vault.execute("SELECT id,clinical_status,raw_json,category FROM condition WHERE dedupe_key=?", (key,)).fetchone()
+    if when is None:
+        title += f" [onset unknown; recorded {recorded}]"
+    previous = vault.execute("SELECT id,clinical_status,raw_json,category,recorded FROM condition WHERE dedupe_key=?", (key,)).fetchone()
     if previous is None:
         raw = _raw(resource, precision, verification_status=verification, current=current,
-                   resource_ids=[identity] if identity else [], **scope)
+                   resource_ids=[identity] if identity else [], recorded_precision=recorded_precision, **scope)
         cur = vault.execute(
-            "INSERT INTO condition(code_system,code,name,clinical_status,onset,category,source,source_id,dedupe_key,raw_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)", (system, code, name, clinical, when, category.value, "fhir", source_id, key, raw))
-        search.index_doc(vault, kind="condition", ref=str(cur.lastrowid), title=title, body=raw, category=category, ts=when)
+            "INSERT INTO condition(code_system,code,name,clinical_status,onset,recorded,category,source,source_id,dedupe_key,raw_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (system, code, name, clinical, when, recorded, category.value, "fhir", source_id, key, raw))
+        search.index_doc(vault, kind="condition", ref=str(cur.lastrowid), title=title, body=raw, category=category, ts=when or recorded)
         counts["condition"] += 1
         return
     old = json.loads(previous["raw_json"])
     ids = _resource_ids(old) | ({identity} if identity else set())
-    if previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification:
+    if (previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification
+            or previous["recorded"] != recorded):
         category, conflict = _stricter(category, previous["category"])
         document = resource
         if conflict:  # the stored text stays under its own category; only the status moves
             document = {key: value for key, value in old.items() if key not in ("clinicalStatus", "verificationStatus")}
             document.update({key: resource[key] for key in ("clinicalStatus", "verificationStatus") if key in resource})
-        raw = _raw(document, precision, verification_status=verification, current=current, resource_ids=sorted(ids), **scope)
-        vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=? WHERE id=?",
-                      (clinical, raw, source_id, category.value, previous["id"]))
+        raw = _raw(document, precision, verification_status=verification, current=current, resource_ids=sorted(ids),
+                   recorded_precision=recorded_precision, **scope)
+        vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=?,recorded=? WHERE id=?",
+                      (clinical, raw, source_id, category.value, recorded, previous["id"]))
         search.index_doc(vault, kind="condition", ref=str(previous["id"]), title=title, body=raw,
-                         category=category, ts=when)
+                         category=category, ts=when or recorded)
         counts["condition_updated"] = counts.get("condition_updated", 0)+1
     elif ids != _resource_ids(old):  # the same condition from another resource: remember who else asserts it
         old.setdefault("_caduceus", {})["resource_ids"] = sorted(ids)
@@ -566,7 +583,7 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
         else:
             when = resource.get("onsetDateTime") or (resource.get("onsetPeriod") or {}).get("start")
         when, precision = _date_value(when)
-        if when is None:
+        if when is None and not (kind == "Condition" and _date_value(resource.get("recordedDate"))[0] is not None):
             _skip(counts, kind, "date")
             continue
         with write_txn(vault):

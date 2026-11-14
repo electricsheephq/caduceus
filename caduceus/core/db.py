@@ -63,6 +63,19 @@ def _migrate_vault(conn: sqlite3.Connection) -> None:
                          "WHERE status='succeeded' AND parser <> 'hae_sync'")
         if "comparison_json" not in {row[1] for row in conn.execute("PRAGMA table_info(callset)")}:
             conn.execute("ALTER TABLE callset ADD COLUMN comparison_json TEXT NOT NULL DEFAULT '[]'")
+        if "recorded" not in {row[1] for row in conn.execute("PRAGMA table_info(condition)")}:
+            conn.execute("ALTER TABLE condition ADD COLUMN recorded TEXT")
+        if not conn.execute("SELECT 1 FROM settings WHERE key='migration:fhir_uncoded_names_v1'").fetchone():
+            from ..health.fhir import _observation_key
+
+            for row in conn.execute("SELECT id,name,effective_at,value_num,value_text,unit FROM observation "
+                                    "WHERE source='fhir' AND code_system IS NULL AND code IS NULL").fetchall():
+                key = _observation_key(None, None, row["effective_at"], row["value_num"], row["value_text"],
+                                       row["unit"], False, row["name"])
+                # A colliding row keeps its old key and all its data.
+                conn.execute("UPDATE OR IGNORE observation SET dedupe_key=? WHERE id=?", (key, row["id"]))
+            conn.execute("INSERT INTO settings(key,value_json,updated_at) "
+                         "VALUES ('migration:fhir_uncoded_names_v1','true',strftime('%Y-%m-%dT%H:%M:%SZ','now'))")
 
     def has_column():
         return "category" in {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}

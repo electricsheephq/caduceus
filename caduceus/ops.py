@@ -303,8 +303,7 @@ def _lookup(store, policy, markers) -> dict:
         entry = call.as_dict() if call is not None else {"marker": name, "state": "not_on_chip"}
         notes = [_snapshot_dict(r) for r in _snapshot_rows(store.vault, "marker=? COLLATE NOCASE", (key,), 5)
                  if allowed(policy, r["category"])]
-        if notes:
-            entry["annotations"] = notes
+        entry["annotations"] = notes
         results.append(entry)
     return {"results": results, "limits": [CHIP_LIMITS, LIMITS], **_withheld(withheld)}
 
@@ -396,19 +395,33 @@ def genome_tool(ctx, args: dict) -> dict:
             if not allowed(policy, categorize(genes=[gene])):
                 return {"gene": gene, "results": [], **_withheld(1), **warning}
             rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), _int(args, "limit", 40, 1, 100))
-            markers = sorted({r["marker"] for r in rows if r["marker"]})
-            if not rows:
-                # Which genes the pack covers is public, so check privacy only when it has markers.
-                markers = sorted({m["rsid"] for e in _pack().entries if e["gene"] == gene for m in e["markers"]})
-                if markers:
-                    if not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
-                        return {"gene": gene, "results": [], **_withheld(1), **warning}
-                    return {"gene": gene, **_lookup(store, policy, markers), **warning,
-                            "note": "From the built-in knowledge pack; your variant report has no rows for this gene."}
+            pack = _pack()
+            definitions = _need("knowledge.pack", "DERIVED_MARKERS")
+            derived_markers = [m[0] for name, ms in definitions if name == gene for m in ms]
+            pack_markers = [m["rsid"] for e in pack.entries if e["gene"] == gene for m in e["markers"]]
+            report_markers = [r["marker"] for r in rows if r["marker"]]
+            markers = list(dict.fromkeys(derived_markers + pack_markers + report_markers))
+            if not rows and markers and not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
+                return {"gene": gene, "results": [], **_withheld(1), **warning}
             if not markers:
                 return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report.",
                         **warning}
-            return {"gene": gene, **_lookup(store, policy, markers), **warning}
+            derived = next((d for d in _need("knowledge.pack", "derive")(
+                pack, _get_calls(store.vault, derived_markers)) if d["name"] == gene), None) if derived_markers else None
+            result = {"gene": gene}
+            hidden = 0
+            if derived is not None:
+                if allowed(policy, derived["category"]):
+                    result["derived"] = derived
+                else:
+                    hidden = 1
+            result.update(_lookup(store, policy, markers))
+            if hidden:
+                result.update(_withheld(result.get("withheld", 0) + hidden))
+            if (set(derived_markers) | set(pack_markers)) - set(report_markers):
+                result["note"] = ("Includes markers from the built-in knowledge pack or derived-call definitions "
+                                  "that have no rows in your variant report.")
+            return {**result, **warning}
         if op == "pgx":
             drug = str(args.get("drug") or "").strip()
             if not drug:
@@ -1163,6 +1176,12 @@ def _size_text(n: int) -> str:
     return f"{n / 1_000_000:.1f} MB" if n >= 100_000 else f"{n / 1000:.0f} KB"
 
 
+def _erase_schedules(ctx) -> str:
+    return ("Schedules armed with /blueprint keep running: the next research watch starts a new vault; "
+            f"the next Health Auto Export sync imports the last {_cfg(ctx, 'hae_backfill_days')} days again; "
+            "the daily check finds nothing until data returns.")
+
+
 def _erase_preview(ctx, root: Path) -> str:
     targets = _erase_targets(root)
     if not targets:
@@ -1182,7 +1201,8 @@ def _erase_preview(ctx, root: Path) -> str:
                     f"{n['medications']} medications, {n['notes']} notes, {n['research_items']} research items, "
                     "every health sample, the reports and the demo files")
     return (f"This deletes everything Caduceus stored on this machine: {what} ({size} in {root}). "
-            "Your Caduceus settings stay. It cannot be undone. To erase it, run: /caduceus erase confirm")
+            f"Your Caduceus settings stay. {_erase_schedules(ctx)} "
+            "It cannot be undone. To erase it, run: /caduceus erase confirm")
 
 
 def _erase(ctx, confirm: bool) -> str:
@@ -1217,7 +1237,7 @@ def _erase(ctx, confirm: bool) -> str:
         note += (f" {', '.join(links)} {'was a link' if len(links) == 1 else 'were links'}: only the link was removed, "
                  "not what it points to.")
     return (f"Erased the Caduceus vault ({size}) from {root}.{note} Your settings are unchanged. "
-            "A research watch you armed with /blueprint keeps its schedule; its next run starts a new vault.")
+            f"{_erase_schedules(ctx)}")
 
 
 def command(ctx, raw: str) -> str:

@@ -276,6 +276,10 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
             except (KeyError, ValueError, TypeError, OverflowError):
                 skipped += 1
                 continue
+            if (name == "sleep_analysis" and "value" in entry
+                    and rows[0][2] in run_state.get("sleep_summaries", {}).get(rows[0][7], set())):
+                counts["sleep_segments_omitted"] = counts.get("sleep_segments_omitted", 0) + 1
+                continue
             if len(pending) + len(rows) > BATCH:
                 flush()
             pending.extend(rows)
@@ -332,18 +336,27 @@ def _read_json(stream):
 
 def _sleep_nights(data, *, cancel=None):
     """Collect valid segment and summary nights before any file rows are ingested."""
-    segments, summaries = set(), set()
+    segments, summaries = {}, {}
     for metric in data.get("metrics", []):
         if not isinstance(metric, dict) or metric.get("name") != "sleep_analysis":
             continue
         for entry in metric.get("data", []):
             _check_cancel(cancel)
             try:
-                day = _metric_rows("sleep_analysis", metric, entry, None)[0][7]
+                row = _metric_rows("sleep_analysis", metric, entry, None)[0]
             except (KeyError, ValueError, TypeError, OverflowError):
                 continue
-            (segments if "value" in entry else summaries).add(day)
+            (segments if "value" in entry else summaries).setdefault(row[7], set()).add(row[2])
     return segments, summaries
+
+
+def _sleep_state(segments, summaries, warnings):
+    edges = {min(segments), max(segments)} if segments else set()
+    mixed = sorted(day for day, names in segments.items() if names & summaries.get(day, set()))
+    if mixed:
+        warnings.append("Sleep summaries used instead of same-source segments for nights: " + ", ".join(mixed))
+    return {"sleep_keep": {day for day in edges if not segments[day] <= summaries.get(day, set())},
+            "sleep_summaries": summaries}
 
 
 def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
@@ -358,15 +371,16 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
             if zipfile.is_zipfile(stored):
                 with zipfile.ZipFile(stored) as archive:
                     members = _safe_members(archive)
-                    segments, summaries = set(), set()
+                    segments, summaries = {}, {}
                     # Scan every member before ingesting: zip order need not be date order.
                     for member in members:
                         _check_cancel(cancel)
                         with archive.open(member) as stream:
                             member_segments, member_summaries = _sleep_nights(_read_json(stream), cancel=cancel)
-                        segments.update(member_segments)
-                        summaries.update(member_summaries)
-                    state["sleep_keep"] = ({min(segments), max(segments)} if segments else set()) - summaries
+                        for target, member_nights in ((segments, member_segments), (summaries, member_summaries)):
+                            for day, names in member_nights.items():
+                                target.setdefault(day, set()).update(names)
+                    state.update(_sleep_state(segments, summaries, warnings))
                     for member in members:
                         _check_cancel(cancel)
                         with archive.open(member) as stream:
@@ -379,7 +393,7 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
                 with stored.open("rb") as stream:
                     data = _read_json(stream)
                 segments, summaries = _sleep_nights(data, cancel=cancel)
-                state["sleep_keep"] = ({min(segments), max(segments)} if segments else set()) - summaries
+                state.update(_sleep_state(segments, summaries, warnings))
                 ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
             _check_cancel(cancel)
             warnings.extend(recompute_rollups(samples))
