@@ -308,6 +308,6 @@ def test_edge_replacement_requires_summary_for_every_segment_source(vault, sampl
     _hae_file(vault, samples, tmp_path, segments)
     result = _hae_file(vault, samples, tmp_path, [_segment(4, 6), _segment(4, 6, "Synthetic Other"),
                                                 _summary()], "mixed.json")
-    assert result.counts["samples_replaced"] == 0
+    assert result.counts["samples_replaced"] == 2  # only the summary source's old segments are replaced
     assert result.counts["sleep_segments_omitted"] == 1
     assert samples.execute("SELECT count(*) FROM sample WHERE source_name='Synthetic Other'").fetchone()[0] == 2

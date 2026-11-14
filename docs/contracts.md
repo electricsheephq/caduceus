@@ -117,7 +117,18 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 ```
 
 **`import_apple_health`:**
-- **Run:** the `import_run` lives in the vault; samples go to `samples`.
+- **Runs:** `apple_health` version `1` tracks samples; zip clinical records have a separate `apple_clinical`
+  run keyed by `fhir.PARSER_VERSION` (`2`). Runs live in the vault; samples go to `samples`. Each part skips
+  independently after success. Re-importing a pre-0.3.1 zip runs only its clinical members: it never opens
+  sample XML or recomputes rollups, and creates no sample-import run. A first import still reads both parts
+  in one call. A failed/cancelled sample part returns immediately; a failed/cancelled clinical part can retry
+  without re-reading successful samples. A lone XML has only a sample run.
+- **Reporting:** completed `op=import` returns summed counts for the parts that ran, with `counts.parts`
+  mapping `apple_health` and `apple_clinical` to `{status, run_id}`. A skipped part has null `run_id` and adds
+  no counts. Clinical-only recovery thus reports samples skipped plus clinical rows added; its top-level
+  `run_id` and status are the clinical run's. When only samples run, those identify the sample run. When
+  both skip, the result is `skipped` with no new run. `op=status` lists the separate parser/version runs and
+  their own counts/progress/errors; selecting the returned run id shows the clinical recovery counts.
 - **Parsing:** streams a lone Apple Health XML or a safe XML member from a zip. A single `export.xml` takes
   precedence; otherwise exactly one non-`export_cda.xml` XML must contain `<!DOCTYPE HealthData` or `<HealthData`
   in its first 4096 bytes. Localized names are supported; size limits and entity guards apply to both paths.
@@ -135,8 +146,12 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 - **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
   cleared once per run. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
   morning in the end's offset (which still supplies `tz_offset_min`). Sleep nights in `run_state["sleep_keep"]`
-  (a set of ISO dates) are upsert-only, as are nights before `run_state["sleep_clear_from"]` when that local `date`
-  cutoff is set. Other metric types keep the usual replacement rule. In `counts["metrics_ignored"]`, unknown
+  (a set of ISO dates) preserve stored rows except for each source whose summary the file uses on that night:
+  its HAE sleep rows are cleared before insertion, once per run per night/source using
+  `run_state["sleep_sources_cleared"]`. Other sources and Apple rows stay. Nights before
+  `run_state["sleep_clear_from"]` when that local `date` cutoff is set are upsert-only; nights outside these
+  protections still replace the whole HAE night. Sync sets no `sleep_keep`, so is unchanged.
+  Other metric types keep the usual replacement rule. In `counts["metrics_ignored"]`, unknown
   metrics keep their names only when they match `^[a-z][a-z0-9_]{0,63}$`, up to 50 distinct names per run;
   repeats of kept names keep counting there. Every other unknown metric counts under `"other"`, for files and sync.
   Entry dates use `date` when present, otherwise `start`; missing or invalid dates are skipped. Offset-bearing
@@ -215,6 +230,13 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
 **Records semantics:**
+- **Parser recovery.** `fhir.PARSER_VERSION` is `2`: re-importing a file successfully read by version `1`
+  runs again once, recovering recorded-only Conditions and previously merged uncoded concepts. Existing
+  rows still dedupe; correction/retraction state and ignored superseded copies keep their usual rules.
+  An already-corrected/amended observation with the same content key is upserted without deleting it or
+  counting another insertion/supersession; its superseded-copy references remain intact.
+  `open_vault` runs `fhir_uncoded_names_v1` before returning the connection to either importer, so re-imports
+  match the re-keyed observations. Subsequent imports of the same source/version skip.
 - **Uncoded observations.** When both `code_system` and `code` are NULL, the content key appends the concept's
   lowercased, whitespace-collapsed, stripped name (the component's own name for panel rows); non-string names
   are converted with `str()` before normalization. Identity-based correction lookups also match that normalized
@@ -230,6 +252,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   and its precision is kept in `raw_json._caduceus.recorded_precision`. A Condition with no onset but a valid
   recorded date has NULL onset and key `_key([system, code, None, name])`; known-onset keys are unchanged.
   Its search timestamp uses the recorded date and its title appends ` [onset unknown; recorded <date>]`.
+  When a sensitive-category conflict keeps the stored Condition document, its `recorded` column,
+  `_caduceus.recorded_precision`, search timestamp and recorded-date title also stay with that document;
+  clinical/verification status may still update. When the incoming document wins, its recorded values apply.
   Identity-based retraction removes a matching NULL-onset row even when the retraction gives an onset.
   A known onset withdraws the same identity's matching unknown-onset assertion through the same removal path,
   including its search document; other identities' assertions remain. A recorded-only copy arriving after a

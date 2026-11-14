@@ -14,7 +14,7 @@ from ..core.db import write_txn
 from ..core.policy import Category, SENSITIVE, categorize, medication_category
 
 PARSER = "fhir"
-PARSER_VERSION = "1"
+PARSER_VERSION = "2"
 MAX_JSON = 64 << 20
 LOINC = "http://loinc.org"
 ALIASES = {"hba1c": ("4548-4", "17856-6", "59261-8"),
@@ -372,6 +372,8 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
                 for row in previous:
                     document = json.loads(row["raw_json"])
                     meta = document.setdefault("_caduceus", {})
+                    if row["dedupe_key"] == key and document.get("status") in ("corrected", "amended"):
+                        continue  # re-reading an existing correction upserts it without superseding it again
                     if identity not in _resource_ids(document):
                         # Another resource's correction already replaced this one's copy: that corrected value stays,
                         # and this correction stands on its own.
@@ -550,6 +552,10 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
         if conflict:  # the stored text stays under its own category; only the status moves
             document = {key: value for key, value in old.items() if key not in ("clinicalStatus", "verificationStatus")}
             document.update({key: resource[key] for key in ("clinicalStatus", "verificationStatus") if key in resource})
+            recorded = previous["recorded"]
+            recorded_precision = old.get("_caduceus", {}).get("recorded_precision")
+            if when is None:
+                title = title.rsplit(" [onset unknown; recorded ", 1)[0] + f" [onset unknown; recorded {recorded}]"
         raw = _raw(document, precision, verification_status=verification, current=current, resource_ids=sorted(ids),
                    recorded_precision=recorded_precision, **scope)
         vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=?,recorded=? WHERE id=?",

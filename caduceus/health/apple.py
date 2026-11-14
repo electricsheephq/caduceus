@@ -18,6 +18,7 @@ from .trends import recompute_rollups
 
 PARSER = "apple_health"
 PARSER_VERSION = "1"
+CLINICAL_PARSER = "apple_clinical"
 BATCH = 10_000
 MAX_MEMBER = 8 << 30
 MAX_TOTAL = 16 << 30
@@ -182,7 +183,7 @@ def _safe_members(archive):
     return members
 
 
-def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
+def _import_samples(samples, vault, src, *, cancel=None) -> ImportResult:
     run = sources.begin_import(vault, src, PARSER, PARSER_VERSION)
     if run is None:
         return ImportResult("skipped", source_id=src.id)
@@ -211,20 +212,6 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
                         raise ValueError(EXPORT_XML_ERROR)
                     with archive.open(exports[0]) as stream:
                         _xml(samples, vault, stream, src.id, run.id, counts, cancel, warnings)
-                    for member in members:
-                        if cancel is not None and cancel.is_set():
-                            break
-                        path = PurePosixPath(member.filename)
-                        if "clinical-records" in path.parts and path.suffix.lower() == ".json":
-                            if member.file_size > fhir.MAX_JSON:
-                                raise ValueError("FHIR JSON exceeds size limit")
-                            with archive.open(member) as stream:
-                                raw = stream.read(fhir.MAX_JSON + 1)
-                            if len(raw) > fhir.MAX_JSON:
-                                raise ValueError("FHIR JSON exceeds inflate limit")
-                            clinical = fhir.ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
-                            for key, value in clinical.items():
-                                counts[key] = counts.get(key, 0) + value
             else:
                 if stored.stat().st_size > MAX_MEMBER:
                     raise ValueError("XML exceeds size limit")
@@ -247,3 +234,52 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
     warnings += fhir.warning_messages(counts) + errors
     sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
     return ImportResult(status, run.id, src.id, counts, warnings)
+
+
+def _import_clinical(vault, src, *, cancel=None):
+    run = sources.begin_import(vault, src, CLINICAL_PARSER, fhir.PARSER_VERSION)
+    if run is None:
+        return ImportResult("skipped", source_id=src.id)
+    counts, warnings, status = {}, [], "succeeded"
+    try:
+        with zipfile.ZipFile(sources.source_file(vault, src)) as archive:
+            for member in _safe_members(archive):
+                if cancel is not None and cancel.is_set():
+                    break
+                path = PurePosixPath(member.filename)
+                if "clinical-records" not in path.parts or path.suffix.lower() != ".json":
+                    continue
+                if member.file_size > fhir.MAX_JSON:
+                    raise ValueError("FHIR JSON exceeds size limit")
+                with archive.open(member) as stream:
+                    raw = stream.read(fhir.MAX_JSON + 1)
+                if len(raw) > fhir.MAX_JSON:
+                    raise ValueError("FHIR JSON exceeds inflate limit")
+                clinical = fhir.ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
+                for key, value in clinical.items():
+                    counts[key] = counts.get(key, 0) + value
+        if cancel is not None and cancel.is_set():
+            status = "cancelled"
+    except Exception as exc:
+        status, warnings = "failed", [f"{type(exc).__name__}: Apple Health clinical import failed"]
+    warnings = fhir.warning_messages(counts) + warnings
+    sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
+    return ImportResult(status, run.id, src.id, counts, warnings)
+
+
+def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
+    sample_result = _import_samples(samples, vault, src, cancel=cancel)
+    if sample_result.status not in ("succeeded", "skipped"):
+        return sample_result
+    if not zipfile.is_zipfile(sources.source_file(vault, src)):
+        return sample_result
+    clinical = _import_clinical(vault, src, cancel=cancel)
+    if sample_result.status == clinical.status == "skipped":
+        return ImportResult("skipped", source_id=src.id)
+    counts = {**sample_result.counts}
+    for key, value in clinical.counts.items():
+        counts[key] = counts.get(key, 0) + value
+    counts["parts"] = {PARSER: {"status": sample_result.status, "run_id": sample_result.run_id},
+                       CLINICAL_PARSER: {"status": clinical.status, "run_id": clinical.run_id}}
+    active = clinical if clinical.status != "skipped" else sample_result
+    return ImportResult(active.status, active.run_id, src.id, counts, sample_result.warnings + clinical.warnings)

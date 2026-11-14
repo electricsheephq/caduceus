@@ -240,6 +240,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
     if not isinstance(data, dict):
         raise ValueError("payload must be an object")
     cleared = run_state.setdefault("cleared", set())
+    sleep_sources_cleared = run_state.setdefault("sleep_sources_cleared", set())
     sleep_clear_from = run_state.get("sleep_clear_from")
     sleep_keep = run_state.get("sleep_keep", set())
     pending, workouts = [], []
@@ -254,12 +255,19 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         pairs = {(kind, day) for kind, day in pairs
                  if kind != "HKCategoryTypeIdentifierSleepAnalysis" or
                  (day not in sleep_keep and (sleep_clear_from is None or day >= sleep_clear_from.isoformat()))}
+        sleep_sources = {(r[7], r[2]) for r in pending
+                         if r[1] == "HKCategoryTypeIdentifierSleepAnalysis" and r[7] in sleep_keep
+                         and r[2] in run_state.get("sleep_summaries", {}).get(r[7], set())} - sleep_sources_cleared
         replaced = 0
         with write_txn(samples):
             samples.execute("CREATE INDEX IF NOT EXISTS sample_hae_type_day ON sample(provider,type,local_day)")
             for kind, day in sorted(pairs):
                 replaced += samples.execute("DELETE FROM sample WHERE provider='hae' AND type=? AND local_day=?",
                                             (kind, day)).rowcount
+            for day, source in sorted(sleep_sources):
+                replaced += samples.execute(
+                    "DELETE FROM sample WHERE provider='hae' AND type='HKCategoryTypeIdentifierSleepAnalysis' "
+                    "AND local_day=? AND source_name=?", (day, source)).rowcount
             before = samples.total_changes
             samples.executemany(
                 "INSERT INTO sample(source_id,type,source_name,unit,start_utc,end_utc,tz_offset_min,local_day,"
@@ -274,6 +282,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
                 "duration_unit,statistics_json,dedupe_key) VALUES (?,?,?,?,?,?,?,?,?)", workouts)
             added_workouts = samples.total_changes - before
         cleared.update(pairs)
+        sleep_sources_cleared.update(sleep_sources)
         counts["samples_replaced"] += replaced
         counts["samples"] += written
         counts["workouts"] += added_workouts
