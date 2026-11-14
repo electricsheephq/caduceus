@@ -772,14 +772,20 @@ def _sync(ctx) -> dict:
             src = sources.virtual_source(store.vault, "hae_sync", server,
                                          f"Health Auto Export (MCP server {server})")
             previous = store.vault.execute(
-                "SELECT id,status,errors_json FROM import_run WHERE source_id=? AND parser='hae_sync' "
+                "SELECT id,status,errors_json,progress_json FROM import_run WHERE source_id=? AND parser='hae_sync' "
                 "AND status<>'running' ORDER BY id DESC LIMIT 1", (src.id,)).fetchone()
             base = {"file": src.original_name, "kind": src.kind, "source_id": src.id}
-            if previous is not None and previous["status"] in ("failed", "interrupted"):
+            if (previous is not None and previous["status"] in ("failed", "interrupted") and
+                    not json.loads(previous["progress_json"] or "{}").get("reported")):
+                errors = json.loads(previous["errors_json"] or "[]")
                 base["previous_sync"] = {"import_run_id": previous["id"], "status": previous["status"],
-                                         "errors": json.loads(previous["errors_json"] or "[]")[:3]}
+                                         "error": errors[-1] if errors else None}
         outcome = jobs.submit("hae-sync:" + server, run, wait_s=IMPORT_WAIT_S)
     if outcome["state"] == "done":
+        with _Store() as store, write_txn(store.vault):
+            store.vault.execute(
+                "UPDATE import_run SET progress_json=json_set(COALESCE(progress_json,'{}'),'$.reported',1) WHERE id=?",
+                (outcome["result"]["run_id"],))
         return {**base, **outcome["result"]}
     if outcome["state"] == "error":
         raise ToolError("Health Auto Export sync failed")

@@ -87,6 +87,14 @@ def sleep_night(morning):
                 (f"{morning} 01:00:00 +0900", f"{morning} 07:00:00 +0900", "Deep"))]
 
 
+def split_sleep_night(morning):
+    previous = morning - timedelta(days=1)
+    return [entry(date=start, start=start, end=end, value=phase)
+            for start, end, phase in (
+                (f"{previous} 22:00:00 +0900", f"{previous} 23:30:00 +0900", "Core"),
+                (f"{morning} 00:30:00 +0900", f"{morning} 05:00:00 +0900", "Deep"))]
+
+
 def start_only_sleep_server(segments, seen):
     def call(tool, args):
         if tool != "get_health_metrics" or args["metrics"] != "sleep_analysis":
@@ -144,7 +152,20 @@ def test_partial_first_night_file_preserves_earlier_segments(tmp_path, samples, 
     assert samples.execute("SELECT source_id FROM sample WHERE value_text LIKE '%Deep'").fetchone()[0] == second.source_id
 
 
-def test_zip_sleep_cutoff_uses_earliest_day_across_all_members(tmp_path, samples, vault):
+def test_older_file_partial_last_night_preserves_newer_sleep(tmp_path, samples, vault):
+    newer = [segment for i in range(3) for segment in split_sleep_night(TODAY + timedelta(days=i))]
+    assert ingest_file(tmp_path, vault, samples,
+                       payload({"name": "sleep_analysis", "data": newer}), "newer.json").status == "succeeded"
+    assert sleep_hours(samples, TODAY) == 6.0
+    older = [segment for i in (-2, -1) for segment in split_sleep_night(TODAY + timedelta(days=i))]
+    older += split_sleep_night(TODAY)[:1]
+    out = ingest_file(tmp_path, vault, samples,
+                      payload({"name": "sleep_analysis", "data": older}), "older.json")
+    assert out.status == "succeeded"
+    assert [sleep_hours(samples, TODAY + timedelta(days=i)) for i in range(-2, 3)] == [6.0] * 5
+
+
+def test_zip_sleep_keeps_both_edge_nights_across_all_members(tmp_path, samples, vault):
     tomorrow = TODAY + timedelta(days=1)
     both = sleep_night(TODAY) + sleep_night(tomorrow)
     assert ingest_file(tmp_path, vault, samples,
@@ -157,8 +178,49 @@ def test_zip_sleep_cutoff_uses_earliest_day_across_all_members(tmp_path, samples
     out = hae.import_hae(samples, vault, src)
     assert out.status == "succeeded"
     assert sleep_hours(samples, TODAY) == 8
-    assert sleep_hours(samples, tomorrow) == 6
-    assert out.counts["samples_replaced"] == 2
+    assert sleep_hours(samples, tomorrow) == 8
+    assert out.counts["samples_replaced"] == 0
+
+
+def test_zip_daily_sleep_replaces_only_middle_nights_once(tmp_path, samples, vault, monkeypatch):
+    nights = [TODAY + timedelta(days=i) for i in range(4)]
+    old = [entry(day=str(n), start=f"{n} 05:30:00 +0900", end=f"{n} 06:30:00 +0900", value="Asleep")
+           for n in nights]
+    assert ingest_file(tmp_path, vault, samples,
+                       payload({"name": "sleep_analysis", "data": old})).status == "succeeded"
+    path = tmp_path / "daily.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        # Deliberately out of order: each member contains its day's morning and evening.
+        for day in (nights[2], nights[0], nights[1]):
+            segments = split_sleep_night(day)[1:] + split_sleep_night(day + timedelta(days=1))[:1]
+            archive.writestr(f"{day}.json", json.dumps(payload({"name": "sleep_analysis", "data": segments})))
+    src, _ = sources.store_source(vault, path, "hae")
+    monkeypatch.setattr(hae, "BATCH", 1)
+    out = hae.import_hae(samples, vault, src)
+    assert out.status == "succeeded" and out.counts["samples_replaced"] == 2
+    assert [sleep_hours(samples, n) for n in nights] == [5.5, 6.0, 6.0, 2.5]
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 8
+    assert [r[0] for r in samples.execute("SELECT local_day FROM sample WHERE value_text=? ORDER BY local_day",
+                                        (hae.SLEEP["Asleep"],))] == [str(nights[0]), str(nights[-1])]
+
+
+@pytest.mark.parametrize("summary_first", [False, True])
+def test_zip_summary_replaces_segment_edge_night(tmp_path, samples, vault, summary_first):
+    tomorrow = TODAY + timedelta(days=1)
+    assert ingest_file(tmp_path, vault, samples, payload({"name": "sleep_analysis", "data":
+                       sleep_night(TODAY) + sleep_night(tomorrow)})).status == "succeeded"
+    members = [sleep_night(TODAY)[1:] + sleep_night(tomorrow)[1:],
+               [entry(totalSleep=7, sleepEnd=f"{TODAY} 07:00:00 +0900")]]
+    if summary_first:
+        members.reverse()
+    path = tmp_path / "summary.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        for i, entries in enumerate(members):
+            archive.writestr(f"{i}.json", json.dumps(payload({"name": "sleep_analysis", "data": entries})))
+    src, _ = sources.store_source(vault, path, "hae")
+    out = hae.import_hae(samples, vault, src)
+    assert out.status == "succeeded" and out.counts["samples_replaced"] == 2
+    assert [sleep_hours(samples, n) for n in (TODAY, tomorrow)] == [7.0, 8.0]
 
 
 def test_sleep_summaries_replace_the_rollup_nights(tmp_path, samples, vault):
@@ -178,7 +240,8 @@ def test_sleep_summaries_replace_the_rollup_nights(tmp_path, samples, vault):
     second = ingest_file(tmp_path, vault, samples,
                          payload({"name": "sleep_analysis", "data": summaries}), "summaries.json")
     assert second.status == "succeeded"
-    assert second.counts["samples_replaced"] == 2
+    # Both summary nights replace their two old segments, including the first night.
+    assert second.counts["samples_replaced"] == 4
     assert [sleep_hours(samples, n) for n in nights] == [7.0, 6.0, 7.0]
 
 
@@ -596,6 +659,8 @@ def test_registration_blueprint_schema_and_settings(plugin):
     assert blueprint["schedule_template"] == "{minute} {hour} * * *"
     assert "[SILENT]" in blueprint["prompt_template"]
     assert "previous_sync" in blueprint["prompt_template"]
+    assert blueprint["prompt_template"].endswith(
+        "for previous_sync, say that an earlier sync failed and give its error.")
     assert "sync" in ctx.tools["caduceus_capture"]["schema"]["parameters"]["properties"]["op"]["enum"]
     manifest = (Path(__file__).resolve().parents[1] / "plugin.yaml").read_text()
     assert "  hae_mcp_server:\n    type: str\n    default: \"health-auto-export\"" in manifest
@@ -862,7 +927,7 @@ def test_next_sync_reports_background_failure(plugin, vault, monkeypatch, next_b
         assert jobs.join("hae-sync:health-auto-export", 5)
     failed = vault.execute("SELECT id FROM import_run WHERE status='failed' ORDER BY id DESC LIMIT 1").fetchone()[0]
     expected = {"import_run_id": failed, "status": "failed",
-                "errors": ["Health Auto Export did not answer: synthetic server not connected"]}
+                "error": "Health Auto Export did not answer: synthetic server not connected"}
     entered.clear()
     release.clear()
 
@@ -890,18 +955,80 @@ def test_next_sync_reports_background_failure(plugin, vault, monkeypatch, next_b
     assert succeeded["status"] == "succeeded" and "previous_sync" not in succeeded
 
 
-def test_sync_reports_latest_interrupted_run_first_three_errors(plugin, vault):
+@pytest.mark.parametrize("errors", [[], ["one", "two", "three", "four"]])
+def test_sync_reports_latest_interrupted_run_last_error(plugin, vault, errors):
     ctx, call = plugin
     src = sources.virtual_source(vault, "hae_sync", "health-auto-export", "Synthetic sync")
     old = sources.begin_run(vault, src, "hae_sync", "1")
     sources.finish_import(vault, old.id, status="failed", counts={}, errors=["old error"])
     latest = sources.begin_run(vault, src, "hae_sync", "1")
-    sources.finish_import(vault, latest.id, status="interrupted", counts={}, errors=["one", "two", "three", "four"])
+    sources.finish_import(vault, latest.id, status="interrupted", counts={}, errors=errors)
     ctx.call_mcp = lambda server, tool, args, timeout: empty(tool, args)
     result = call(op="sync")
     assert result["status"] == "succeeded"
     assert result["previous_sync"] == {"import_run_id": latest.id, "status": "interrupted",
-                                       "errors": ["one", "two", "three"]}
+                                       "error": errors[-1] if errors else None}
+    assert "previous_sync" not in call(op="sync")
+
+
+def test_sync_failure_returned_within_wait_is_not_reported_again(plugin, vault, monkeypatch):
+    ctx, call = plugin
+    monkeypatch.setattr(ops, "IMPORT_WAIT_S", 5)
+    ctx.call_mcp = lambda server, tool, args, timeout: {"ok": False, "error": "synthetic failure"}
+    failed = call(op="sync")
+    assert failed["status"] == "failed"
+    progress = vault.execute("SELECT progress_json FROM import_run WHERE id=?", (failed["run_id"],)).fetchone()[0]
+    assert json.loads(progress)["reported"] == 1
+    ctx.call_mcp = lambda server, tool, args, timeout: empty(tool, args)
+    succeeded = call(op="sync")
+    assert succeeded["status"] == "succeeded" and "previous_sync" not in succeeded
+
+
+def test_sync_reported_latest_failure_does_not_reveal_older_failure(plugin, vault):
+    ctx, call = plugin
+    src = sources.virtual_source(vault, "hae_sync", "health-auto-export", "Synthetic sync")
+    for i in range(2):
+        run = sources.begin_run(vault, src, "hae_sync", "1")
+        sources.finish_import(vault, run.id, status="failed", counts={}, errors=[f"synthetic failure {i}"])
+    sources.update_progress(vault, run.id, {"reported": 1})
+    ctx.call_mcp = lambda server, tool, args, timeout: empty(tool, args)
+    result = call(op="sync")
+    assert result["status"] == "succeeded" and "previous_sync" not in result
+
+
+def test_previous_sync_reports_failure_cause_after_malformed_warnings(plugin, vault, monkeypatch):
+    ctx, call = plugin
+    entered, release = threading.Event(), threading.Event()
+    cause = "Health Auto Export did not answer: synthetic connection failure"
+    warned = False
+
+    def fails(server, tool, args, timeout):
+        nonlocal warned
+        if not warned:
+            warned = True
+            return {"ok": True, "result": payload(*(metric(name, qty="malformed") for name in
+                    ("step_count", "body_mass", "resting_heart_rate", "protein")))}
+        entered.set()
+        assert release.wait(5)
+        return {"ok": False, "error": "synthetic connection failure"}
+
+    ctx.call_mcp = fails
+    monkeypatch.setattr(ops, "IMPORT_WAIT_S", 0)
+    try:
+        assert call(op="sync")["status"] == "running"
+        assert entered.wait(5)
+    finally:
+        release.set()
+        assert jobs.join("hae-sync:health-auto-export", 5)
+    failed = vault.execute("SELECT id,errors_json FROM import_run WHERE status='failed'").fetchone()
+    errors = json.loads(failed["errors_json"])
+    assert len(errors) == 5 and all("malformed entries" in warning for warning in errors[:-1])
+    assert errors[-1] == cause
+    ctx.call_mcp = lambda server, tool, args, timeout: empty(tool, args)
+    monkeypatch.setattr(ops, "IMPORT_WAIT_S", 5)
+    result = call(op="sync")
+    assert result["status"] == "succeeded"
+    assert result["previous_sync"] == {"import_run_id": failed["id"], "status": "failed", "error": cause}
 
 
 def test_sync_accepts_unwrapped_data_object(samples, vault):

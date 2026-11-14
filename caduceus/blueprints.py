@@ -64,7 +64,7 @@ BLUEPRINTS = (
         "prompt_template": (
             "Call caduceus_capture with op=sync. If the result's status is succeeded, running or busy and the "
             "result has no previous_sync, reply exactly [SILENT]. Otherwise reply with one plain sentence giving "
-            "the error as the tool gave it; for previous_sync, say that an earlier sync failed and give its first error."
+            "the error as the tool gave it; for previous_sync, say that an earlier sync failed and give its error."
         ),
         "slots": [_TIME("06:30"), _DELIVER],
         "skills": ["caduceus:caduceus-guide"],

@@ -219,14 +219,15 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         raise ValueError("payload must be an object")
     cleared = run_state.setdefault("cleared", set())
     sleep_clear_from = run_state.get("sleep_clear_from")
+    sleep_keep = run_state.get("sleep_keep", set())
     pending, workouts = [], []
 
     def flush():
         _check_cancel(cancel)
         pairs = {(r[1], r[7]) for r in pending} - cleared
-        if sleep_clear_from is not None:
-            pairs = {(kind, day) for kind, day in pairs
-                     if kind != "HKCategoryTypeIdentifierSleepAnalysis" or day >= sleep_clear_from.isoformat()}
+        pairs = {(kind, day) for kind, day in pairs
+                 if kind != "HKCategoryTypeIdentifierSleepAnalysis" or
+                 (day not in sleep_keep and (sleep_clear_from is None or day >= sleep_clear_from.isoformat()))}
         replaced = 0
         with write_txn(samples):
             samples.execute("CREATE INDEX IF NOT EXISTS sample_hae_type_day ON sample(provider,type,local_day)")
@@ -325,20 +326,20 @@ def _read_json(stream):
     return payload["data"]
 
 
-def _sleep_clear_from(data, *, cancel=None):
-    """The first sleep night may be partial; only replace later nights."""
-    earliest = None
+def _sleep_nights(data, *, cancel=None):
+    """Collect valid segment and summary nights before any file rows are ingested."""
+    segments, summaries = set(), set()
     for metric in data.get("metrics", []):
         if not isinstance(metric, dict) or metric.get("name") != "sleep_analysis":
             continue
         for entry in metric.get("data", []):
             _check_cancel(cancel)
             try:
-                day = date.fromisoformat(_metric_rows("sleep_analysis", metric, entry, None)[0][7])
+                day = _metric_rows("sleep_analysis", metric, entry, None)[0][7]
             except (KeyError, ValueError, TypeError, OverflowError):
                 continue
-            earliest = min(earliest, day) if earliest is not None else day
-    return earliest + timedelta(days=1) if earliest is not None else None
+            (segments if "value" in entry else summaries).add(day)
+    return segments, summaries
 
 
 def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
@@ -353,14 +354,15 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
             if zipfile.is_zipfile(stored):
                 with zipfile.ZipFile(stored) as archive:
                     members = _safe_members(archive)
+                    segments, summaries = set(), set()
                     # Scan every member before ingesting: zip order need not be date order.
                     for member in members:
                         _check_cancel(cancel)
                         with archive.open(member) as stream:
-                            cutoff = _sleep_clear_from(_read_json(stream), cancel=cancel)
-                        if cutoff is not None:
-                            previous = state.get("sleep_clear_from")
-                            state["sleep_clear_from"] = min(previous, cutoff) if previous is not None else cutoff
+                            member_segments, member_summaries = _sleep_nights(_read_json(stream), cancel=cancel)
+                        segments.update(member_segments)
+                        summaries.update(member_summaries)
+                    state["sleep_keep"] = ({min(segments), max(segments)} if segments else set()) - summaries
                     for member in members:
                         _check_cancel(cancel)
                         with archive.open(member) as stream:
@@ -372,7 +374,8 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
                     raise ValueError("JSON exceeds size limit")
                 with stored.open("rb") as stream:
                     data = _read_json(stream)
-                state["sleep_clear_from"] = _sleep_clear_from(data, cancel=cancel)
+                segments, summaries = _sleep_nights(data, cancel=cancel)
+                state["sleep_keep"] = ({min(segments), max(segments)} if segments else set()) - summaries
                 ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
             _check_cancel(cancel)
             warnings.extend(recompute_rollups(samples))

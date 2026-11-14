@@ -134,13 +134,17 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 
 - **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
   cleared once per run. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
-  morning in the end's offset (which still supplies `tz_offset_min`). `run_state["sleep_clear_from"]` is a local
-  `date` or `None`; sleep nights before the cutoff are upsert-only. Other metric types keep the usual replacement rule.
-- **`import_hae`:** imports a stored JSON file or safe JSON zip members. The cutoff is the day after the earliest
-  valid sleep night across the whole file, including every JSON member. Non-JSON members are skipped unopened.
+  morning in the end's offset (which still supplies `tz_offset_min`). Sleep nights in `run_state["sleep_keep"]`
+  (a set of ISO dates) are upsert-only, as are nights before `run_state["sleep_clear_from"]` when that local `date`
+  cutoff is set. Other metric types keep the usual replacement rule.
+- **`import_hae`:** imports a stored JSON file or safe JSON zip members. Before ingesting, scans valid sleep entries
+  across the whole file, including every JSON member. Sets `sleep_keep` to the earliest and latest segment nights,
+  except any night with a summary entry, which replaces its night even at an edge. Does not set `sleep_clear_from`.
+  Non-JSON members are skipped unopened.
 - **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
-  `since`, in seven-day windows, with `sleep_clear_from=since`. Only truncated replies split a window. An unusable
-  non-truncated reply counts as `windows_empty` and warns using only request dates; empty data objects are normal.
+  `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Only truncated replies split
+  a window. An unusable non-truncated reply counts as `windows_empty` and warns using only request dates;
+  empty data objects are normal.
   `local_offset` overrides the machine's local offset for tests. A permission-denied run with no sample/workout
   writes and no other runs for its virtual source removes its run and source together; the failure still comes
   back in the result. Other failures retain the run so the next sync can report it, even on a first empty sync.
@@ -152,9 +156,12 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   cancellation, and records `{"waiting": "another Health Auto Export run"}` once. Every exit releases the locks;
   erase removes the lock file with the databases.
 - **Capture `op=sync`:** before submitting the job, reads the source's latest finished `hae_sync` run. If it is
-  `failed` or `interrupted`, all done/running/busy results include `previous_sync` with `import_run_id`, `status`
-  and the first three stored `errors`. A later succeeded run suppresses this notice. The `hae-sync` blueprint
-  reports that earlier failure instead of staying silent when `previous_sync` is present.
+  `failed` or `interrupted` and its `progress_json` has no truthy `reported` flag, all done/running/busy results
+  include `previous_sync` with `import_run_id`, `status` and `error` (the last stored error, or null).
+  A later succeeded run suppresses this notice. When the job finishes within the caller's wait (`done`), marks
+  that run's `progress_json.reported=1` in `write_txn`, since its final status was returned directly; a deleted
+  denied run needs no row. The `hae-sync` blueprint reports an earlier failure and its error instead of staying
+  silent when `previous_sync` is present.
 - **`trends.sleep_morning(moment: datetime) -> date`:** names a noon-to-noon night by its morning in the supplied
   offset: the date plus one day when the hour is at least 12. Used by both HAE partitions and sleep rollups.
 
