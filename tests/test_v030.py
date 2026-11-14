@@ -4,7 +4,7 @@ import json
 import sqlite3
 import threading
 import zipfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -73,6 +73,88 @@ def sync(call, samples, vault, *, days=1, today=TODAY, **kw):
 
 def empty(tool, args):
     return {"ok": True, "result": payload()}
+
+
+def sleep_night(morning):
+    previous = morning - timedelta(days=1)
+    return [{"date": start, "start": start, "end": end, "value": phase, "source": SOURCE}
+            for start, end, phase in (
+                (f"{previous} 23:00:00 +0900", f"{morning} 01:00:00 +0900", "Core"),
+                (f"{morning} 01:00:00 +0900", f"{morning} 07:00:00 +0900", "Deep"))]
+
+
+def start_only_sleep_server(segments, seen):
+    def call(tool, args):
+        if tool != "get_health_metrics" or args["metrics"] != "sleep_analysis":
+            return empty(tool, args)
+        seen.append((args["start"], args["end"]))
+        parse = lambda text: datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
+        entries = [s for s in segments if parse(args["start"]) <= parse(s["start"]) <= parse(args["end"])]
+        return {"ok": True, "result": payload({"name": "sleep_analysis", "data": entries})}
+    return call
+
+
+def sleep_hours(samples, day):
+    return samples.execute("SELECT value FROM daily_rollup WHERE metric='sleep_hours' AND day=?",
+                           (day.isoformat(),)).fetchone()[0]
+
+
+def test_second_sync_preserves_cross_midnight_sleep(samples, vault):
+    segments = [segment for k in range(1, 20) for segment in sleep_night(date(2026, 11, k))]
+    seen = []
+    call = start_only_sleep_server(segments, seen)
+    first = sync(call, samples, vault, days=10, today=date(2026, 11, 12))
+    assert first.status == "succeeded"
+    assert sleep_hours(samples, date(2026, 11, 10)) == 8
+    second = sync(call, samples, vault, days=10, today=date(2026, 11, 13))
+    assert second.status == "succeeded" and second.counts["since"] == "2026-11-10"
+    assert seen[-1] == ("2026-11-09 00:00:00 +0900", "2026-11-13 23:59:59 +0900")
+    for day in (9, 10, 11):
+        assert sleep_hours(samples, date(2026, 11, day)) == 8
+
+
+def test_sleep_crossing_seven_day_window_is_complete_once(samples, vault):
+    morning = date(2026, 11, 9)
+    seen = []
+    out = sync(start_only_sleep_server(sleep_night(morning), seen), samples, vault,
+               days=10, today=date(2026, 11, 12))
+    assert out.status == "succeeded"
+    assert seen == [("2026-11-02 00:00:00 +0900", "2026-11-08 23:59:59 +0900"),
+                    ("2026-11-09 00:00:00 +0900", "2026-11-12 23:59:59 +0900")]
+    assert sleep_hours(samples, morning) == 8
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 2
+    assert out.counts["samples"] == 2 and out.counts["samples_replaced"] == 0
+
+
+def test_partial_first_night_file_preserves_earlier_segments(tmp_path, samples, vault):
+    whole = sleep_night(TODAY)
+    first = ingest_file(tmp_path, vault, samples,
+                        payload({"name": "sleep_analysis", "data": whole}), "whole.json")
+    assert first.status == "succeeded" and sleep_hours(samples, TODAY) == 8
+    second = ingest_file(tmp_path, vault, samples,
+                         payload({"name": "sleep_analysis", "data": whole[1:]}), "partial.json")
+    assert second.status == "succeeded" and second.counts["samples_replaced"] == 0
+    assert sleep_hours(samples, TODAY) == 8
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 2
+    # The partial night's existing segment was still upserted to the new source.
+    assert samples.execute("SELECT source_id FROM sample WHERE value_text LIKE '%Deep'").fetchone()[0] == second.source_id
+
+
+def test_zip_sleep_cutoff_uses_earliest_day_across_all_members(tmp_path, samples, vault):
+    tomorrow = TODAY + timedelta(days=1)
+    both = sleep_night(TODAY) + sleep_night(tomorrow)
+    assert ingest_file(tmp_path, vault, samples,
+                       payload({"name": "sleep_analysis", "data": both})).status == "succeeded"
+    path = tmp_path / "partial.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, day in (("later.json", tomorrow), ("earlier.json", TODAY)):
+            archive.writestr(name, json.dumps(payload({"name": "sleep_analysis", "data": sleep_night(day)[1:]})))
+    src, _ = sources.store_source(vault, path, "hae")
+    out = hae.import_hae(samples, vault, src)
+    assert out.status == "succeeded"
+    assert sleep_hours(samples, TODAY) == 8
+    assert sleep_hours(samples, tomorrow) == 6
+    assert out.counts["samples_replaced"] == 2
 
 
 def test_every_metric_file_to_trends_and_local_offsets(plugin, tmp_path, samples):
@@ -209,6 +291,28 @@ def test_zip_member_size_cap_fails_cleanly(tmp_path, vault, samples, monkeypatch
     assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 0
 
 
+def test_zip_skips_compressible_non_json_without_opening(tmp_path, vault, samples, monkeypatch):
+    path = tmp_path / "unrelated.zip"
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("health.json", json.dumps(payload(metric())))
+        archive.writestr("unrelated.txt", "x" * 100_000)
+        item = archive.getinfo("unrelated.txt")
+        assert item.file_size > item.compress_size * 200
+    src, _ = sources.store_source(vault, path, "hae")
+    original_open = zipfile.ZipFile.open
+
+    def json_only(archive, member, *args, **kwargs):
+        name = member.filename if isinstance(member, zipfile.ZipInfo) else member
+        assert name.endswith(".json"), "non-JSON members must not be opened"
+        return original_open(archive, member, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", json_only)
+    monkeypatch.setattr(hae, "MAX_JSON", 1000)
+    monkeypatch.setattr(hae, "MAX_TOTAL", 1000)
+    out = hae.import_hae(samples, vault, src)
+    assert out.status == "succeeded" and out.counts["samples"] == 1
+
+
 def test_sniff_hae_fhir_and_unrecognised(plugin, tmp_path):
     _, call = plugin
     assert sources.sniff_kind(write(tmp_path)) == "hae"
@@ -240,7 +344,7 @@ def test_sync_missing_hermes_api(plugin):
     assert call(op="sync") == {"error": "This Hermes cannot give plugins MCP access; Health Auto Export sync needs Hermes 0.23.0 or newer."}
 
 
-def test_sync_permission_failure_is_recorded(plugin, vault):
+def test_sync_permission_failure_leaves_empty_vault_and_allows_demo(plugin, vault, monkeypatch):
     ctx, call = plugin
 
     def denied(*args, **kw):
@@ -251,7 +355,47 @@ def test_sync_permission_failure_is_recorded(plugin, vault):
     message = ("Caduceus is not allowed to read the MCP server 'health-auto-export'. To allow it, add "
                "'health-auto-export' to plugins.entries.caduceus.mcp_allowlist in config.yaml, then run op=sync again.")
     assert out["status"] == "failed" and out["warnings"] == [message]
-    assert sources.run_info(vault, out["run_id"])["errors"] == [message]
+    assert sources.run_info(vault, out["run_id"]) is None
+    assert call(op="sources")["files"] == []
+    assert call(op="status")["recent_imports"] == []
+    assert vault.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert vault.execute("SELECT count(*) FROM audit_event").fetchone()[0] == 0
+    assert vault.execute("SELECT count(*) FROM search_doc").fetchone()[0] == 0
+    monkeypatch.setattr(ops, "DEMO_MARKERS", 30)
+    submitted = []
+    submit = jobs.submit
+
+    def tracked(key, fn, *, wait_s):
+        submitted.append(key)
+        return submit(key, fn, wait_s=wait_s)
+
+    monkeypatch.setattr(jobs, "submit", tracked)
+    try:
+        assert ctx.commands["caduceus"]["handler"]("demo").startswith("Loading the demo persona")
+    finally:
+        for job in submitted:
+            assert jobs.join(job, 30)
+
+
+def test_failed_empty_sync_preserves_source_with_previous_run(samples, vault):
+    first = sync(empty, samples, vault)
+    second = sync(lambda tool, args: {"ok": False, "error": "not connected"}, samples, vault)
+    assert second.status == "failed" and second.counts["samples"] == second.counts["workouts"] == 0
+    assert sources.get_source(vault, first.source_id) is not None
+    assert sources.run_info(vault, first.run_id)["status"] == "succeeded"
+    assert sources.run_info(vault, second.run_id)["status"] == "failed"
+
+
+@pytest.mark.parametrize("with_workout", [False, True])
+def test_failed_sync_keeps_provenance_after_writing(samples, vault, with_workout):
+    data = (payload(workouts=[{"name": "Walking", "start": DAY + " 10:00:00 +0900",
+                               "end": DAY + " 11:00:00 +0900"}]) if with_workout else payload(metric()))
+    replies = iter([{"ok": True, "result": data}, {"ok": False, "error": "not connected"}])
+    out = sync(lambda tool, args: next(replies), samples, vault)
+    assert out.status == "failed"
+    assert out.counts["workouts" if with_workout else "samples"] == 1
+    assert sources.get_source(vault, out.source_id) is not None
+    assert sources.run_info(vault, out.run_id)["status"] == "failed"
 
 
 @pytest.mark.parametrize("shape", range(6))
@@ -413,10 +557,37 @@ def test_batch_boundary_never_deletes_same_run_rows(tmp_path, samples, vault, mo
     assert trends.trend(samples, "steps", bucket="day")["points"][0]["value"] == 500
 
 
-def test_malformed_single_day_protocol_is_skipped(samples, vault):
-    out = sync(lambda tool, args: {"ok": True, "result": "not JSON"}, samples, vault)
-    assert out.status == "succeeded" and out.counts["windows_skipped"] == 3
-    assert all("request window " + DAY in w for w in out.warnings)
+@pytest.mark.parametrize("reply", ["No data", {"data": []}])
+def test_non_truncated_empty_reply_never_splits(samples, vault, reply):
+    seen = []
+
+    def call(tool, args):
+        kind = "workouts" if tool == "get_workouts" else "sleep" if args["metrics"] == "sleep_analysis" else "quantity"
+        seen.append((kind, args["start"][:10], args["end"][:10]))
+        return {"ok": True, "result": reply}
+
+    out = sync(call, samples, vault, days=90)
+    assert out.status == "succeeded"
+    assert len(seen) == len(set(seen)) == out.counts["windows"] == out.counts["windows_empty"] == 23
+    assert [sum(kind == k for kind, _, _ in seen) for k in ("quantity", "sleep", "workouts")] == [7, 13, 3]
+    assert out.counts["windows_skipped"] == 0
+    assert out.warnings == [f"{kind} {start} to {end}: no data in the reply" for kind, start, end in seen]
+
+
+@pytest.mark.parametrize("data", [{}, {"metrics": []}])
+def test_usable_empty_data_has_no_warning(samples, vault, data):
+    out = sync(lambda tool, args: {"ok": True, "result": {"data": data}}, samples, vault)
+    assert out.status == "succeeded" and out.warnings == []
+    assert out.counts["windows"] == 3 and out.counts["windows_skipped"] == 0
+
+
+def test_truncated_single_day_still_skips(samples, vault):
+    def call(tool, args):
+        return {"ok": True, "truncated": True, "result": "cut"} if args.get("aggregate") else empty(tool, args)
+
+    out = sync(call, samples, vault)
+    assert out.status == "succeeded" and out.counts["windows_skipped"] == 1
+    assert out.warnings == ["quantity: skipped request window " + DAY]
 
 
 def test_begin_run_interrupts_stale_runs(vault):

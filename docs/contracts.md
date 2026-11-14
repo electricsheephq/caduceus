@@ -10,8 +10,10 @@ duplicates.
 | Function | Contract |
 |---|---|
 | `sources.store_source(conn, path, kind) -> (SourceArtifact, existed)` | Copies the file once into `sources/<sha256>/` beside the vault. |
+| `sources.virtual_source(conn: sqlite3.Connection, kind, key: str, label: str) -> SourceArtifact` | Reuses one virtual source per MCP server key, with an empty `stored_path` and no file. |
 | `sources.source_file(conn, src) -> Path` | The stored copy. **Importers read only this, never the user's path.** |
 | `sources.begin_import(conn, src, parser, version) -> ImportRun \| None` | `None` means this version already imported this source: return `ImportResult(status="skipped")`. It also marks runs left `running` as `interrupted`. |
+| `sources.begin_run(conn: sqlite3.Connection, src: SourceArtifact, parser: str, version: str) -> ImportRun` | Always starts a new run; marks stale `running` runs of the same source and parser `interrupted`. |
 | `sources.update_progress(conn, run_id, dict)` | Call about every 10k–50k rows. |
 | `sources.finish_import(conn, run_id, *, counts, status, errors=())` | `status` is one of `succeeded`, `failed`, `cancelled`. |
 | `search.index_doc(conn, *, kind, ref, title, body, category, ts=None)` | Upsert into the search index. `kind` is in `search.KINDS`; `category` is a `policy.Category`. |
@@ -120,6 +122,25 @@ def trend_svg(points, *, unit, title, markers=()) -> str
   in its first 4096 bytes. Localized names are supported; size limits and entity guards apply to both paths.
 - **Lone XML:** warns that clinical records require the export zip.
 - **Clinical records:** `clinical-records/*.json` inside the zip go through the same FHIR code into `observation`, `condition` and `medication_event`.
+
+**Health Auto Export (`caduceus/health/hae.py`):**
+
+```python
+def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warnings, cancel=None)
+def import_hae(samples, vault, src, *, cancel=None) -> ImportResult
+def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None, local_offset=None) -> ImportResult
+```
+
+- **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
+  cleared once per run. `run_state["sleep_clear_from"]` is a local `date` or `None`; sleep days before the cutoff
+  are upsert-only. Other metric types keep the usual replacement rule.
+- **`import_hae`:** imports a stored JSON file or safe JSON zip members. The cutoff is the day after the earliest
+  valid sleep end-day across the whole file, including every JSON member. Non-JSON members are skipped unopened.
+- **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
+  `since`, in seven-day windows, with `sleep_clear_from=since`. Only truncated replies split a window. An unusable
+  non-truncated reply counts as `windows_empty` and warns using only request dates; empty data objects are normal.
+  `local_offset` overrides the machine's local offset for tests. A failed run with no sample/workout writes and no
+  other runs for its virtual source removes its run and source together; the failure still comes back in the result.
 
 **Trend results:**
 - **Every result carries** `unit`, `source_policy`, `coverage` (with gaps), and `calc_version`.

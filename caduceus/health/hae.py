@@ -159,11 +159,15 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
     if not isinstance(data, dict):
         raise ValueError("payload must be an object")
     cleared = run_state.setdefault("cleared", set())
+    sleep_clear_from = run_state.get("sleep_clear_from")
     pending, workouts = [], []
 
     def flush():
         _check_cancel(cancel)
         pairs = {(r[1], r[7]) for r in pending} - cleared
+        if sleep_clear_from is not None:
+            pairs = {(kind, day) for kind, day in pairs
+                     if kind != "HKCategoryTypeIdentifierSleepAnalysis" or day >= sleep_clear_from.isoformat()}
         replaced = 0
         with write_txn(samples):
             samples.execute("CREATE INDEX IF NOT EXISTS sample_hae_type_day ON sample(provider,type,local_day)")
@@ -239,13 +243,14 @@ def _safe_members(archive):
         path = PurePosixPath(item.filename)
         if path.is_absolute() or ".." in path.parts or "\\" in item.filename or ":" in item.filename or item.is_dir():
             continue
+        if path.suffix.lower() != ".json":
+            continue
         if item.file_size > MAX_JSON or item.file_size > max(1, item.compress_size) * 200:
             raise ValueError("zip member exceeds inflate limit")
         total += item.file_size
         if total > MAX_TOTAL:
             raise ValueError("zip exceeds total inflate limit")
-        if path.suffix.lower() == ".json":
-            members.append(item)
+        members.append(item)
     if not members:
         raise ValueError("zip has no JSON files")
     return members
@@ -261,6 +266,22 @@ def _read_json(stream):
     return payload["data"]
 
 
+def _sleep_clear_from(data, *, cancel=None):
+    """The first sleep end-day may be partial; only replace later days."""
+    earliest = None
+    for metric in data.get("metrics", []):
+        if not isinstance(metric, dict) or metric.get("name") != "sleep_analysis":
+            continue
+        for entry in metric.get("data", []):
+            _check_cancel(cancel)
+            try:
+                day = date.fromisoformat(_metric_rows("sleep_analysis", metric, entry, None)[0][7])
+            except (KeyError, ValueError, TypeError, OverflowError):
+                continue
+            earliest = min(earliest, day) if earliest is not None else day
+    return earliest + timedelta(days=1) if earliest is not None else None
+
+
 def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
     run = sources.begin_import(vault, src, "hae_json", PARSER_VERSION)
     if run is None:
@@ -271,7 +292,16 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
         stored = sources.source_file(vault, src)
         if zipfile.is_zipfile(stored):
             with zipfile.ZipFile(stored) as archive:
-                for member in _safe_members(archive):
+                members = _safe_members(archive)
+                # Scan every member before ingesting: zip order need not be date order.
+                for member in members:
+                    _check_cancel(cancel)
+                    with archive.open(member) as stream:
+                        cutoff = _sleep_clear_from(_read_json(stream), cancel=cancel)
+                    if cutoff is not None:
+                        previous = state.get("sleep_clear_from")
+                        state["sleep_clear_from"] = min(previous, cutoff) if previous is not None else cutoff
+                for member in members:
                     _check_cancel(cancel)
                     with archive.open(member) as stream:
                         data = _read_json(stream)
@@ -282,6 +312,7 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
                 raise ValueError("JSON exceeds size limit")
             with stored.open("rb") as stream:
                 data = _read_json(stream)
+            state["sleep_clear_from"] = _sleep_clear_from(data, cancel=cancel)
             ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
         _check_cancel(cancel)
         warnings.extend(recompute_rollups(samples))
@@ -336,14 +367,14 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
         since = max(date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2),
                     through - timedelta(days=3650))
     run = sources.begin_run(vault, src, "hae_sync", PARSER_VERSION)
-    counts = {**_counts(), "windows": 0, "windows_skipped": 0, "since": since.isoformat(),
+    counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0, "since": since.isoformat(),
               "through": through.isoformat()}
-    warnings, state, status = [], {}, "succeeded"
+    warnings, state, status = [], {"sleep_clear_from": since}, "succeeded"
     offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
     quantities = ",".join(n for n in MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
     windows = []
     for kind, size in (("quantity", 14), ("sleep", 7), ("workouts", 31)):
-        start = since
+        start = since - timedelta(days=1) if kind == "sleep" else since
         while start <= through:
             end = min(through, start + timedelta(days=size - 1))
             windows.append((start, end, kind))
@@ -367,14 +398,18 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
             if isinstance(envelope, dict) and envelope.get("ok") is False:
                 raise _ServerError("Health Auto Export did not answer: " + str(envelope.get("error", ""))[:200])
             data = _unwrap(envelope)
-            if data is None and start < end:
+            truncated = isinstance(envelope, dict) and envelope.get("truncated")
+            if truncated and start < end:
                 middle = start + timedelta(days=(end - start).days // 2)
                 windows.extend(((start, middle, kind), (middle + timedelta(days=1), end, kind)))
                 windows.sort(key=lambda w: (w[0], w[1], w[2]))
                 total += 2
-            elif data is None:
+            elif truncated:
                 counts["windows_skipped"] += 1
                 warnings.append(f"{kind}: skipped request window {start}")
+            elif data is None:
+                counts["windows_empty"] += 1
+                warnings.append(f"{kind} {start} to {end}: no data in the reply")
             else:
                 ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
             done += 1
@@ -394,4 +429,12 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
         status = "failed"
         warnings.append(type(exc).__name__)
     sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
+    if status == "failed" and counts["samples"] == 0 and counts["workouts"] == 0:
+        # This path creates no audit/search rows. Keep provenance if another run uses it.
+        with write_txn(vault):
+            other_run = vault.execute("SELECT 1 FROM import_run WHERE source_id=? AND id<>?",
+                                      (src.id, run.id)).fetchone()
+            if other_run is None:
+                vault.execute("DELETE FROM import_run WHERE id=?", (run.id,))
+                vault.execute("DELETE FROM source_artifact WHERE id=?", (src.id,))
     return ImportResult(status, run.id, src.id, counts, warnings)
