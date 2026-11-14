@@ -139,6 +139,13 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   cutoff is set. Other metric types keep the usual replacement rule. In `counts["metrics_ignored"]`, unknown
   metrics keep their names only when they match `^[a-z][a-z0-9_]{0,63}$`, up to 50 distinct names per run;
   repeats of kept names keep counting there. Every other unknown metric counts under `"other"`, for files and sync.
+  Entry dates use `date` when present, otherwise `start`; missing or invalid dates are skipped. Offset-bearing
+  24-hour and ISO timestamps and locale-independent 12-hour AM/PM timestamps (hours 1–12, optional dots and
+  colon in the offset) are accepted. `source` still defaults to `"Health Auto Export"`; merged `sources` is ignored.
+  Sleep segments with `value` keep their explicit interval. Summaries without `value` use `totalSleep` when
+  present, otherwise sum `asleep`, `core`, `deep` and `rem`. Export summaries keep `sleepEnd`/`inBedEnd` as the
+  end and subtract the hours. Other summaries use `_sleep_bucket_start` and add the hours, ignoring the bucket's
+  `end`: a midnight bucket for day X is the night of morning X. That named helper holds the bucket-night rule.
 - **`import_hae`:** imports a stored JSON file or safe JSON zip members. Before ingesting, scans valid sleep entries
   across the whole file, including every JSON member, tracking segment and summary sources per night. Sets
   `sleep_keep` to the earliest and latest segment nights, except when every segment source on an edge night also
@@ -146,10 +153,17 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   For each night and source with both formats in the file, uses the summary and omits that source's segments;
   `counts.sleep_segments_omitted` counts the omitted valid segment entries (absent when zero), and a warning
   lists only the affected night dates, never source names. `run_state["sleep_summaries"]` maps nights to summary
-  source sets for this file-only selection; sync still asks for segments only. Does not set `sleep_clear_from`.
+  source sets for this file-only selection. Does not set `sleep_clear_from`.
   Non-JSON members are skipped unopened.
 - **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
-  `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Only truncated replies split
+  `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Quantity windows span 14 days,
+  workout windows 31 days. A logical window S–E sends plain-date `start=S`, `end=E+1 day`, including after
+  truncation splits, so the boundary day is requested on both sides when end dates are inclusive and no day is
+  lost when they are exclusive. Duplicate buckets upsert the same natural key without doubling rollups.
+  The quantity request includes every `MAPPING` name except `body_mass` and `sleep_analysis`, using
+  `weight_body_mass` for weight; files still accept both weight names. Sleep requests keep `aggregate=False`
+  and accept both summaries and segments. The phone interprets request dates in its own time zone;
+  `local_offset` is retained for caller compatibility but no longer affects requests. Only truncated replies split
   a window. An unusable non-truncated reply counts as `windows_empty` and warns using only request dates;
   usable empty data objects count as readable and give no warning. A run with some readable replies may succeed
   despite unreadable windows. A run with unreadable windows and no readable replies fails, appending last:
@@ -161,7 +175,17 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   `through`, with the same 3,650-day floor. Stores ISO `since` and `through` in the running import's `counts_json`
   inside `write_txn` before its first MCP request, so an interrupted first sync also preserves its start;
   `finish_import` replaces these with the full counts.
-  `local_offset` overrides the machine's local offset for tests. A permission-denied run with no sample/workout
+  Sync-only `counts.entries_by_kind` holds run-wide `parsed` and `skipped` entry totals for `metrics`, `sleep`
+  and `workouts`, collected only from readable replies; unknown metrics in `metrics_ignored` count as neither.
+  A parsed entry counts even when it upserts an existing row. `run_state["sync_entries"]` shares these totals;
+  `sync_kind` identifies the request kind for malformed metric containers with no usable name. After all windows,
+  any kind with skipped > 0 and parsed == 0 fails the run and appears in `counts.unreadable_kinds` (a list of
+  kind keys, absent when empty). Each gets the fixed warning: "Health Auto Export sent <kind> data that Caduceus
+  cannot read, so none was imported. The next sync reads these days again." The label is `health metric`, `sleep`
+  or `workout`, with no server text. Already written rows stay, and the failed run never moves the watermark;
+  retrying replaces them. A kind with some parsed entries keeps the usual malformed-entry warnings and does
+  not fail for partial skips. Empty metrics lists succeed. This failure rule does not apply to file imports.
+  A permission-denied run with no sample/workout
   writes and no other runs for its virtual source removes its run and source together; the failure still comes
   back in the result. Other failures retain the run so the next sync can report it, even on a first empty sync.
   An `ok=false` server envelope fails with exactly: "Health Auto Export did not answer the request. Check that

@@ -109,6 +109,15 @@ def _run_lock(samples, vault, run_id, cancel):
 
 
 def _date(text):
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}) (\d{1,2}):(\d{2}):(\d{2}) ?([AaPp])\.?[Mm]\.? ([+-]\d{2}:?\d{2})",
+                         text) if isinstance(text, str) else None
+    if match:
+        day, hour, minute, second, meridiem, offset = match.groups()
+        hour = int(hour)
+        if not 1 <= hour <= 12:
+            raise ValueError("invalid 12-hour time")
+        hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
+        text = f"{day} {hour:02d}:{minute}:{second} {offset}"
     try:
         value = datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
     except (TypeError, ValueError):
@@ -136,8 +145,9 @@ def _source(entry):
 
 
 def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, end=None):
-    start = start if start is not None else _date(entry.get("start", entry["date"]))
-    end = end if end is not None else _date(entry.get("end", entry["date"]))
+    when = entry["date"] if "date" in entry else entry["start"]
+    start = start if start is not None else _date(entry.get("start", when))
+    end = end if end is not None else _date(entry.get("end", when))
     if end < start:
         raise ValueError("invalid interval")
     source = _source(entry)
@@ -153,11 +163,16 @@ def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, 
             day.isoformat(), value, text, _key(identity), "wellness")
 
 
+def _sleep_bucket_start(entry):
+    """A day bucket belongs to the night of its start's morning, not its evening."""
+    return _date(entry["start"])
+
+
 def _metric_rows(name, metric, entry, source_id):
     if not isinstance(entry, dict):
         raise ValueError("entry must be an object")
-    # Even entries with explicit start/end must have a valid, offset-bearing date.
-    _date(entry["date"])
+    # Files supply date; MCP day buckets supply start. Both require an offset.
+    _date(entry["date"] if "date" in entry else entry["start"])
     unit = metric.get("units")
     if unit is not None and not isinstance(unit, str):
         raise ValueError("unit must be text")
@@ -172,8 +187,14 @@ def _metric_rows(name, metric, entry, source_id):
                      sum(_number(entry.get(k, 0)) for k in ("asleep", "core", "deep", "rem")))
             if not ("totalSleep" in entry or "asleep" in entry) or not 0 < hours <= 24:
                 raise ValueError("invalid sleep duration")
-            end = _date(entry.get("sleepEnd") or entry.get("inBedEnd"))
-            start, text = end - timedelta(hours=hours), SLEEP["Asleep"]
+            sleep_end = entry.get("sleepEnd") or entry.get("inBedEnd")
+            if sleep_end:
+                end = _date(sleep_end)
+                start = end - timedelta(hours=hours)
+            else:
+                start = _sleep_bucket_start(entry)
+                end = start + timedelta(hours=hours)
+            text = SLEEP["Asleep"]
         return [_sample("SleepAnalysis", entry, source_id, "h", text=text, start=start, end=end)]
     if name == "blood_pressure":
         return [_sample("BloodPressure" + side.title(), entry, source_id, unit, _number(entry[side]))
@@ -223,6 +244,10 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
     sleep_keep = run_state.get("sleep_keep", set())
     pending, workouts = [], []
 
+    def count_entry(kind, outcome):
+        if "sync_entries" in run_state:
+            run_state["sync_entries"][kind][outcome] += 1
+
     def flush():
         _check_cancel(cancel)
         pairs = {(r[1], r[7]) for r in pending} - cleared
@@ -259,6 +284,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         _check_cancel(cancel)
         if not isinstance(metric, dict) or not isinstance(metric.get("name"), str):
             counts["entries_skipped"] += 1
+            count_entry(run_state.get("sync_kind", "metrics"), "skipped")
             continue
         name = metric["name"]
         if name not in MAPPING:
@@ -269,13 +295,16 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
             ignored[name] = ignored.get(name, 0) + 1
             continue
         skipped = 0
+        kind = "sleep" if name == "sleep_analysis" else "metrics"
         for entry in metric.get("data", []):
             _check_cancel(cancel)
             try:
                 rows = _metric_rows(name, metric, entry, source_id)
             except (KeyError, ValueError, TypeError, OverflowError):
                 skipped += 1
+                count_entry(kind, "skipped")
                 continue
+            count_entry(kind, "parsed")
             if (name == "sleep_analysis" and "value" in entry
                     and rows[0][2] in run_state.get("sleep_summaries", {}).get(rows[0][7], set())):
                 counts["sleep_segments_omitted"] = counts.get("sleep_segments_omitted", 0) + 1
@@ -294,7 +323,9 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
             row = _workout(entry, source_id)
         except (KeyError, ValueError, TypeError, OverflowError):
             counts["entries_skipped"] += 1
+            count_entry("workouts", "skipped")
             continue
+        count_entry("workouts", "parsed")
         if len(pending) + len(workouts) >= BATCH:
             flush()
         workouts.append(row)
@@ -440,9 +471,11 @@ def _unwrap(envelope):
 
 
 def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None, local_offset=None) -> ImportResult:
+    """Sync phone-local day buckets; local_offset is retained but unused by requests."""
     src = sources.virtual_source(vault, "hae_sync", server, f"Health Auto Export (MCP server {server})")
     run = sources.begin_run(vault, src, "hae_sync", PARSER_VERSION)
     counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0}
+    counts["entries_by_kind"] = {kind: {"parsed": 0, "skipped": 0} for kind in ("metrics", "sleep", "workouts")}
     warnings, status, denied = [], "succeeded", False
     readable_replies = 0
     try:
@@ -468,9 +501,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                 vault.execute("UPDATE import_run SET counts_json=? WHERE id=?",
                               (json.dumps({"since": counts["since"], "through": counts["through"]},
                                           sort_keys=True), run.id))
-            state = {"sleep_clear_from": since}
-            offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
-            quantities = ",".join(n for n in MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
+            state = {"sleep_clear_from": since, "sync_entries": counts["entries_by_kind"]}
+            quantities = ",".join(n for n in MAPPING if n not in ("body_mass", "sleep_analysis"))
             windows = []
             for kind, size in (("quantity", 14), ("sleep", 7), ("workouts", 31)):
                 start = since - timedelta(days=1) if kind == "sleep" else since
@@ -483,7 +515,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
             while windows:
                 _check_cancel(cancel)
                 start, end, kind = windows.pop(0)
-                args = {"start": f"{start} 00:00:00 {offset}", "end": f"{end} 23:59:59 {offset}"}
+                args = {"start": start.isoformat(), "end": (end + timedelta(days=1)).isoformat()}
                 if kind == "workouts":
                     tool = "get_workouts"
                     args.update(includeMetadata=False, includeRoutes=False)
@@ -511,11 +543,21 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     warnings.append(f"{kind} {start} to {end}: no data in the reply")
                 else:
                     readable_replies += 1
+                    state["sync_kind"] = "metrics" if kind == "quantity" else kind
                     ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
                 done += 1
                 sources.update_progress(vault, run.id, {"windows_done": done, "windows_total": total})
             _check_cancel(cancel)
             warnings.extend(recompute_rollups(samples))
+            unreadable = [kind for kind, tally in counts["entries_by_kind"].items()
+                          if tally["skipped"] > 0 and tally["parsed"] == 0]
+            if unreadable:
+                status = "failed"
+                counts["unreadable_kinds"] = unreadable
+                labels = {"metrics": "health metric", "sleep": "sleep", "workouts": "workout"}
+                for kind in unreadable:
+                    warnings.append(f"Health Auto Export sent {labels[kind]} data that Caduceus cannot read, "
+                                    "so none was imported. The next sync reads these days again.")
             if counts["windows_skipped"]:
                 status = "failed"
                 warnings.append(f"Health Auto Export replies for {counts['windows_skipped']} one-day requests "

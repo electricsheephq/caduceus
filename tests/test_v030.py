@@ -104,8 +104,9 @@ def start_only_sleep_server(segments, seen):
         if tool != "get_health_metrics" or args["metrics"] != "sleep_analysis":
             return empty(tool, args)
         seen.append((args["start"], args["end"]))
-        parse = lambda text: datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
-        entries = [s for s in segments if parse(args["start"]) <= parse(s["start"]) <= parse(args["end"])]
+        # Plain request dates use the phone's local calendar, with an exclusive end here.
+        first, last = (date.fromisoformat(args[key]) for key in ("start", "end"))
+        entries = [s for s in segments if first <= date.fromisoformat(s["start"][:10]) < last]
         return {"ok": True, "result": payload({"name": "sleep_analysis", "data": entries})}
     return call
 
@@ -124,7 +125,7 @@ def test_second_sync_preserves_cross_midnight_sleep(samples, vault):
     assert sleep_hours(samples, date(2026, 11, 10)) == 8
     second = sync(call, samples, vault, days=10, today=date(2026, 11, 13))
     assert second.status == "succeeded" and second.counts["since"] == "2026-11-10"
-    assert seen[-1] == ("2026-11-09 00:00:00 +0900", "2026-11-13 23:59:59 +0900")
+    assert seen[-1] == ("2026-11-09", "2026-11-14")
     for day in (9, 10, 11):
         assert sleep_hours(samples, date(2026, 11, day)) == 8
 
@@ -135,8 +136,7 @@ def test_sleep_crossing_seven_day_window_is_complete_once(samples, vault):
     out = sync(start_only_sleep_server(sleep_night(morning), seen), samples, vault,
                days=10, today=date(2026, 11, 12))
     assert out.status == "succeeded"
-    assert seen == [("2026-11-02 00:00:00 +0900", "2026-11-08 23:59:59 +0900"),
-                    ("2026-11-09 00:00:00 +0900", "2026-11-12 23:59:59 +0900")]
+    assert seen == [("2026-11-02", "2026-11-09"), ("2026-11-09", "2026-11-13")]
     assert sleep_hours(samples, morning) == 8
     assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 2
     assert out.counts["samples"] == 2 and out.counts["samples_replaced"] == 0
@@ -555,9 +555,8 @@ def test_sync_truncated_window_exact_splits(samples, vault):
 
     out = sync(call, samples, vault, days=4)
     assert out.status == "succeeded"
-    assert seen == [("2026-11-10 00:00:00 +0900", "2026-11-13 23:59:59 +0900"),
-                    ("2026-11-10 00:00:00 +0900", "2026-11-11 23:59:59 +0900"),
-                    ("2026-11-12 00:00:00 +0900", "2026-11-13 23:59:59 +0900")]
+    assert seen == [("2026-11-10", "2026-11-14"),
+                    ("2026-11-10", "2026-11-12"), ("2026-11-12", "2026-11-14")]
     progress = sources.run_info(vault, out.run_id)["progress"]
     assert progress["windows_done"] == progress["windows_total"] == 5
 
@@ -624,7 +623,7 @@ def test_sync_tool_counts_only_and_call_arguments(plugin):
     assert SOURCE not in json.dumps(out) and "876543.25" not in json.dumps(out)
     assert all(server == "health-auto-export" and timeout == 120 for server, _, _, timeout in seen)
     quantity = next(args for _, _, args, _ in seen if args.get("aggregate"))
-    assert quantity["metrics"] == ",".join(n for n in hae.MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
+    assert quantity["metrics"] == ",".join(n for n in hae.MAPPING if n not in ("body_mass", "sleep_analysis"))
     assert quantity["interval"] == "days" and "T" not in quantity["start"]
     sleep = next(args for _, _, args, _ in seen if args.get("metrics") == "sleep_analysis")
     assert sleep["aggregate"] is False
@@ -755,7 +754,7 @@ def test_non_truncated_empty_reply_never_splits(samples, vault, reply):
     assert len(seen) == len(set(seen)) == out.counts["windows"] == out.counts["windows_empty"] == 23
     assert [sum(kind == k for kind, _, _ in seen) for k in ("quantity", "sleep", "workouts")] == [7, 13, 3]
     assert out.counts["windows_skipped"] == 0
-    assert out.warnings == [f"{kind} {start} to {end}: no data in the reply"
+    assert out.warnings == [f"{kind} {start} to {date.fromisoformat(end) - timedelta(days=1)}: no data in the reply"
                             for kind, start, end in seen] + [UNREADABLE_ERROR]
 
 
@@ -779,7 +778,8 @@ def test_unreadable_window_among_readable_replies_succeeds_through_today(samples
     assert out.status == "succeeded" and out.counts["samples"] == 2
     assert replies == ["valid", "unreadable", "valid"]
     assert out.counts["windows_empty"] == 1
-    assert out.warnings == [f"quantity {unreadable[0][0][:10]} to {unreadable[0][1][:10]}: no data in the reply"]
+    last = date.fromisoformat(unreadable[0][1]) - timedelta(days=1)
+    assert out.warnings == [f"quantity {unreadable[0][0]} to {last}: no data in the reply"]
     assert out.counts["through"] == TODAY.isoformat()
     assert sources.run_info(vault, out.run_id)["counts"]["through"] == out.counts["through"]
     next_sync = sync(empty, samples, vault, today=TODAY + timedelta(days=1))
@@ -973,7 +973,7 @@ def test_skipped_day_does_not_advance_sync_watermark(samples, vault):
     def truncated(tool, args):
         if args.get("aggregate"):
             start, end = (date.fromisoformat(args[k][:10]) for k in ("start", "end"))
-            if start <= skipped <= end:
+            if start <= skipped < end:
                 return {"ok": True, "truncated": True, "result": "cut"}
             return {"ok": True, "result": payload(metric(qty=7000, day=str(start)))}
         return empty(tool, args)
@@ -993,7 +993,7 @@ def test_skipped_day_does_not_advance_sync_watermark(samples, vault):
     third = sync(recovered, samples, vault, today=TODAY + timedelta(days=2))
     assert third.status == "succeeded"
     assert third.counts["since"] == (TODAY - timedelta(days=2)).isoformat()
-    assert seen == [((TODAY - timedelta(days=2)).isoformat(), (TODAY + timedelta(days=2)).isoformat())]
+    assert seen == [((TODAY - timedelta(days=2)).isoformat(), (TODAY + timedelta(days=3)).isoformat())]
     assert samples.execute("SELECT value FROM daily_rollup WHERE metric='steps' AND day=?",
                            (str(skipped),)).fetchone()[0] == 8123
 
