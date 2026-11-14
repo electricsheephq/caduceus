@@ -14,14 +14,15 @@ Cover one area per turn and let the user set the pace. Before each area, ask whe
    - `caduceus_capture op=settings` for what is stored;
    - `caduceus_genome op=summary` and `op=derived` for the derived calls;
    - `caduceus_genome op=filter` for the largest findings, good and bad;
-   - `caduceus_trend op=metrics` and `op=labs` for wearable and lab series;
+   - `caduceus_trend op=metrics` for wearable series;
+   - `caduceus_search kinds=["observation"]` to list lab results, then `caduceus_trend op=labs lab=<name or LOINC code>` for each lab worth a trend;
    - the medications and supplements recorded.
 2. Order the findings by what the user can act on, not by magnitude. For each, note:
    - the evidence tier: a CPIC guideline, a research association, or weak or just for fun;
    - how reliable a consumer chip is for that marker;
    - which of the user's own measurements agree or disagree.
 3. Check the obvious confirmations before raising a finding. For example, look up a carrier flag's companion variant first.
-4. Draft three to five questions the user could take to a clinician.
+4. Draft three to five questions the user could take to a clinician. You give them in the chat at the end.
 
 Keep this preparation to yourself. Show the user only the order you propose, as one short list.
 
@@ -39,8 +40,10 @@ Keep this preparation to yourself. Show the user only the order you propose, as 
 - Point out when one finding touches two systems: one plan, two wins.
 
 ## Finish with a brief
-- Offer `caduceus_capture op=brief`: labs with their ranges, relevant gene–drug results with evidence tiers, medications and supplements, and the questions for each clinician.
-- Sensitive results stay out of the brief, and out of anything sent or exported, unless the user asks for them to be included.
+- Offer `caduceus_capture op=brief`. It holds medications, Apple Health trends, labs with their ranges, and gene–drug results with evidence tiers.
+- **The brief shows whatever the current privacy settings allow.** You cannot change those settings. Before making the brief, ask whether any sensitive area should stay out of it. If one should, the user hides it first with `/caduceus hide <category>`, and can show it again with `/caduceus show <category>`.
+- Give the questions for each clinician in the chat, next to the brief. The brief file does not include them.
+- Never send or export the brief, or anything from the session, unless the user asks.
 - Record follow-ups the user names (rechecks, appointments) with `op=journal`.
 
 ## Guardrails
