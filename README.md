@@ -131,9 +131,10 @@ plugins:
       mcp_allowlist: [health-auto-export]
 ```
 
-Then call `caduceus_capture op=sync`. `/blueprint caduceus:hae-sync` keeps it current daily and stays silent unless
-sync fails. The `hae_mcp_server` setting defaults to `health-auto-export`; `hae_backfill_days` defaults to 90 for the
-first sync. Later syncs start two days before the last synced day.
+Then call `caduceus_capture op=sync`. `/blueprint caduceus:hae-sync` keeps it current daily and stays silent unless a
+sync fails, including one that failed in the background after its call returned. The `hae_mcp_server` setting
+defaults to `health-auto-export`; `hae_backfill_days` defaults to 90 for the first sync. Later syncs start two days
+before the last complete sync. A sync that could not read a day ends as failed, so the next one reads that day again.
 
 ## Tools
 
