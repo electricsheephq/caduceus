@@ -29,7 +29,7 @@ def test_registers_manifest_tools_command_skills_and_blueprints(data_dir):
     assert set(ctx.skills) == {"caduceus-setup", "caduceus-guide", "caduceus-research", "caduceus-report-problem"}
     for entry in ctx.skills.values():
         assert entry["path"].is_file()
-    assert set(ctx.blueprints) == {"research-watch", "daily-check"}
+    assert set(ctx.blueprints) == {"research-watch", "daily-check", "hae-sync"}
     assert set(ctx.hooks) == manifest_list("provides_hooks") == {"pre_llm_call"}  # hermes plugins validate checks this
     for fields in ctx.blueprints.values():
         assert "[SILENT]" in fields["prompt_template"]

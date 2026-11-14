@@ -10,10 +10,12 @@ duplicates.
 | Function | Contract |
 |---|---|
 | `sources.store_source(conn, path, kind) -> (SourceArtifact, existed)` | Copies the file once into `sources/<sha256>/` beside the vault. |
+| `sources.virtual_source(conn: sqlite3.Connection, kind, key: str, label: str) -> SourceArtifact` | Reuses one virtual source per MCP server key, with an empty `stored_path` and no file. |
 | `sources.source_file(conn, src) -> Path` | The stored copy. **Importers read only this, never the user's path.** |
 | `sources.begin_import(conn, src, parser, version) -> ImportRun \| None` | `None` means this version already imported this source: return `ImportResult(status="skipped")`. It also marks runs left `running` as `interrupted`. |
+| `sources.begin_run(conn: sqlite3.Connection, src: SourceArtifact, parser: str, version: str) -> ImportRun` | Always starts a new run; marks stale `running` runs of the same source and parser `interrupted`. |
 | `sources.update_progress(conn, run_id, dict)` | Call about every 10k–50k rows. |
-| `sources.finish_import(conn, run_id, *, counts, status, errors=())` | `status` is one of `succeeded`, `failed`, `cancelled`. |
+| `sources.finish_import(conn, run_id, *, counts, status, errors=())` | `status` is one of `succeeded`, `failed`, `cancelled`. Stores at most 50 errors: when over the cap, keeps the first 49 and the last error. |
 | `search.index_doc(conn, *, kind, ref, title, body, category, ts=None)` | Upsert into the search index. `kind` is in `search.KINDS`; `category` is a `policy.Category`. |
 | `search.browse(conn, *, policy, kinds, limit=8) -> dict` | Same hit shape as search, newest first, limited to visible records of the given kinds; `withheld` counts hidden records. |
 | `policy.Category`, `policy.Policy`, `policy.allowed(policy, category)`, `policy.categorize(genes=…, text=…, markers=…, default=…)` | Categorize every record you index or store. `markers` applies the fixed categories in `policy.MARKER_CATEGORY` (APOE and the BRCA founder variants), whatever the text says. |
@@ -109,6 +111,7 @@ def metrics(samples) -> list[dict]
 def trend(samples, metric, *, start=None, end=None, bucket="week") -> dict
 def compare_windows(samples, metric, *, pivot, before_days=28, after_days=28) -> dict
 def daily_check(samples, *, thresholds=None, today=None) -> dict
+def sleep_morning(moment: datetime) -> date
 def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict   # in health/fhir.py
 def trend_svg(points, *, unit, title, markers=()) -> str
 ```
@@ -120,6 +123,61 @@ def trend_svg(points, *, unit, title, markers=()) -> str
   in its first 4096 bytes. Localized names are supported; size limits and entity guards apply to both paths.
 - **Lone XML:** warns that clinical records require the export zip.
 - **Clinical records:** `clinical-records/*.json` inside the zip go through the same FHIR code into `observation`, `condition` and `medication_event`.
+
+**Health Auto Export (`caduceus/health/hae.py`):**
+
+```python
+def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warnings, cancel=None)
+def import_hae(samples, vault, src, *, cancel=None) -> ImportResult
+def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None, local_offset=None) -> ImportResult
+```
+
+- **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
+  cleared once per run. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
+  morning in the end's offset (which still supplies `tz_offset_min`). Sleep nights in `run_state["sleep_keep"]`
+  (a set of ISO dates) are upsert-only, as are nights before `run_state["sleep_clear_from"]` when that local `date`
+  cutoff is set. Other metric types keep the usual replacement rule. In `counts["metrics_ignored"]`, unknown
+  metrics keep their names only when they match `^[a-z][a-z0-9_]{0,63}$`, up to 50 distinct names per run;
+  repeats of kept names keep counting there. Every other unknown metric counts under `"other"`, for files and sync.
+- **`import_hae`:** imports a stored JSON file or safe JSON zip members. Before ingesting, scans valid sleep entries
+  across the whole file, including every JSON member. Sets `sleep_keep` to the earliest and latest segment nights,
+  except any night with a summary entry, which replaces its night even at an edge. Does not set `sleep_clear_from`.
+  Non-JSON members are skipped unopened.
+- **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
+  `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Only truncated replies split
+  a window. An unusable non-truncated reply counts as `windows_empty` and warns using only request dates;
+  usable empty data objects count as readable and give no warning. A run with some readable replies may succeed
+  despite unreadable windows. A run with unreadable windows and no readable replies fails, appending last:
+  "None of Health Auto Export's replies could be read, so nothing was imported. The next sync reads these days again."
+  Succeeded runs store `through=today`; failed runs never advance the successful-sync watermark.
+  A first sync starts at `today - (backfill_days - 1)`. Until a run of this source succeeds, the most recent
+  earlier `hae_sync` run with a stored `since` preserves that start: takes the earlier of its `since` and the
+  backfill start, never before `today - 3650 days`. After a succeeded run, starts two days before that run's
+  `through`, with the same 3,650-day floor. Stores ISO `since` and `through` in the running import's `counts_json`
+  inside `write_txn` before its first MCP request, so an interrupted first sync also preserves its start;
+  `finish_import` replaces these with the full counts.
+  `local_offset` overrides the machine's local offset for tests. A permission-denied run with no sample/workout
+  writes and no other runs for its virtual source removes its run and source together; the failure still comes
+  back in the result. Other failures retain the run so the next sync can report it, even on a first empty sync.
+  An `ok=false` server envelope fails with exactly: "Health Auto Export did not answer the request. Check that
+  the app is open and its MCP server is running." Server-provided error text is never copied into warnings,
+  stored errors, progress or logs; `previous_sync.error` receives the fixed message too.
+  Skipped one-day truncated windows fail the run, retain writes and never advance the successful-sync watermark.
+- **Run exclusion:** both HAE entry points begin a visible `running` run before acquiring a per-samples-file
+  thread lock, held through rollup recomputation. On systems with `fcntl`, a nonempty `main` path from
+  `PRAGMA database_list` also uses an exclusive nonblocking flock on `<samples path>-hae-lock`. In-memory databases
+  and systems without `fcntl` use only the thread lock. Waiting polls at intervals of at most 0.25 s, checks
+  cancellation, and records `{"waiting": "another Health Auto Export run"}` once. Every exit releases the locks;
+  erase removes the lock file with the databases.
+- **Capture `op=sync`:** before submitting the job, reads the source's latest finished `hae_sync` run. If it is
+  `failed` or `interrupted` and its `progress_json` has no truthy `reported` flag, all done/running/busy results
+  include `previous_sync` with `import_run_id`, `status` and `error` (the last stored error, or null).
+  A later succeeded run suppresses this notice. When the job finishes within the caller's wait (`done`), marks
+  that run's `progress_json.reported=1` in `write_txn`, since its final status was returned directly; a deleted
+  denied run needs no row. The `hae-sync` blueprint reports an earlier failure and its error instead of staying
+  silent when `previous_sync` is present.
+- **`trends.sleep_morning(moment: datetime) -> date`:** names a noon-to-noon night by its morning in the supplied
+  offset: the date plus one day when the hour is at least 12. Used by both HAE partitions and sleep rollups.
 
 **Trend results:**
 - **Every result carries** `unit`, `source_policy`, `coverage` (with gaps), and `calc_version`.

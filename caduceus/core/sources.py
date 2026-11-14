@@ -72,6 +72,17 @@ def store_source(conn: sqlite3.Connection, path, kind, *, subject_id: int = 1) -
     return _artifact(row), False
 
 
+def virtual_source(conn: sqlite3.Connection, kind, key: str, label: str) -> SourceArtifact:
+    """One provenance row for an MCP server; there is deliberately no file."""
+    digest = hashlib.sha256(("hae-sync:" + key).encode()).hexdigest()
+    with write_txn(conn):
+        conn.execute(
+            "INSERT OR IGNORE INTO source_artifact(subject_id,kind,sha256,original_name,stored_path,"
+            "size_bytes,added_at) VALUES (1,?,?,?,'',0,?)",
+            (SourceKind(kind).value, digest, label, now_iso()))
+    return _artifact(conn.execute("SELECT * FROM source_artifact WHERE sha256=?", (digest,)).fetchone())
+
+
 def get_source(conn: sqlite3.Connection, source_id: int) -> SourceArtifact | None:
     row = conn.execute("SELECT * FROM source_artifact WHERE id=?", (source_id,)).fetchone()
     return _artifact(row) if row is not None else None
@@ -79,6 +90,8 @@ def get_source(conn: sqlite3.Connection, source_id: int) -> SourceArtifact | Non
 
 def source_file(conn: sqlite3.Connection, src: SourceArtifact) -> Path:
     """The stored copy of *src* (importers read this, never the user's original path)."""
+    if not src.stored_path:
+        raise ValueError("virtual source has no stored file")
     return db_dir(conn) / src.stored_path
 
 
@@ -87,7 +100,6 @@ def begin_import(conn: sqlite3.Connection, src: SourceArtifact, parser: str, ver
 
     Runs left ``running`` by a crash or restart are marked ``interrupted`` first. Importers write
     with natural keys (INSERT OR IGNORE / upsert), so the new run resumes without duplicates."""
-    started = now_iso()
     with write_txn(conn):
         done = conn.execute(
             "SELECT 1 FROM import_run WHERE source_id=? AND parser=? AND parser_version=? AND status='succeeded'",
@@ -95,6 +107,13 @@ def begin_import(conn: sqlite3.Connection, src: SourceArtifact, parser: str, ver
         ).fetchone()
         if done:
             return None
+        return begin_run(conn, src, parser, version)
+
+
+def begin_run(conn: sqlite3.Connection, src: SourceArtifact, parser: str, version: str) -> ImportRun:
+    """Start a fresh run, interrupting stale runs without skipping a successful source."""
+    started = now_iso()
+    with write_txn(conn):
         conn.execute(
             "UPDATE import_run SET status='interrupted', finished_at=? "
             "WHERE source_id=? AND parser=? AND status='running'",
@@ -117,10 +136,13 @@ def finish_import(conn: sqlite3.Connection, run_id: int, *, counts: dict, status
     status = RunStatus(status).value
     if status == RunStatus.RUNNING:
         raise ValueError("finish_import needs a final status")
+    errors = [str(e) for e in errors]
+    if len(errors) > 50:
+        errors = errors[:49] + errors[-1:]
     with write_txn(conn):
         conn.execute(
             "UPDATE import_run SET status=?, finished_at=?, counts_json=?, errors_json=? WHERE id=?",
-            (status, now_iso(), json.dumps(counts, sort_keys=True), json.dumps([str(e) for e in errors][:50]), run_id),
+            (status, now_iso(), json.dumps(counts, sort_keys=True), json.dumps(errors), run_id),
         )
 
 
@@ -193,6 +215,10 @@ def sniff_kind(path: Path) -> str:
                 with zf.open(jsons[0]) as fh:
                     if '"resourceType"' in _peek_text(fh.read(4096)):
                         return SourceKind.FHIR.value
+            for member in sorted(jsons, key=lambda i: i.file_size, reverse=True)[:20]:
+                with zf.open(member) as fh:
+                    if _looks_hae(fh.read(64 << 10).decode("utf-8-sig", "replace")):
+                        return SourceKind.HAE.value
         return SourceKind.OTHER.value
     with open(path, "rb") as fh:
         magic = fh.read(2)
@@ -207,7 +233,8 @@ def sniff_kind(path: Path) -> str:
             except (OSError, EOFError, zlib.error):  # BadGzipFile is an OSError
                 return SourceKind.OTHER.value
             return SourceKind.DTC.value if _looks_dtc(head) else SourceKind.OTHER.value
-        head = _peek_text(fh.read(4096))
+        raw_head = fh.read(64 << 10)
+        head = _peek_text(raw_head)
     if '"resourceType"' in head:
         return SourceKind.FHIR.value
     lowered = path.name.lower()
@@ -217,7 +244,13 @@ def sniff_kind(path: Path) -> str:
         return SourceKind.APPLE_HEALTH.value
     if _looks_dtc(head):
         return SourceKind.DTC.value
+    if lowered.endswith(".json") and _looks_hae(raw_head.decode("utf-8-sig", "replace")):
+        return SourceKind.HAE.value
     return SourceKind.OTHER.value
+
+
+def _looks_hae(head: str) -> bool:
+    return '"data"' in head and ('"metrics"' in head or '"workouts"' in head) and '"resourceType"' not in head
 
 
 def _looks_dtc(head: str) -> bool:

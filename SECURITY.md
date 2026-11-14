@@ -24,7 +24,7 @@ Disclosure — imports, search and reports run locally, and the vault is never u
 whole; tool results (slices of your data) enter the conversation, so the model provider you
 chose sees them; a hook adds one fixed note, holding none of your data, to the first health, medication or DNA question of each chat when the vault has data (off with the `vault_hint` setting); the research watch (on by default, runs when you or the agent ask for it or on a schedule you
 create, off with the `research_watch` setting) sends gene and topic terms, the names of medications you recorded,
-and public marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed
+and public marker and article IDs, never genotypes, to Europe PMC and NCBI; the Health Auto Export sync (off until you allow that app's MCP server for Caduceus in Hermes config, and run only when you or the agent ask for it or on a schedule you create) reads Apple Health data from that server through Hermes's own MCP client and sends nothing out; scheduled checks run model turns billed
 like any message;
 no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
 check it holds no health data, and files it to this repository with `gh` only after you
@@ -37,7 +37,7 @@ The same disclosure appears in the README and the manifest.
 **Storage**
 - Everything lives in the profile's `plugin-data/caduceus/` directory:
   - `vault.db`: genome, records, research and the search index;
-  - `samples.db`: Apple Health samples;
+  - `samples.db`: Apple Health samples, from an export or Health Auto Export;
   - `sources/`: one copy of each imported file, by SHA-256, never overwritten;
   - `reports/`: rebuilt variant reports and health briefs;
   - `demo-files/`: the synthetic demo persona's files, if you ran `/caduceus demo`.
@@ -46,12 +46,14 @@ The same disclosure appears in the README and the manifest.
 
 **Reading files**
 - The plugin reads a file only when `caduceus_capture op=import` names its absolute path.
+- The Health Auto Export sync reads only from the MCP server named in the `hae_mcp_server` setting, and only after the operator adds that name to `plugins.entries.caduceus.mcp_allowlist`. It calls the server through Hermes (`ctx.call_mcp`), so Caduceus never handles the server's token.
 - That path goes through Hermes' own read guard (`agent.file_safety`) before it is opened.
 - Importers read only the stored copy.
 - Tool descriptions and skills tell the agent never to open these files itself.
 
 **Untrusted input**
 - Every imported file is treated as hostile.
+  - Health Auto Export payloads, from files or the sync, are hostile too: size caps apply, unknown metrics are ignored, and workout routes, heart-rate series and metadata are never stored.
   - Zip members are streamed, never extracted, and odd member names are refused.
   - Decompressed bytes, line length, decoded objects and the compression ratio are all capped while streaming.
   - XML with entity declarations is refused before parsing.
@@ -67,7 +69,7 @@ The same disclosure appears in the README and the manifest.
 - The agent can read the privacy settings but cannot change them. Only the user's `/caduceus privacy|hide|show|unlock|lock` commands, or the config file, write them.
 
 **Network**
-- Only the research watch uses the network:
+- Caduceus's own code uses the network only for the research watch. The Health Auto Export sync asks Hermes's MCP client to call the server the operator allowed; the HAE Mac app serves it on the same machine. The research watch:
   - HTTPS only;
   - a fixed host allowlist (`www.ebi.ac.uk`, `eutils.ncbi.nlm.nih.gov`, `www.ncbi.nlm.nih.gov`, `api.cpicpgx.org`);
   - redirects refused;

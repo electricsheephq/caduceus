@@ -13,6 +13,8 @@ class SourceKind(StrEnum):
     PROMETHEASE = "promethease"    # a Promethease report (.zip or .html)
     APPLE_HEALTH = "apple_health"  # Apple Health export.zip (may contain clinical-records/ FHIR JSON)
     FHIR = "fhir"                  # a FHIR R4 Bundle or resource as JSON
+    HAE = "hae"                  # Health Auto Export JSON
+    HAE_SYNC = "hae_sync"        # virtual MCP source, with no stored file
     OTHER = "other"
 
 

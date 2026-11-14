@@ -12,7 +12,7 @@ Health or medical records. Go one step at a time, and keep each message short.
 
 - `/caduceus …` and `/blueprint caduceus:…` are chat commands that the user types in Hermes chat. They are not shell commands.
 - You work through the tools: `caduceus_capture`, `caduceus_genome`, `caduceus_trend` and `caduceus_search`.
-- In a shell, only the `hermes plugins …` commands apply: install, enable and list. There is no `hermes caduceus` shell command, so never run one. For anything else, call a tool, or ask the user to type the chat command.
+- In a shell, the only Caduceus commands are `hermes plugins …`: install, enable and list. There is no `hermes caduceus` shell command, so never run one. For anything else, call a tool, or ask the user to type the chat command.
 
 ## 0. What to say first
 
@@ -53,6 +53,17 @@ For each file:
 3. **Report the counts it returns in one line.** For example: "960k genotypes from your 23andMe v3 file" or "25k variant report records".
    - **If it says `skipped`, it was already imported.**
    - **If it says `failed`, show the error and stop on that file.**
+
+### Health Auto Export
+
+- **JSON export:** in HAE, export metrics as JSON using Manual Export, or an automation that saves JSON files to a
+  folder. Import that file with `caduceus_capture op=import`.
+- **Live sync:** if the HAE app's MCP server is running and configured in Hermes, the operator adds its server name
+  to `plugins.entries.caduceus.mcp_allowlist` in `config.yaml`. If that name is not `health-auto-export`, also set
+  the Caduceus setting `hae_mcp_server` to the same name: the allowlist grants access, the setting picks the server.
+  Then call `caduceus_capture op=sync`;
+  `/blueprint caduceus:hae-sync` keeps it current.
+- `.hae` AutoSync files are HAE's private format and cannot be imported.
 
 ## 2. Their medications
 

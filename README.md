@@ -39,7 +39,7 @@ turns it on.
 |---|---|
 | Hermes chat (CLI or Desktop; messaging apps are not tested yet) | The commands you type: `/caduceus help`, `/caduceus demo`, `/caduceus privacy …`, `/caduceus erase`, and the watches `/blueprint caduceus:research-watch` and `/blueprint caduceus:daily-check` |
 | Your agent | The tools `caduceus_capture`, `caduceus_genome`, `caduceus_trend` and `caduceus_search`. Ask in plain words and the agent calls them |
-| A shell | Only the `hermes plugins …` commands: install, enable and list (for example `hermes plugins install electricsheephq/caduceus --enable`). There is no `hermes caduceus` shell command |
+| A shell | For Caduceus, only the `hermes plugins …` commands: install, enable and list (for example `hermes plugins install electricsheephq/caduceus --enable`). There is no `hermes caduceus` shell command |
 
 ## Try it
 
@@ -105,6 +105,7 @@ Other health plugins in the Hermes catalog read Apple Health, records or medicat
 | Living DNA raw data, `.zip` or `.txt` | Download your raw data in your Living DNA settings |
 | Promethease report, `.zip` or `.html` | The report file you downloaded from Promethease |
 | Apple Health export: the `.zip` from an iPhone in any language, or the export XML inside it | iPhone Health app → your picture → Export All Health Data. With Health Records connected, the zip includes your clinical records |
+| Health Auto Export JSON (or a zip of JSON exports) | In Health Auto Export, use Manual Export or an automation that saves metrics as JSON |
 | FHIR R4 JSON (labs, conditions, medications) | A patient portal's FHIR or "download my record" export |
 
 Give your agent the file's path, and Caduceus copies the file into its vault and imports it.
@@ -113,6 +114,31 @@ Give your agent the file's path, and Caduceus copies the file into its vault and
 - An interrupted import resumes where it stopped.
 - A vault holds one person. A second DNA file is compared with the first on shared markers, and if it looks like a
   different person, you are told, and answers carry a warning. Keep each person in their own Hermes profile.
+
+### Health Auto Export
+
+For a **JSON export**, use Manual Export in Health Auto Export (HAE), or an automation that saves JSON files to a
+folder, then import the file with `caduceus_capture op=import`. `.hae` AutoSync files are HAE's private format and
+cannot be imported.
+
+For **live sync**, run the HAE app's MCP server and configure it in Hermes. The operator allows its server name in
+`config.yaml` (use your configured name if different):
+
+```yaml
+plugins:
+  entries:
+    caduceus:
+      mcp_allowlist: [health-auto-export]
+```
+
+Then call `caduceus_capture op=sync`. `/blueprint caduceus:hae-sync` keeps it current daily and stays silent unless a
+sync fails, including one that failed in the background after its call returned. The `hae_mcp_server` setting
+defaults to `health-auto-export`. If your server has another name, put that name in the allowlist and set
+`hae_mcp_server` to it too: the allowlist grants access, and the setting picks the server. `hae_backfill_days`
+defaults to 90 for the first sync, and a first sync that fails or is interrupted keeps that start for the next try.
+Later syncs start two days before the last day read in full. A day whose reply was too large is read again by the
+next sync. A sync in which no reply could be read fails and says so, and the next one reads those days again. When
+the server answers with an error, Caduceus reports a fixed message and never passes on the server's own text.
 
 ## Tools
 
@@ -145,7 +171,7 @@ Disclosure — imports, search and reports run locally, and the vault is never u
 whole; tool results (slices of your data) enter the conversation, so the model provider you
 chose sees them; a hook adds one fixed note, holding none of your data, to the first health, medication or DNA question of each chat when the vault has data (off with the `vault_hint` setting); the research watch (on by default, runs when you or the agent ask for it or on a schedule you
 create, off with the `research_watch` setting) sends gene and topic terms, the names of medications you recorded,
-and public marker and article IDs, never genotypes, to Europe PMC and NCBI; scheduled checks run model turns billed
+and public marker and article IDs, never genotypes, to Europe PMC and NCBI; the Health Auto Export sync (off until you allow that app's MCP server for Caduceus in Hermes config, and run only when you or the agent ask for it or on a schedule you create) reads Apple Health data from that server through Hermes's own MCP client and sends nothing out; scheduled checks run model turns billed
 like any message;
 no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, asks you to
 check it holds no health data, and files it to this repository with `gh` only after you

@@ -52,6 +52,11 @@ def rollups_stale(samples) -> bool:
                            types).fetchone() is not None
 
 
+def sleep_morning(moment: datetime) -> date:
+    """Name a noon-to-noon sleep night by its morning, in the supplied offset."""
+    return moment.date() + timedelta(days=1 if moment.hour >= 12 else 0)
+
+
 def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
     """Every daily rollup computed from the stored samples, and the sleep warnings. Reads only.
 
@@ -74,8 +79,10 @@ def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
     summed = ",".join("'" + m + "'" for m, spec in METRICS.items() if spec[2] == "max_source_sum")
     rows = [tuple(row) for row in samples.execute(
         "WITH mapped AS (SELECT *, CASE type " + cases + " END AS metric FROM sample), "
-        "normalized AS (SELECT metric,local_day AS day,source_name,CASE metric " + normal + " END AS v FROM mapped WHERE metric IS NOT NULL), "
-        "per_source AS (SELECT metric,day,source_name,SUM(v) AS total,COUNT(v) AS n FROM normalized WHERE v IS NOT NULL GROUP BY metric,day,source_name), "
+        "normalized AS (SELECT metric,local_day AS day,source_name,provider,CASE metric " + normal + " END AS v FROM mapped WHERE metric IS NOT NULL), "
+        "source_totals AS (SELECT metric,day,source_name,provider,SUM(v) AS total,COUNT(v) AS n FROM normalized WHERE v IS NOT NULL GROUP BY metric,day,source_name,provider), "
+        "preferred AS (SELECT *,MAX(provider <> 'hae') OVER (PARTITION BY metric,day) AS has_other FROM source_totals), "
+        "per_source AS (SELECT * FROM preferred WHERE provider <> 'hae' OR NOT has_other), "
         "ranked AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY metric,day ORDER BY total DESC,source_name) AS rank FROM per_source), "
         "rollups AS (SELECT metric,day,SUM(total)/SUM(n) AS value,SUM(n) AS n,json_group_array(source_name) AS names FROM per_source "
         "WHERE metric NOT IN (" + summed + ") GROUP BY metric,day "
@@ -85,7 +92,7 @@ def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
               "HKCategoryValueSleepAnalysisAsleepUnspecified", "HKCategoryValueSleepAnalysisAsleepCore",
               "HKCategoryValueSleepAnalysisAsleepDeep", "HKCategoryValueSleepAnalysisAsleepREM")
     asleep = samples.execute(
-        "SELECT tz_offset_min,source_name,start_utc,end_utc FROM sample "
+        "SELECT tz_offset_min,source_name,start_utc,end_utc,provider FROM sample "
         "WHERE type='HKCategoryTypeIdentifierSleepAnalysis' AND value_text IN ("+
         ",".join("?" for _ in stages)+")", stages)
     grouped = {}
@@ -94,13 +101,16 @@ def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
         start = datetime.fromisoformat(row[2]).astimezone(offset)
         end = datetime.fromisoformat(row[3]).astimezone(offset)
         while start < end:
-            morning = start.date() + timedelta(days=1 if start.hour >= 12 else 0)
+            morning = sleep_morning(start)
             noon = datetime.combine(morning, time(12), tzinfo=offset)
             stop = min(end, noon)
-            grouped.setdefault((morning.isoformat(), row[1]), []).append((start, stop))
+            grouped.setdefault((morning.isoformat(), row[1], row[4]), []).append((start, stop))
             start = stop
     nights = {}
-    for (night, source), intervals in sorted(grouped.items()):
+    non_hae_nights = {night for night, _, provider in grouped if provider != "hae"}
+    for (night, source, provider), intervals in sorted(grouped.items()):
+        if provider == "hae" and night in non_hae_nights:
+            continue
         left = right = None
         seconds, n = 0, 0
         for start, end in sorted(intervals):
