@@ -113,8 +113,7 @@ Other health plugins in the Hermes catalog read Apple Health, records or medicat
 
 Give your agent the file's path, and Caduceus copies the file into its vault and imports it.
 - The agent is told never to open these files itself.
-- Big imports keep running in the background. Re-importing a file does nothing, unless a newer Caduceus reads more
-  from it; then only what is new is added.
+- Big imports keep running in the background, and re-importing a file does nothing.
 - An interrupted import resumes where it stopped.
 - A FHIR condition that gives only the date it was recorded is kept, with its onset unknown. Results without a code
   are told apart by name.
@@ -176,7 +175,9 @@ A gene–drug result keeps three outcomes apart:
 You change these yourself, with `/caduceus privacy standard`, `/caduceus hide <category>`, `/caduceus unlock <category>`
 and so on (`/caduceus help` lists them), or in the plugin settings. Your agent can read the settings but cannot change
 them. Hidden results are counted, never described. A marker follows its gene's category: hiding `pgx` hides the
-drug-response genes' markers in every view, and a derived call shows only when every marker behind it can.
+drug-response genes' markers in gene views, lookups, gene–drug checks and the summary's gene–drug profile, and a
+derived call shows only when every marker behind it can. Variant-report listings (filters, top findings, the rebuilt
+report) follow each annotation's own category.
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
