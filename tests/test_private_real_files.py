@@ -50,7 +50,7 @@ def test_private_hero_tools_run_cleanly(vault, private_dir):
     pack, calls = ops._pack_calls(vault)
     for drug in ("semaglutide", "tirzepatide", "clopidogrel", "simvastatin", "warfarin"):
         for level in ("open", "standard"):
-            result = ops._pgx(pack, drug, calls, Policy(level=level))
+            result = ops._pgx(pack, drug, calls, Policy(level=level), vault=vault)
             # Totals only: per-status counts would describe the maintainer's results.
             print(drug, level, "entries", len(result["entries"]), "withheld", result.get("withheld", 0))
             assert {e["status"] for e in result["entries"]} <= {"flag", "no_flag", "not_assessed"}

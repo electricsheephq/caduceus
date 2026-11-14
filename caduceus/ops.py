@@ -369,11 +369,16 @@ def _pack_calls(vault):
     return pack, _get_calls(vault, sorted(set(_pack_rsids(pack)) | set(_SENSITIVE_MARKERS)))
 
 
-def _pgx(pack, drug: str, calls, policy) -> dict:
+def _pgx_entry_visible(vault, policy, entry):
+    return (allowed(policy, entry.get("category", categorize(genes=[entry["gene"]], default=Category.PGX)))
+            and all(_marker_visible(vault, policy, marker["rsid"]) for marker in entry.get("markers", ())))
+
+
+def _pgx(pack, drug: str, calls, policy, *, vault) -> dict:
     """Gene–drug entries for *drug*, filtered by the policy, with the user's own genotypes beside each marker."""
     result = _need("knowledge.pack", "pgx_check")(pack, drug, calls)
     entries = list(result.get("entries") or [])
-    shown = [e for e in entries if allowed(policy, e.get("category", Category.PGX))]
+    shown = [e for e in entries if _pgx_entry_visible(vault, policy, e)]
     for entry in shown:
         mine = {}
         for marker in entry.get("markers") or ():
@@ -453,7 +458,7 @@ def genome_tool(ctx, args: dict) -> dict:
             if not allowed(policy, Category.PGX):
                 return {"drug": drug, **_withheld(1), **warning}
             pack, calls = _pack_calls(store.vault)
-            return {**_pgx(pack, drug, calls, policy), **warning}
+            return {**_pgx(pack, drug, calls, policy, vault=store.vault), **warning}
         if op == "derived":
             pack, calls = _pack_calls(store.vault)
             derived = _need("knowledge.pack", "derive")(pack, calls)
@@ -510,12 +515,12 @@ def _genome_summary(store, policy) -> dict:
             out.update(_withheld(out.get("withheld", 0) + 1))
         else:
             pack, calls = _pack_calls(vault)
-            shown = [e for e in pack.entries if allowed(policy, categorize(genes=[e["gene"]], default=Category.PGX))]
+            shown = [e for e in pack.entries if _pgx_entry_visible(vault, policy, e)]
             filtered = dataclasses.replace(pack, cpic=[e for e in pack.cpic if e in shown],
                                            glp1=[e for e in pack.glp1 if e in shown])
             result = _need("knowledge.pack", "profile")(filtered, calls)
             derived = result["derived"]
-            result["derived"] = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
+            result["derived"] = [d for d in derived if _derived_visible(vault, policy, d)]
             out["gene_drug_profile"] = result
             out.update(_withheld(out.get("withheld", 0) + len(pack.entries) - len(shown)
                                  + len(derived) - len(result["derived"])))

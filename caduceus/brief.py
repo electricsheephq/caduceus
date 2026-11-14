@@ -278,7 +278,7 @@ def _genes_section(vault, meds, policy) -> tuple[str, int]:
     pack, calls = loaded
     blocks, withheld = [], 0
     for drug in drugs:
-        result = _pgx(pack, drug, calls, policy)
+        result = _pgx(pack, drug, calls, policy, vault=vault)
         withheld += result.get("withheld", 0)
         entries = result.get("entries") or []
         if not entries:

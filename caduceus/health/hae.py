@@ -163,9 +163,10 @@ def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, 
             day.isoformat(), value, text, _key(identity), "wellness")
 
 
-def _sleep_bucket_start(entry):
-    """A day bucket belongs to the night of its start's morning, not its evening."""
-    return _date(entry["start"])
+def _sleep_bucket_start(entry, hours):
+    """Keep a day bucket's whole duration in the night ending at its day's noon."""
+    noon = _date(entry["start"]).replace(hour=12, minute=0, second=0, microsecond=0)
+    return noon - timedelta(hours=hours)
 
 
 def _metric_rows(name, metric, entry, source_id):
@@ -183,16 +184,20 @@ def _metric_rows(name, metric, entry, source_id):
             start = _date(entry.get("start", entry.get("startDate")))
             end = _date(entry.get("end", entry.get("endDate")))
         else:
-            hours = (_number(entry["totalSleep"]) if "totalSleep" in entry else
-                     sum(_number(entry.get(k, 0)) for k in ("asleep", "core", "deep", "rem")))
-            if not ("totalSleep" in entry or "asleep" in entry) or not 0 < hours <= 24:
+            values = {k: _number(entry.get(k, 0))
+                      for k in ("totalSleep", "asleep", "core", "deep", "rem", "inBed")}
+            hours = values["totalSleep"] or sum(values[k] for k in ("asleep", "core", "deep", "rem"))
+            if (not ("totalSleep" in entry or "asleep" in entry)
+                    or any(value < 0 for value in values.values()) or hours > 24):
                 raise ValueError("invalid sleep duration")
+            if hours == 0:
+                return []  # valid iPhone-only in-bed buckets are read, but contain no sleep
             sleep_end = entry.get("sleepEnd") or entry.get("inBedEnd")
             if sleep_end:
                 end = _date(sleep_end)
                 start = end - timedelta(hours=hours)
             else:
-                start = _sleep_bucket_start(entry)
+                start = _sleep_bucket_start(entry, hours)
                 end = start + timedelta(hours=hours)
             text = SLEEP["Asleep"]
         return [_sample("SleepAnalysis", entry, source_id, "h", text=text, start=start, end=end)]
@@ -314,6 +319,8 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
                 count_entry(kind, "skipped")
                 continue
             count_entry(kind, "parsed")
+            if not rows:
+                continue
             if (name == "sleep_analysis" and "value" in entry
                     and rows[0][2] in run_state.get("sleep_summaries", {}).get(rows[0][7], set())):
                 counts["sleep_segments_omitted"] = counts.get("sleep_segments_omitted", 0) + 1
@@ -383,9 +390,12 @@ def _sleep_nights(data, *, cancel=None):
         for entry in metric.get("data", []):
             _check_cancel(cancel)
             try:
-                row = _metric_rows("sleep_analysis", metric, entry, None)[0]
+                rows = _metric_rows("sleep_analysis", metric, entry, None)
             except (KeyError, ValueError, TypeError, OverflowError):
                 continue
+            if not rows:
+                continue
+            row = rows[0]
             (segments if "value" in entry else summaries).setdefault(row[7], set()).add(row[2])
     return segments, summaries
 

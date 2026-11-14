@@ -109,7 +109,7 @@ def test_full_sync_real_shapes_keep_phone_days_and_sleep_nights(samples, vault):
             ("2026-11-14T12:05:00Z", str(TODAY))]
     sleep = samples.execute("SELECT * FROM sample WHERE type='HKCategoryTypeIdentifierSleepAnalysis'").fetchone()
     assert (sleep["start_utc"], sleep["end_utc"], sleep["local_day"], sleep["tz_offset_min"]) == (
-        "2026-11-13T15:00:00Z", "2026-11-13T22:30:00Z", str(TODAY), 540)
+        "2026-11-13T19:30:00Z", "2026-11-14T03:00:00Z", str(TODAY), 540)
     export_summary = {"date": f"{TODAY} 00:00:00 +0900", "sleepEnd": f"{TODAY} 07:30:00 +0900", "totalSleep": 7.5}
     assert hae._metric_rows("sleep_analysis", {}, export_summary, None)[0][7] == sleep["local_day"]
     assert tuple(samples.execute("SELECT day,value FROM daily_rollup WHERE metric='sleep_hours'").fetchone()) == (

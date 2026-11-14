@@ -521,8 +521,16 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
             "AND EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)",
             (system, code, identity)).fetchall()
             if system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name)]
-        if when is None and any(row["onset"] is not None for row in same):
-            return  # an existing known onset wins; like a duplicate, this adds no row
+        known = [row for row in same if row["onset"] is not None]
+        if when is None and known:
+            for row in known:
+                old = json.loads(row["raw_json"])
+                # Keep the known dates and document; only the incoming statuses move.
+                document = {k: v for k, v in old.items() if k not in ("clinicalStatus", "verificationStatus")}
+                document.update({k: resource[k] for k in ("id", "clinicalStatus", "verificationStatus") if k in resource})
+                _condition(vault, document, source_id, row["onset"], old.get("_caduceus", {}).get("date_precision"),
+                           counts, full_url)
+            return
         if when is not None:
             for row in same:
                 if row["onset"] is None:

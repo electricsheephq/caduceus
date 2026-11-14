@@ -147,9 +147,13 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   24-hour and ISO timestamps and locale-independent 12-hour AM/PM timestamps (hours 1–12, optional dots and
   colon in the offset) are accepted. `source` still defaults to `"Health Auto Export"`; merged `sources` is ignored.
   Sleep segments with `value` keep their explicit interval. Summaries without `value` use `totalSleep` when
-  present, otherwise sum `asleep`, `core`, `deep` and `rem`. Export summaries keep `sleepEnd`/`inBedEnd` as the
-  end and subtract the hours. Other summaries use `_sleep_bucket_start` and add the hours, ignoring the bucket's
-  `end`: a midnight bucket for day X is the night of morning X. That named helper holds the bucket-night rule.
+  above zero, otherwise sum `asleep`, `core`, `deep` and `rem`. All supplied duration fields (including `inBed`)
+  must be finite, nonnegative numbers, and the chosen sleep total must not exceed 24 hours. A valid zero-sleep
+  summary counts as parsed but returns no rows, stores nothing and does not clear stored nights; both ingestion
+  and the file pre-scan accept that empty row list. Export summaries keep `sleepEnd`/`inBedEnd` as the end and
+  subtract the hours. Other summaries use `_sleep_bucket_start(entry, hours)` and add the hours, ignoring the
+  bucket's `end`: the interval ends at noon of the bucket start's day in its offset and starts `hours` earlier,
+  so even a night over 12 hours stays in that day's noon-to-noon night.
 - **`import_hae`:** imports a stored JSON file or safe JSON zip members. Before ingesting, scans valid sleep entries
   across the whole file, including every JSON member, tracking segment and summary sources per night. Sets
   `sleep_keep` to the earliest and latest segment nights, except when every segment source on an edge night also
@@ -244,7 +248,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   Identity-based retraction removes a matching NULL-onset row even when the retraction gives an onset.
   A known onset withdraws the same identity's matching unknown-onset assertion through the same removal path,
   including its search document; other identities' assertions remain. A recorded-only copy arriving after a
-  matching known-onset row adds nothing, counted like an existing row. Conditions with neither valid date are skipped; no
+  matching known-onset row adds nothing, but applies its incoming clinical and verification statuses through
+  the existing update path, preserving the stored onset, recorded date and their precisions. The search document
+  receives the updated status too; the incoming identity is retained without restoring withdrawn assertions.
+  Conditions with neither valid date are skipped; no
   missing year/month/day or onset is invented.
 - **Identity.** A resource is named by its Bundle entry's `fullUrl` when there is one, absolute URL or `urn:uuid` alike (ids repeat across providers and bundles), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
 - **Statuses.**
@@ -311,7 +318,12 @@ The five marker definitions live in module-level `DERIVED_MARKERS`, shared by `d
 `flagged` (up to 20 sorted genes, each with up to 15 sorted generic drugs and its evidence labels), `derived`,
 `counts` over entries (`flag`, `no_flag`, `not_assessed`), and an informational `note`. Summary supplies a pack
 filtered by `allowed(policy, categorize(genes=[gene], default=Category.PGX))` before aggregation, filters each
-derived item's own category, and counts withheld items without naming them. If PGX is hidden, the whole profile
+entry's markers through `_marker_visible` before its flags and counts are aggregated, filters derived items
+through `_derived_visible`, and counts withheld entries and derived items without naming them. The `op=pgx`
+reply likewise withholds the whole entry (including `your_genotypes` and its status flag) unless every marker
+it reports or uses passes `_marker_visible`, as well as its own category. `_pgx` requires the caller's vault
+for these checks; the genome tool and medication brief both pass it. With nothing hidden, outputs are unchanged.
+If PGX is hidden, the whole profile
 is omitted and counted. Every complete DNA callset supports a profile even without a variant report; existing
 `top_findings` are unchanged. The gene tool keeps the gene-level policy check first (using PGX as the default
 for genes with pack or derived markers even when report rows exist), then looks up the ordered,
