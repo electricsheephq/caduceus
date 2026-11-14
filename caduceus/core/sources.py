@@ -136,10 +136,13 @@ def finish_import(conn: sqlite3.Connection, run_id: int, *, counts: dict, status
     status = RunStatus(status).value
     if status == RunStatus.RUNNING:
         raise ValueError("finish_import needs a final status")
+    errors = [str(e) for e in errors]
+    if len(errors) > 50:
+        errors = errors[:49] + errors[-1:]
     with write_txn(conn):
         conn.execute(
             "UPDATE import_run SET status=?, finished_at=?, counts_json=?, errors_json=? WHERE id=?",
-            (status, now_iso(), json.dumps(counts, sort_keys=True), json.dumps([str(e) for e in errors][:50]), run_id),
+            (status, now_iso(), json.dumps(counts, sort_keys=True), json.dumps(errors), run_id),
         )
 
 

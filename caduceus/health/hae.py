@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import threading
 import time
 import zipfile
@@ -262,6 +263,9 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         name = metric["name"]
         if name not in MAPPING:
             ignored = counts["metrics_ignored"]
+            if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) or (
+                    name not in ignored and len(ignored) - ("other" in ignored) >= 50):
+                name = "other"
             ignored[name] = ignored.get(name, 0) + 1
             continue
         skipped = 0
@@ -426,7 +430,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
     run = sources.begin_run(vault, src, "hae_sync", PARSER_VERSION)
     counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0}
     warnings, status, denied = [], "succeeded", False
-    earliest_unreadable_start = None
+    readable_replies = 0
     try:
         with _run_lock(samples, vault, run.id, cancel):
             previous = vault.execute(
@@ -446,6 +450,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     since = max(min(since, date.fromisoformat(json.loads(earlier[0])["since"])),
                                 through - timedelta(days=3650))
             counts.update(since=since.isoformat(), through=through.isoformat())
+            with write_txn(vault):
+                vault.execute("UPDATE import_run SET counts_json=? WHERE id=?",
+                              (json.dumps({"since": counts["since"], "through": counts["through"]},
+                                          sort_keys=True), run.id))
             state = {"sleep_clear_from": since}
             offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
             quantities = ",".join(n for n in MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
@@ -486,10 +494,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     warnings.append(f"{kind}: skipped request window {start}")
                 elif data is None:
                     counts["windows_empty"] += 1
-                    earliest_unreadable_start = (start if earliest_unreadable_start is None else
-                                                 min(earliest_unreadable_start, start))
                     warnings.append(f"{kind} {start} to {end}: no data in the reply")
                 else:
+                    readable_replies += 1
                     ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
                 done += 1
                 sources.update_progress(vault, run.id, {"windows_done": done, "windows_total": total})
@@ -499,6 +506,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                 status = "failed"
                 warnings.append(f"Health Auto Export replies for {counts['windows_skipped']} one-day requests "
                                 "were too large to read; the next sync reads those days again.")
+            if counts["windows_empty"] > 0 and readable_replies == 0:
+                status = "failed"
+                warnings.append("None of Health Auto Export's replies could be read, so nothing was imported. "
+                                "The next sync reads these days again.")
     except _Cancelled:
         status = "cancelled"
     except PermissionError:
@@ -512,8 +523,6 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
     except Exception as exc:
         status = "failed"
         warnings.append(type(exc).__name__)
-    if earliest_unreadable_start is not None:
-        counts["through"] = min(today, earliest_unreadable_start - timedelta(days=1)).isoformat()
     sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
     if denied and counts["samples"] == 0 and counts["workouts"] == 0:
         # Denial leaves an unused vault empty. Other failures keep a receipt for the next sync.
