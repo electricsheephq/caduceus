@@ -2,6 +2,21 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 — 2026-11-14
+
+### Added
+- **Health Auto Export (#13).**
+  - `caduceus_capture op=import` takes the Health Auto Export app's JSON export (a `.json` file or a zip of them). Steps, weight, lean mass, body fat, BMI, waist, protein, active energy, resting and average heart rate, HRV, VO2 max, blood glucose, blood pressure and sleep land on the same trends as an Apple Health export. Workouts are stored without routes.
+  - `caduceus_capture op=sync` reads new data from the app's MCP server through Hermes. It is off until the operator adds the server to `plugins.entries.caduceus.mcp_allowlist`. The first sync reads 90 days (`hae_backfill_days`), and later ones start two days before the last. `/blueprint caduceus:hae-sync` runs it daily and stays silent unless it fails.
+  - A later export or sync of the same day replaces the earlier value, so a day's steps never double. Where an Apple Health export also covers a day, its samples are used for that day.
+  - `.hae` AutoSync files are the app's private format and cannot be imported.
+
+### Changed
+- `samples.db` gains a `provider` column, added automatically the first time 0.3.0 opens it. Trend numbers for data you already have do not change.
+
+### Docs
+- The setup skill's shell rule covers Caduceus commands only, since the report-problem skill also asks for `hermes --version`.
+
 ## 0.2.2 — 2026-11-14
 
 ### Fixed

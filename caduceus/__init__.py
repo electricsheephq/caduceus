@@ -3,4 +3,4 @@
 Inside this package use relative imports only: Hermes loads the plugin under its own module name.
 """
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"
