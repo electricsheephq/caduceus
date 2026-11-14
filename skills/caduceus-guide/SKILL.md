@@ -39,7 +39,7 @@ For "What stands out in my DNA?" without a variant report, use `caduceus_genome 
 and `no_flag` does not mean normal.
 
 Health Auto Export data answers the same trend questions as Apple Health data. If `caduceus_capture op=sync` returns
-`previous_sync`, tell the user that an earlier sync failed and give its first error.
+`previous_sync`, tell the user that an earlier sync failed and give its error.
 
 ## Which tool for what
 
