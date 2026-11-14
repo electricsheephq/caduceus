@@ -8,6 +8,12 @@ description: Set up Caduceus — import DNA raw data, a Promethease report, an A
 Use this when the user has just installed Caduceus, asks to set it up, or wants to add their DNA, Promethease, Apple
 Health or medical records. Go one step at a time, and keep each message short.
 
+## Where each part runs
+
+- `/caduceus …` and `/blueprint caduceus:…` are chat commands that the user types in Hermes chat. They are not shell commands.
+- You work through the tools: `caduceus_capture`, `caduceus_genome`, `caduceus_trend` and `caduceus_search`.
+- In a shell, only the `hermes plugins …` commands apply: install, enable and list. There is no `hermes caduceus` shell command, so never run one. For anything else, call a tool, or ask the user to type the chat command.
+
 ## 0. What to say first
 
 In two or three sentences:

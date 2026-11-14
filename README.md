@@ -33,6 +33,14 @@ Hermes that can read the current catalog ([hermes-agent#151856](https://github.c
 the line above always works. Without `--enable`, Hermes installs the plugin switched off; `hermes plugins enable caduceus`
 turns it on.
 
+### Where each part runs
+
+| Where | What you use |
+|---|---|
+| Hermes chat (CLI or Desktop; messaging apps are not tested yet) | The commands you type: `/caduceus help`, `/caduceus demo`, `/caduceus privacy …`, `/caduceus erase`, and the watches `/blueprint caduceus:research-watch` and `/blueprint caduceus:daily-check` |
+| Your agent | The tools `caduceus_capture`, `caduceus_genome`, `caduceus_trend` and `caduceus_search`. Ask in plain words and the agent calls them |
+| A shell | Only the `hermes plugins …` commands: install, enable and list (for example `hermes plugins install electricsheephq/caduceus --enable`). There is no `hermes caduceus` shell command |
+
 ## Try it
 
 1. Install with the line above and restart Hermes.
