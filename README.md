@@ -37,9 +37,9 @@ turns it on.
 
 | Where | What you use |
 |---|---|
-| Hermes chat (CLI, Desktop or a messaging app) | The commands you type: `/caduceus help`, `/caduceus demo`, `/caduceus privacy …`, `/caduceus erase`, and the watches `/blueprint caduceus:research-watch` and `/blueprint caduceus:daily-check` |
+| Hermes chat (CLI or Desktop; messaging apps are not tested yet) | The commands you type: `/caduceus help`, `/caduceus demo`, `/caduceus privacy …`, `/caduceus erase`, and the watches `/blueprint caduceus:research-watch` and `/blueprint caduceus:daily-check` |
 | Your agent | The tools `caduceus_capture`, `caduceus_genome`, `caduceus_trend` and `caduceus_search`. Ask in plain words and the agent calls them |
-| A shell | Only installing and listing: `hermes plugins install caduceus --enable` and `hermes plugins list`. There is no `hermes caduceus` shell command |
+| A shell | Only the `hermes plugins …` commands: install, enable and list (for example `hermes plugins install electricsheephq/caduceus --enable`). There is no `hermes caduceus` shell command |
 
 ## Try it
 

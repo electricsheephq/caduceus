@@ -12,7 +12,7 @@ Health or medical records. Go one step at a time, and keep each message short.
 
 - `/caduceus …` and `/blueprint caduceus:…` are chat commands that the user types in Hermes chat. They are not shell commands.
 - You work through the tools: `caduceus_capture`, `caduceus_genome`, `caduceus_trend` and `caduceus_search`.
-- In a shell, only `hermes plugins install caduceus --enable` and `hermes plugins list` apply. There is no `hermes caduceus` shell command, so never run one. For anything else, call a tool, or ask the user to type the chat command.
+- In a shell, only the `hermes plugins …` commands apply: install, enable and list. There is no `hermes caduceus` shell command, so never run one. For anything else, call a tool, or ask the user to type the chat command.
 
 ## 0. What to say first
 
