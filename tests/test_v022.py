@@ -37,8 +37,9 @@ def test_results_use_the_values_the_filter_accepts(plugin):
         assert "error" not in back, back
         assert {r["repute"] for r in back["results"]} == {value}
         assert _markers(back["results"]) == _markers(r for r in everything if r["repute"] == value)
-    schema = ctx.tools["caduceus_genome"]["schema"]
-    assert shown <= set(schema["parameters"]["properties"]["repute"]["enum"])
+    repute_schema = ctx.tools["caduceus_genome"]["schema"]["parameters"]["properties"]["repute"]
+    assert "enum" not in repute_schema  # Hermes validates deferred calls against the schema; the handler checks values
+    assert all(value in repute_schema["description"] for value in ("good", "bad", "neutral"))
 
 
 @pytest.mark.parametrize("spelling", ["Bad", "bad", "BAD", " bad "])

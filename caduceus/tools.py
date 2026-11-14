@@ -59,8 +59,9 @@ TOOLS = (
             "drug": {"type": "string", "description": "Generic or brand name, e.g. 'semaglutide' or 'Ozempic'."},
             "topic": STR,
             "min_magnitude": {"type": "number"},
-            "repute": {"type": "string", "enum": ["good", "bad", "neutral", "Good", "Bad", "Neutral"],
-                       "description": "Case does not matter. Results use good, bad or neutral."},
+            # No enum: Hermes checks deferred calls against this schema, which would refuse "BAD" or " bad "
+            # before the handler normalises them.
+            "repute": {"type": "string", "description": "good, bad or neutral. Case does not matter; results use lowercase."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 100},
         }, required=["op"]),
     },
