@@ -771,8 +771,14 @@ def _sync(ctx) -> dict:
         with _Store() as store:
             src = sources.virtual_source(store.vault, "hae_sync", server,
                                          f"Health Auto Export (MCP server {server})")
+            previous = store.vault.execute(
+                "SELECT id,status,errors_json FROM import_run WHERE source_id=? AND parser='hae_sync' "
+                "AND status<>'running' ORDER BY id DESC LIMIT 1", (src.id,)).fetchone()
+            base = {"file": src.original_name, "kind": src.kind, "source_id": src.id}
+            if previous is not None and previous["status"] in ("failed", "interrupted"):
+                base["previous_sync"] = {"import_run_id": previous["id"], "status": previous["status"],
+                                         "errors": json.loads(previous["errors_json"] or "[]")[:3]}
         outcome = jobs.submit("hae-sync:" + server, run, wait_s=IMPORT_WAIT_S)
-    base = {"file": src.original_name, "kind": src.kind, "source_id": src.id}
     if outcome["state"] == "done":
         return {**base, **outcome["result"]}
     if outcome["state"] == "error":
@@ -1121,7 +1127,8 @@ def _start_demo() -> str:
 
 # Only what Caduceus itself creates: both databases with SQLite's side files, copied sources, reports, demo files.
 # Side files go before their database, so a failed delete never leaves a journal beside a new database.
-_ERASE_FILES = tuple(name + suffix for name in ("vault.db", "samples.db") for suffix in ("-wal", "-shm", "-journal", ""))
+_ERASE_FILES = tuple(name + suffix for name in ("vault.db", "samples.db")
+                     for suffix in ("-wal", "-shm", "-journal", "-hae-lock", ""))
 _NOTHING_TO_ERASE = "There is nothing to erase: Caduceus has no files on this machine yet."
 _ERASE_DIRS = ("sources", "reports", "demo-files")
 

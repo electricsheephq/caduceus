@@ -52,6 +52,11 @@ def rollups_stale(samples) -> bool:
                            types).fetchone() is not None
 
 
+def sleep_morning(moment: datetime) -> date:
+    """Name a noon-to-noon sleep night by its morning, in the supplied offset."""
+    return moment.date() + timedelta(days=1 if moment.hour >= 12 else 0)
+
+
 def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
     """Every daily rollup computed from the stored samples, and the sleep warnings. Reads only.
 
@@ -96,7 +101,7 @@ def _rollup_rows(samples) -> tuple[list[tuple], list[str]]:
         start = datetime.fromisoformat(row[2]).astimezone(offset)
         end = datetime.fromisoformat(row[3]).astimezone(offset)
         while start < end:
-            morning = start.date() + timedelta(days=1 if start.hour >= 12 else 0)
+            morning = sleep_morning(start)
             noon = datetime.combine(morning, time(12), tzinfo=offset)
             stop = min(end, noon)
             grouped.setdefault((morning.isoformat(), row[1], row[4]), []).append((start, stop))

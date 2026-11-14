@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import json
 import math
+import threading
+import time
 import zipfile
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import PurePosixPath
 
@@ -11,7 +14,15 @@ from ..core import sources
 from ..core.contracts import ImportResult
 from ..core.db import write_txn
 from .apple import _key
-from .trends import recompute_rollups
+from .trends import recompute_rollups, sleep_morning
+
+try:
+    import fcntl
+except ImportError:  # Windows: the process-local lock still serializes runs.
+    fcntl = None
+
+_RUN_LOCKS = {}
+_RUN_LOCKS_GUARD = threading.Lock()
 
 PARSER_VERSION = "1"
 BATCH = 10_000
@@ -52,6 +63,50 @@ def _check_cancel(cancel):
         raise _Cancelled
 
 
+@contextmanager
+def _run_lock(samples, vault, run_id, cancel):
+    """Serialize a whole HAE run per samples file, including rollup recomputation."""
+    path = next(row[2] for row in samples.execute("PRAGMA database_list") if row[1] == "main")
+    with _RUN_LOCKS_GUARD:
+        lock = _RUN_LOCKS.setdefault(path or id(samples), threading.Lock())
+    waiting = False
+
+    def wait():
+        nonlocal waiting
+        _check_cancel(cancel)
+        if not waiting:
+            sources.update_progress(vault, run_id, {"waiting": "another Health Auto Export run"})
+            waiting = True
+        if cancel is not None:
+            cancel.wait(0.25)
+        else:
+            time.sleep(0.25)
+        _check_cancel(cancel)
+
+    _check_cancel(cancel)
+    while not lock.acquire(blocking=False):
+        wait()
+    try:
+        _check_cancel(cancel)
+        if path and fcntl is not None:
+            with open(path + "-hae-lock", "a+b") as file:
+                while True:
+                    try:
+                        fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        wait()
+                try:
+                    _check_cancel(cancel)
+                    yield
+                finally:
+                    fcntl.flock(file, fcntl.LOCK_UN)
+        else:
+            yield
+    finally:
+        lock.release()
+
+
 def _date(text):
     try:
         value = datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
@@ -89,8 +144,12 @@ def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, 
     kind = ("HKCategoryTypeIdentifier" if is_sleep else "HKQuantityTypeIdentifier") + kind
     local = end if is_sleep else start
     first, last = _utc(start), _utc(end)
+    day = sleep_morning(start.astimezone(end.tzinfo)) if is_sleep else local.date()
+    identity = ["hae", kind, source, first, last]
+    if is_sleep:
+        identity.append(text)
     return (source_id, kind, source, unit, first, last, int(local.utcoffset().total_seconds() // 60),
-            local.date().isoformat(), value, text, _key(["hae", kind, source, first, last]), "wellness")
+            day.isoformat(), value, text, _key(identity), "wellness")
 
 
 def _metric_rows(name, metric, entry, source_id):
@@ -267,7 +326,7 @@ def _read_json(stream):
 
 
 def _sleep_clear_from(data, *, cancel=None):
-    """The first sleep end-day may be partial; only replace later days."""
+    """The first sleep night may be partial; only replace later nights."""
     earliest = None
     for metric in data.get("metrics", []):
         if not isinstance(metric, dict) or metric.get("name") != "sleep_analysis":
@@ -288,34 +347,35 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
         return ImportResult("skipped", source_id=src.id)
     counts, warnings, state, status = _counts(), [], {}, "succeeded"
     try:
-        _check_cancel(cancel)
-        stored = sources.source_file(vault, src)
-        if zipfile.is_zipfile(stored):
-            with zipfile.ZipFile(stored) as archive:
-                members = _safe_members(archive)
-                # Scan every member before ingesting: zip order need not be date order.
-                for member in members:
-                    _check_cancel(cancel)
-                    with archive.open(member) as stream:
-                        cutoff = _sleep_clear_from(_read_json(stream), cancel=cancel)
-                    if cutoff is not None:
-                        previous = state.get("sleep_clear_from")
-                        state["sleep_clear_from"] = min(previous, cutoff) if previous is not None else cutoff
-                for member in members:
-                    _check_cancel(cancel)
-                    with archive.open(member) as stream:
-                        data = _read_json(stream)
-                    ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
-                    sources.update_progress(vault, run.id, counts)
-        else:
-            if stored.stat().st_size > MAX_JSON:
-                raise ValueError("JSON exceeds size limit")
-            with stored.open("rb") as stream:
-                data = _read_json(stream)
-            state["sleep_clear_from"] = _sleep_clear_from(data, cancel=cancel)
-            ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
-        _check_cancel(cancel)
-        warnings.extend(recompute_rollups(samples))
+        with _run_lock(samples, vault, run.id, cancel):
+            _check_cancel(cancel)
+            stored = sources.source_file(vault, src)
+            if zipfile.is_zipfile(stored):
+                with zipfile.ZipFile(stored) as archive:
+                    members = _safe_members(archive)
+                    # Scan every member before ingesting: zip order need not be date order.
+                    for member in members:
+                        _check_cancel(cancel)
+                        with archive.open(member) as stream:
+                            cutoff = _sleep_clear_from(_read_json(stream), cancel=cancel)
+                        if cutoff is not None:
+                            previous = state.get("sleep_clear_from")
+                            state["sleep_clear_from"] = min(previous, cutoff) if previous is not None else cutoff
+                    for member in members:
+                        _check_cancel(cancel)
+                        with archive.open(member) as stream:
+                            data = _read_json(stream)
+                        ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
+                        sources.update_progress(vault, run.id, counts)
+            else:
+                if stored.stat().st_size > MAX_JSON:
+                    raise ValueError("JSON exceeds size limit")
+                with stored.open("rb") as stream:
+                    data = _read_json(stream)
+                state["sleep_clear_from"] = _sleep_clear_from(data, cancel=cancel)
+                ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
+            _check_cancel(cancel)
+            warnings.extend(recompute_rollups(samples))
     except _Cancelled:
         status = "cancelled"
     except Exception as exc:
@@ -342,6 +402,8 @@ def _unwrap(envelope):
             return None
         if isinstance(value.get("data"), dict):
             return value["data"]
+        if isinstance(value.get("metrics"), list) or isinstance(value.get("workouts"), list):
+            return value
         for key in ("structuredContent", "result"):
             found = unwrap(value.get(key), depth + 1)
             if found is not None:
@@ -358,68 +420,75 @@ def _unwrap(envelope):
 
 def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None, local_offset=None) -> ImportResult:
     src = sources.virtual_source(vault, "hae_sync", server, f"Health Auto Export (MCP server {server})")
-    previous = vault.execute(
-        "SELECT counts_json FROM import_run WHERE source_id=? AND parser='hae_sync' AND status='succeeded' "
-        "ORDER BY id DESC LIMIT 1", (src.id,)).fetchone()
-    through = today
-    since = through - timedelta(days=backfill_days - 1)
-    if previous:
-        since = max(date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2),
-                    through - timedelta(days=3650))
     run = sources.begin_run(vault, src, "hae_sync", PARSER_VERSION)
-    counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0, "since": since.isoformat(),
-              "through": through.isoformat()}
-    warnings, state, status = [], {"sleep_clear_from": since}, "succeeded"
-    offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
-    quantities = ",".join(n for n in MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
-    windows = []
-    for kind, size in (("quantity", 14), ("sleep", 7), ("workouts", 31)):
-        start = since - timedelta(days=1) if kind == "sleep" else since
-        while start <= through:
-            end = min(through, start + timedelta(days=size - 1))
-            windows.append((start, end, kind))
-            start = end + timedelta(days=1)
-    windows.sort(key=lambda w: (w[0], w[1], w[2]))
-    done, total = 0, len(windows)
+    counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0}
+    warnings, status, denied = [], "succeeded", False
     try:
-        while windows:
+        with _run_lock(samples, vault, run.id, cancel):
+            previous = vault.execute(
+                "SELECT counts_json FROM import_run WHERE source_id=? AND parser='hae_sync' AND status='succeeded' "
+                "ORDER BY id DESC LIMIT 1", (src.id,)).fetchone()
+            through = today
+            since = through - timedelta(days=backfill_days - 1)
+            if previous:
+                since = max(date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2),
+                            through - timedelta(days=3650))
+            counts.update(since=since.isoformat(), through=through.isoformat())
+            state = {"sleep_clear_from": since}
+            offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
+            quantities = ",".join(n for n in MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
+            windows = []
+            for kind, size in (("quantity", 14), ("sleep", 7), ("workouts", 31)):
+                start = since - timedelta(days=1) if kind == "sleep" else since
+                while start <= through:
+                    end = min(through, start + timedelta(days=size - 1))
+                    windows.append((start, end, kind))
+                    start = end + timedelta(days=1)
+            windows.sort(key=lambda w: (w[0], w[1], w[2]))
+            done, total = 0, len(windows)
+            while windows:
+                _check_cancel(cancel)
+                start, end, kind = windows.pop(0)
+                args = {"start": f"{start} 00:00:00 {offset}", "end": f"{end} 23:59:59 {offset}"}
+                if kind == "workouts":
+                    tool = "get_workouts"
+                    args.update(includeMetadata=False, includeRoutes=False)
+                else:
+                    tool = "get_health_metrics"
+                    args.update(metrics="sleep_analysis" if kind == "sleep" else quantities,
+                                interval="days", aggregate=kind != "sleep")
+                envelope = call(tool, args)
+                counts["windows"] += 1
+                if isinstance(envelope, dict) and envelope.get("ok") is False:
+                    raise _ServerError("Health Auto Export did not answer: " + str(envelope.get("error", ""))[:200])
+                data = _unwrap(envelope)
+                truncated = isinstance(envelope, dict) and envelope.get("truncated")
+                if truncated and start < end:
+                    middle = start + timedelta(days=(end - start).days // 2)
+                    windows.extend(((start, middle, kind), (middle + timedelta(days=1), end, kind)))
+                    windows.sort(key=lambda w: (w[0], w[1], w[2]))
+                    total += 2
+                elif truncated:
+                    counts["windows_skipped"] += 1
+                    warnings.append(f"{kind}: skipped request window {start}")
+                elif data is None:
+                    counts["windows_empty"] += 1
+                    warnings.append(f"{kind} {start} to {end}: no data in the reply")
+                else:
+                    ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
+                done += 1
+                sources.update_progress(vault, run.id, {"windows_done": done, "windows_total": total})
             _check_cancel(cancel)
-            start, end, kind = windows.pop(0)
-            args = {"start": f"{start} 00:00:00 {offset}", "end": f"{end} 23:59:59 {offset}"}
-            if kind == "workouts":
-                tool = "get_workouts"
-                args.update(includeMetadata=False, includeRoutes=False)
-            else:
-                tool = "get_health_metrics"
-                args.update(metrics="sleep_analysis" if kind == "sleep" else quantities,
-                            interval="days", aggregate=kind != "sleep")
-            envelope = call(tool, args)
-            counts["windows"] += 1
-            if isinstance(envelope, dict) and envelope.get("ok") is False:
-                raise _ServerError("Health Auto Export did not answer: " + str(envelope.get("error", ""))[:200])
-            data = _unwrap(envelope)
-            truncated = isinstance(envelope, dict) and envelope.get("truncated")
-            if truncated and start < end:
-                middle = start + timedelta(days=(end - start).days // 2)
-                windows.extend(((start, middle, kind), (middle + timedelta(days=1), end, kind)))
-                windows.sort(key=lambda w: (w[0], w[1], w[2]))
-                total += 2
-            elif truncated:
-                counts["windows_skipped"] += 1
-                warnings.append(f"{kind}: skipped request window {start}")
-            elif data is None:
-                counts["windows_empty"] += 1
-                warnings.append(f"{kind} {start} to {end}: no data in the reply")
-            else:
-                ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
-            done += 1
-            sources.update_progress(vault, run.id, {"windows_done": done, "windows_total": total})
-        _check_cancel(cancel)
-        warnings.extend(recompute_rollups(samples))
+            warnings.extend(recompute_rollups(samples))
+            if counts["windows_skipped"]:
+                status = "failed"
+                warnings.append(f"Health Auto Export replies for {counts['windows_skipped']} one-day requests "
+                                "were too large to read; the next sync reads those days again.")
     except _Cancelled:
         status = "cancelled"
     except PermissionError:
         status = "failed"
+        denied = True
         warnings.append(f"Caduceus is not allowed to read the MCP server '{server}'. To allow it, add '{server}' "
                         "to plugins.entries.caduceus.mcp_allowlist in config.yaml, then run op=sync again.")
     except _ServerError as exc:
@@ -429,7 +498,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
         status = "failed"
         warnings.append(type(exc).__name__)
     sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
-    if status == "failed" and counts["samples"] == 0 and counts["workouts"] == 0:
+    if denied and counts["samples"] == 0 and counts["workouts"] == 0:
+        # Denial leaves an unused vault empty. Other failures keep a receipt for the next sync.
         # This path creates no audit/search rows. Keep provenance if another run uses it.
         with write_txn(vault):
             other_run = vault.execute("SELECT 1 FROM import_run WHERE source_id=? AND id<>?",

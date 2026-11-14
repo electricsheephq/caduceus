@@ -111,6 +111,7 @@ def metrics(samples) -> list[dict]
 def trend(samples, metric, *, start=None, end=None, bucket="week") -> dict
 def compare_windows(samples, metric, *, pivot, before_days=28, after_days=28) -> dict
 def daily_check(samples, *, thresholds=None, today=None) -> dict
+def sleep_morning(moment: datetime) -> date
 def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict   # in health/fhir.py
 def trend_svg(points, *, unit, title, markers=()) -> str
 ```
@@ -132,15 +133,30 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 ```
 
 - **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
-  cleared once per run. `run_state["sleep_clear_from"]` is a local `date` or `None`; sleep days before the cutoff
-  are upsert-only. Other metric types keep the usual replacement rule.
+  cleared once per run. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
+  morning in the end's offset (which still supplies `tz_offset_min`). `run_state["sleep_clear_from"]` is a local
+  `date` or `None`; sleep nights before the cutoff are upsert-only. Other metric types keep the usual replacement rule.
 - **`import_hae`:** imports a stored JSON file or safe JSON zip members. The cutoff is the day after the earliest
-  valid sleep end-day across the whole file, including every JSON member. Non-JSON members are skipped unopened.
+  valid sleep night across the whole file, including every JSON member. Non-JSON members are skipped unopened.
 - **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
   `since`, in seven-day windows, with `sleep_clear_from=since`. Only truncated replies split a window. An unusable
   non-truncated reply counts as `windows_empty` and warns using only request dates; empty data objects are normal.
-  `local_offset` overrides the machine's local offset for tests. A failed run with no sample/workout writes and no
-  other runs for its virtual source removes its run and source together; the failure still comes back in the result.
+  `local_offset` overrides the machine's local offset for tests. A permission-denied run with no sample/workout
+  writes and no other runs for its virtual source removes its run and source together; the failure still comes
+  back in the result. Other failures retain the run so the next sync can report it, even on a first empty sync.
+  Skipped one-day truncated windows fail the run, retain writes and never advance the successful-sync watermark.
+- **Run exclusion:** both HAE entry points begin a visible `running` run before acquiring a per-samples-file
+  thread lock, held through rollup recomputation. On systems with `fcntl`, a nonempty `main` path from
+  `PRAGMA database_list` also uses an exclusive nonblocking flock on `<samples path>-hae-lock`. In-memory databases
+  and systems without `fcntl` use only the thread lock. Waiting polls at intervals of at most 0.25 s, checks
+  cancellation, and records `{"waiting": "another Health Auto Export run"}` once. Every exit releases the locks;
+  erase removes the lock file with the databases.
+- **Capture `op=sync`:** before submitting the job, reads the source's latest finished `hae_sync` run. If it is
+  `failed` or `interrupted`, all done/running/busy results include `previous_sync` with `import_run_id`, `status`
+  and the first three stored `errors`. A later succeeded run suppresses this notice. The `hae-sync` blueprint
+  reports that earlier failure instead of staying silent when `previous_sync` is present.
+- **`trends.sleep_morning(moment: datetime) -> date`:** names a noon-to-noon night by its morning in the supplied
+  offset: the date plus one day when the hour is at least 12. Used by both HAE partitions and sleep rollups.
 
 **Trend results:**
 - **Every result carries** `unit`, `source_policy`, `coverage` (with gaps), and `calc_version`.

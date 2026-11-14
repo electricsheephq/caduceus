@@ -2,8 +2,12 @@
 import hashlib
 import json
 import sqlite3
+import subprocess
+import sys
 import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -155,6 +159,60 @@ def test_zip_sleep_cutoff_uses_earliest_day_across_all_members(tmp_path, samples
     assert sleep_hours(samples, TODAY) == 8
     assert sleep_hours(samples, tomorrow) == 6
     assert out.counts["samples_replaced"] == 2
+
+
+def test_sleep_summaries_replace_the_rollup_nights(tmp_path, samples, vault):
+    nights = [TODAY + timedelta(days=i) for i in range(3)]
+    segments = []
+    for morning in nights:
+        previous = morning - timedelta(days=1)
+        for start, end in ((f"{previous} 22:00:00 +0900", f"{previous} 23:30:00 +0900"),
+                           (f"{previous} 23:30:00 +0900", f"{morning} 05:00:00 +0900")):
+            segments.append(entry(date=start, start=start, end=end, value="Asleep"))
+    first = ingest_file(tmp_path, vault, samples,
+                        payload({"name": "sleep_analysis", "data": segments}), "segments.json")
+    assert first.status == "succeeded"
+    assert [sleep_hours(samples, n) for n in nights] == [7.0, 7.0, 7.0]
+    summaries = [entry(day=str(night), totalSleep=hours, sleepEnd=f"{night} 05:00:00 +0900")
+                 for night, hours in zip(nights, (7, 6))]
+    second = ingest_file(tmp_path, vault, samples,
+                         payload({"name": "sleep_analysis", "data": summaries}), "summaries.json")
+    assert second.status == "succeeded"
+    assert second.counts["samples_replaced"] == 2
+    assert [sleep_hours(samples, n) for n in nights] == [7.0, 6.0, 7.0]
+
+
+@pytest.mark.parametrize("start,end,night,offset", [
+    (f"{DAY} 22:00:00 +0900", f"{DAY} 23:30:00 +0900", TODAY + timedelta(days=1), 540),
+    (f"{DAY} 01:00:00 +0900", f"{DAY} 07:00:00 +0900", TODAY, 540),
+    (f"{DAY} 13:00:00 +0900", f"{DAY} 14:00:00 +0900", TODAY + timedelta(days=1), 540),
+    # Localize the start into the end's offset before assigning the night.
+    (f"{DAY} 11:00:00 +0000", f"{DAY} 22:00:00 +0900", TODAY + timedelta(days=1), 540),
+])
+def test_sleep_local_day_matches_rollup_night(tmp_path, samples, vault, start, end, night, offset):
+    out = ingest_file(tmp_path, vault, samples, payload({"name": "sleep_analysis", "data": [
+        entry(date=start, start=start, end=end, value="Asleep")]}))
+    assert out.status == "succeeded"
+    row = samples.execute("SELECT local_day,tz_offset_min FROM sample").fetchone()
+    assert tuple(row) == (night.isoformat(), offset)
+    assert trends.sleep_morning(hae._date(start).astimezone(hae._date(end).tzinfo)) == night
+    assert sleep_hours(samples, night) == (hae._date(end) - hae._date(start)).total_seconds() / 3600
+
+
+def test_sleep_identity_keeps_asleep_and_in_bed(tmp_path, samples, vault):
+    previous = TODAY - timedelta(days=1)
+    entries = [entry(start=f"{previous} 23:00:00 +0900", end=f"{TODAY} 07:00:00 +0900", value=value)
+               for value in ("Asleep", "In Bed")]
+    data = payload({"name": "sleep_analysis", "data": entries})
+    first = ingest_file(tmp_path, vault, samples, data, "first.json")
+    assert first.status == "succeeded"
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 2
+    assert sleep_hours(samples, TODAY) == 8.0
+    # Distinct file identity ensures the importer runs again rather than skipping.
+    second = ingest_file(tmp_path, vault, samples, {**data, "synthetic": True}, "second.json")
+    assert second.status == "succeeded" and second.counts["samples_replaced"] == 0
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 2
+    assert sleep_hours(samples, TODAY) == 8.0
 
 
 def test_every_metric_file_to_trends_and_local_offsets(plugin, tmp_path, samples):
@@ -519,7 +577,12 @@ def test_erase_includes_hae_and_virtual_sources(plugin, data_dir, tmp_path):
     assert call("caduceus_genome", op="summary")["callsets"] == []
     assert "no report" in call("caduceus_genome", op="report")["error"].lower() or "import" in call("caduceus_genome", op="report")["error"].lower()
     assert "separate Hermes profile" in ctx.commands["caduceus"]["handler"]("demo")
-    assert ctx.commands["caduceus"]["handler"]("erase confirm").startswith("Erased")
+    lock_file = data_dir / "samples.db-hae-lock"
+    if hae.fcntl is not None:
+        assert lock_file.exists()
+    erased = ctx.commands["caduceus"]["handler"]("erase confirm")
+    assert erased.startswith("Erased") and "Left in place" not in erased
+    assert not lock_file.exists()
     assert not (data_dir / "vault.db").exists() and not (data_dir / "samples.db").exists()
     with open_vault() as vault:
         assert vault.execute("SELECT count(*) FROM source_artifact").fetchone()[0] == 0
@@ -532,6 +595,7 @@ def test_registration_blueprint_schema_and_settings(plugin):
     assert blueprint["slots"][0]["default"] == "06:30"
     assert blueprint["schedule_template"] == "{minute} {hour} * * *"
     assert "[SILENT]" in blueprint["prompt_template"]
+    assert "previous_sync" in blueprint["prompt_template"]
     assert "sync" in ctx.tools["caduceus_capture"]["schema"]["parameters"]["properties"]["op"]["enum"]
     manifest = (Path(__file__).resolve().parents[1] / "plugin.yaml").read_text()
     assert "  hae_mcp_server:\n    type: str\n    default: \"health-auto-export\"" in manifest
@@ -586,8 +650,10 @@ def test_truncated_single_day_still_skips(samples, vault):
         return {"ok": True, "truncated": True, "result": "cut"} if args.get("aggregate") else empty(tool, args)
 
     out = sync(call, samples, vault)
-    assert out.status == "succeeded" and out.counts["windows_skipped"] == 1
-    assert out.warnings == ["quantity: skipped request window " + DAY]
+    assert out.status == "failed" and out.counts["windows_skipped"] == 1
+    assert out.warnings == ["quantity: skipped request window " + DAY,
+                            "Health Auto Export replies for 1 one-day requests were too large to read; "
+                            "the next sync reads those days again."]
 
 
 def test_begin_run_interrupts_stale_runs(vault):
@@ -596,3 +662,257 @@ def test_begin_run_interrupts_stale_runs(vault):
     second = sources.begin_run(vault, src, "hae_sync", "1")
     assert sources.run_info(vault, first.id)["status"] == "interrupted"
     assert sources.run_info(vault, second.id)["status"] == "running"
+
+
+def test_skipped_day_does_not_advance_sync_watermark(samples, vault):
+    assert sync(empty, samples, vault).status == "succeeded"
+    skipped = TODAY - timedelta(days=1)
+    following = TODAY + timedelta(days=1)
+
+    def truncated(tool, args):
+        if args.get("aggregate"):
+            start, end = (date.fromisoformat(args[k][:10]) for k in ("start", "end"))
+            if start <= skipped <= end:
+                return {"ok": True, "truncated": True, "result": "cut"}
+            return {"ok": True, "result": payload(metric(qty=7000, day=str(start)))}
+        return empty(tool, args)
+
+    failed = sync(truncated, samples, vault, today=following)
+    assert failed.status == "failed" and failed.counts["windows_skipped"] == 1
+    assert failed.counts["samples"] > 0
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == failed.counts["samples"]
+    seen = []
+
+    def recovered(tool, args):
+        if args.get("aggregate"):
+            seen.append((args["start"][:10], args["end"][:10]))
+            return {"ok": True, "result": payload(metric(qty=8123, day=str(skipped)))}
+        return empty(tool, args)
+
+    third = sync(recovered, samples, vault, today=TODAY + timedelta(days=2))
+    assert third.status == "succeeded"
+    assert third.counts["since"] == (TODAY - timedelta(days=2)).isoformat()
+    assert seen == [((TODAY - timedelta(days=2)).isoformat(), (TODAY + timedelta(days=2)).isoformat())]
+    assert samples.execute("SELECT value FROM daily_rollup WHERE metric='steps' AND day=?",
+                           (str(skipped),)).fetchone()[0] == 8123
+
+
+@pytest.mark.parametrize("second_kind", ["import", "sync"])
+@pytest.mark.parametrize("thread_only", [False, True])
+def test_hae_runs_serialize_hourly_and_daily(tmp_path, data_dir, vault, samples, monkeypatch,
+                                          second_kind, thread_only):
+    if thread_only:
+        monkeypatch.setattr(hae, "fcntl", None)
+    path = tmp_path / "hourly.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        for index, hour in enumerate((1, 2)):
+            archive.writestr(f"{index}.json", json.dumps(payload(metric(qty=2000,
+                              date=f"{DAY} {hour:02}:00:00 +0900"))))
+    hourly_src, _ = sources.store_source(vault, path, "hae")
+    daily_src, _ = sources.store_source(vault, write(tmp_path, "daily.json", payload(metric(qty=7000))), "hae")
+    paused, release, waiting = threading.Event(), threading.Event(), threading.Event()
+    read_json, progress = hae._read_json, sources.update_progress
+    reads, waits = 0, []
+
+    def pause_between_members(stream):
+        nonlocal reads
+        reads += 1  # two scan reads, then the two ingest reads
+        if reads == 4:
+            paused.set()
+            assert release.wait(5)
+        return read_json(stream)
+
+    def track_wait(conn, run_id, state):
+        progress(conn, run_id, state)
+        if "waiting" in state:
+            waits.append(run_id)
+            waiting.set()
+
+    monkeypatch.setattr(hae, "_read_json", pause_between_members)
+    monkeypatch.setattr(sources, "update_progress", track_wait)
+
+    def run_hourly():
+        with closing(open_samples()) as s, closing(open_vault()) as v:
+            return hae.import_hae(s, v, hourly_src)
+
+    def run_daily():
+        with closing(open_samples()) as s, closing(open_vault()) as v:
+            if second_kind == "import":
+                return hae.import_hae(s, v, daily_src)
+            return sync(lambda tool, args: {"ok": True, "result": payload(metric(qty=7000))}
+                        if args.get("aggregate") else empty(tool, args), s, v)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(run_hourly)
+        try:
+            assert paused.wait(5)
+            second = pool.submit(run_daily)
+            assert waiting.wait(5)
+            assert len(waits) == 1
+            info = sources.run_info(vault, waits[0])
+            assert info["status"] == "running"
+            assert info["progress"] == {"waiting": "another Health Auto Export run"}
+            assert samples.execute("SELECT sum(value) FROM sample").fetchone()[0] == 2000
+        finally:
+            release.set()
+        assert first.result(timeout=5).status == "succeeded"
+        assert second.result(timeout=5).status == "succeeded"
+    assert len(waits) == 1
+    assert trends.trend(samples, "steps", bucket="day")["points"][0]["value"] == 7000
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("run_kind", ["import", "sync"])
+def test_cancel_hae_while_waiting_writes_nothing(tmp_path, samples, vault, monkeypatch, run_kind):
+    src, _ = sources.store_source(vault, write(tmp_path), "hae")
+    cancel, waiting = threading.Event(), threading.Event()
+    progress = sources.update_progress
+    waits = []
+
+    def track_wait(conn, run_id, state):
+        progress(conn, run_id, state)
+        if "waiting" in state:
+            waits.append(run_id)
+            waiting.set()
+
+    monkeypatch.setattr(sources, "update_progress", track_wait)
+
+    def run():
+        with closing(open_samples()) as s, closing(open_vault()) as v:
+            if run_kind == "import":
+                return hae.import_hae(s, v, src, cancel=cancel)
+            return sync(lambda *args: pytest.fail("cancelled waiter must not call MCP"), s, v, cancel=cancel)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with hae._run_lock(samples, vault, 0, None):
+            pending = pool.submit(run)
+            try:
+                assert waiting.wait(5)
+                assert sources.run_info(vault, waits[0])["status"] == "running"
+            finally:
+                cancel.set()
+            result = pending.result(timeout=5)
+        assert result.status == "cancelled" and result.counts["samples"] == 0
+    assert len(waits) == 1
+    assert sources.run_info(vault, result.run_id)["status"] == "cancelled"
+    assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 0
+    # The cancelled waiter released its resources, so a later run can proceed.
+    assert hae.import_hae(samples, vault, src).status == "succeeded"
+
+
+def test_cross_process_hae_lock_wait_can_cancel(tmp_path, data_dir, samples, vault, monkeypatch):
+    if hae.fcntl is None:
+        return  # no cross-process flock on this platform
+    lock_file = data_dir / "samples.db-hae-lock"
+    script = ("import fcntl, sys\n"
+              "with open(sys.argv[1], 'a+b') as f:\n"
+              "    fcntl.flock(f, fcntl.LOCK_EX)\n"
+              "    print('locked', flush=True)\n"
+              "    sys.stdin.readline()\n")
+    src, _ = sources.store_source(vault, write(tmp_path), "hae")
+    cancel, waiting = threading.Event(), threading.Event()
+    progress = sources.update_progress
+
+    def track_wait(conn, run_id, state):
+        progress(conn, run_id, state)
+        if "waiting" in state:
+            waiting.set()
+
+    monkeypatch.setattr(sources, "update_progress", track_wait)
+    with subprocess.Popen([sys.executable, "-c", script, str(lock_file)], stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE, text=True) as holder:
+        try:
+            assert holder.stdout.readline().strip() == "locked"
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                def run():
+                    with closing(open_samples()) as s, closing(open_vault()) as v:
+                        return hae.import_hae(s, v, src, cancel=cancel)
+
+                pending = pool.submit(run)
+                try:
+                    assert waiting.wait(5)
+                finally:
+                    cancel.set()
+                assert pending.result(timeout=5).status == "cancelled"
+            assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == 0
+        finally:
+            holder.communicate("release\n", timeout=5)
+    assert holder.returncode == 0
+    assert hae.import_hae(samples, vault, src).status == "succeeded"
+
+
+@pytest.mark.parametrize("next_background", [False, True])
+def test_next_sync_reports_background_failure(plugin, vault, monkeypatch, next_background):
+    ctx, call = plugin
+    assert vault.execute("SELECT count(*) FROM import_run").fetchone()[0] == 0
+    entered, release = threading.Event(), threading.Event()
+
+    def fails(server, tool, args, timeout):
+        entered.set()
+        assert release.wait(5)
+        return {"ok": False, "error": "synthetic server not connected"}
+
+    ctx.call_mcp = fails
+    monkeypatch.setattr(ops, "IMPORT_WAIT_S", 0)
+    try:
+        assert call(op="sync")["status"] == "running"
+        assert entered.wait(5)
+    finally:
+        release.set()
+        assert jobs.join("hae-sync:health-auto-export", 5)
+    failed = vault.execute("SELECT id FROM import_run WHERE status='failed' ORDER BY id DESC LIMIT 1").fetchone()[0]
+    expected = {"import_run_id": failed, "status": "failed",
+                "errors": ["Health Auto Export did not answer: synthetic server not connected"]}
+    entered.clear()
+    release.clear()
+
+    def succeeds(server, tool, args, timeout):
+        if next_background:
+            entered.set()
+            assert release.wait(5)
+        return empty(tool, args)
+
+    ctx.call_mcp = succeeds
+    monkeypatch.setattr(ops, "IMPORT_WAIT_S", 0 if next_background else 5)
+    try:
+        out = call(op="sync")
+        assert out["status"] == ("running" if next_background else "succeeded")
+        assert out["previous_sync"] == expected
+        if next_background:
+            assert entered.wait(5)
+            busy = call(op="sync")
+            assert busy["status"] == "busy" and busy["previous_sync"] == expected
+    finally:
+        release.set()
+        assert jobs.join("hae-sync:health-auto-export", 5)
+    monkeypatch.setattr(ops, "IMPORT_WAIT_S", 5)
+    succeeded = call(op="sync")
+    assert succeeded["status"] == "succeeded" and "previous_sync" not in succeeded
+
+
+def test_sync_reports_latest_interrupted_run_first_three_errors(plugin, vault):
+    ctx, call = plugin
+    src = sources.virtual_source(vault, "hae_sync", "health-auto-export", "Synthetic sync")
+    old = sources.begin_run(vault, src, "hae_sync", "1")
+    sources.finish_import(vault, old.id, status="failed", counts={}, errors=["old error"])
+    latest = sources.begin_run(vault, src, "hae_sync", "1")
+    sources.finish_import(vault, latest.id, status="interrupted", counts={}, errors=["one", "two", "three", "four"])
+    ctx.call_mcp = lambda server, tool, args, timeout: empty(tool, args)
+    result = call(op="sync")
+    assert result["status"] == "succeeded"
+    assert result["previous_sync"] == {"import_run_id": latest.id, "status": "interrupted",
+                                       "errors": ["one", "two", "three"]}
+
+
+def test_sync_accepts_unwrapped_data_object(samples, vault):
+    def call(tool, args):
+        if args.get("aggregate"):
+            return {"ok": True, "result": json.dumps({"metrics": [metric(qty=7000)]})}
+        if tool == "get_workouts":
+            return {"ok": True, "result": json.dumps({"workouts": []})}
+        return empty(tool, args)
+
+    out = sync(call, samples, vault)
+    assert out.status == "succeeded" and out.counts["samples"] == 1
+    assert out.warnings == []
+    assert trends.trend(samples, "steps", bucket="day")["points"][0]["value"] == 7000
