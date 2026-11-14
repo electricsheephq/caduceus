@@ -16,6 +16,7 @@ import threading
 import time
 from contextlib import ExitStack, closing
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 
 from .core import jobs, search as search_index, sources
@@ -267,6 +268,30 @@ def _marker_category(vault, marker: str) -> str:
     return row["category"] if row else Category.GENERAL.value
 
 
+@lru_cache(maxsize=1)
+def _marker_genes():
+    """Reverse index of the pack and derived definitions, built on first use (never at registration)."""
+    genes = {}
+    for entry in _pack().entries:
+        for marker in entry["markers"]:
+            genes.setdefault(marker["rsid"].lower(), set()).add(entry["gene"])
+    for gene, markers in _need("knowledge.pack", "DERIVED_MARKERS"):
+        for marker, *_ in markers:
+            genes.setdefault(marker.lower(), set()).add(gene)
+    return genes
+
+
+def _marker_visible(vault, policy, marker):
+    return (allowed(policy, _marker_category(vault, marker))
+            and all(allowed(policy, categorize(genes=[gene], default=Category.PGX))
+                    for gene in _marker_genes().get(marker.lower(), ())))
+
+
+def _derived_visible(vault, policy, row):
+    return (allowed(policy, row.get("category", Category.PGX))
+            and all(_marker_visible(vault, policy, marker) for marker in row.get("basis", {})))
+
+
 def _snapshot_rows(vault, where: str, params=(), limit=50):
     return vault.execute(
         "SELECT id, marker, title, geno, magnitude, repute, summary, genes_json, category, kind "
@@ -296,8 +321,7 @@ def _lookup(store, policy, markers) -> dict:
     for name in wanted:
         call = calls.get(name)
         key = call.resolved_marker if call is not None and call.resolved_marker else name
-        if not (allowed(policy, _marker_category(store.vault, key))
-                and allowed(policy, _marker_category(store.vault, name))):
+        if not (_marker_visible(store.vault, policy, key) and _marker_visible(store.vault, policy, name)):
             withheld += 1
             continue
         entry = call.as_dict() if call is not None else {"marker": name, "state": "not_on_chip"}
@@ -401,7 +425,7 @@ def genome_tool(ctx, args: dict) -> dict:
             pack_markers = [m["rsid"] for e in pack.entries if e["gene"] == gene for m in e["markers"]]
             report_markers = [r["marker"] for r in rows if r["marker"]]
             markers = list(dict.fromkeys(derived_markers + pack_markers + report_markers))
-            if not rows and markers and not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
+            if (derived_markers or pack_markers) and not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
                 return {"gene": gene, "results": [], **_withheld(1), **warning}
             if not markers:
                 return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report.",
@@ -411,7 +435,7 @@ def genome_tool(ctx, args: dict) -> dict:
             result = {"gene": gene}
             hidden = 0
             if derived is not None:
-                if allowed(policy, derived["category"]):
+                if _derived_visible(store.vault, policy, derived):
                     result["derived"] = derived
                 else:
                     hidden = 1
@@ -433,7 +457,7 @@ def genome_tool(ctx, args: dict) -> dict:
         if op == "derived":
             pack, calls = _pack_calls(store.vault)
             derived = _need("knowledge.pack", "derive")(pack, calls)
-            shown = [d for d in derived if allowed(policy, d.get("category", Category.PGX))]
+            shown = [d for d in derived if _derived_visible(store.vault, policy, d)]
             return {"derived": shown, "limits": [CHIP_LIMITS, LIMITS], **_withheld(len(derived) - len(shown)),
                     **warning}
         if op == "summary":
@@ -763,6 +787,11 @@ def _import(args: dict) -> dict:
     return {**base, "status": "running", "import_run_id": run_id, "note": note}
 
 
+def _hae_backfill_days(ctx) -> int:
+    value = _cfg(ctx, "hae_backfill_days")
+    return value if not isinstance(value, bool) and isinstance(value, int) and 1 <= value <= 3650 else 90
+
+
 def _sync(ctx) -> dict:
     call_mcp = getattr(ctx, "call_mcp", None)
     if not callable(call_mcp):
@@ -770,9 +799,7 @@ def _sync(ctx) -> dict:
     server = _cfg(ctx, "hae_mcp_server")
     if not isinstance(server, str) or not server.strip():
         server = _CONFIG_DEFAULTS["hae_mcp_server"]
-    backfill = _cfg(ctx, "hae_backfill_days")
-    if isinstance(backfill, bool) or not isinstance(backfill, int) or not 1 <= backfill <= 3650:
-        backfill = 90
+    backfill = _hae_backfill_days(ctx)
     sync = _need("health.hae", "sync_hae")
 
     def run():
@@ -1178,7 +1205,7 @@ def _size_text(n: int) -> str:
 
 def _erase_schedules(ctx) -> str:
     return ("Schedules armed with /blueprint keep running: the next research watch starts a new vault; "
-            f"the next Health Auto Export sync imports the last {_cfg(ctx, 'hae_backfill_days')} days again; "
+            f"the next Health Auto Export sync imports the last {_hae_backfill_days(ctx)} days again; "
             "the daily check finds nothing until data returns.")
 
 

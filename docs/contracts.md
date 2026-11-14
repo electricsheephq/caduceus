@@ -192,11 +192,13 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 
 **Records semantics:**
 - **Uncoded observations.** When both `code_system` and `code` are NULL, the content key appends the concept's
-  lowercased, whitespace-collapsed, stripped name (the component's own name for panel rows). Identity-based
-  correction lookups also match that normalized name. Coded observation keys are unchanged. On open,
+  lowercased, whitespace-collapsed, stripped name (the component's own name for panel rows); non-string names
+  are converted with `str()` before normalization. Identity-based correction lookups also match that normalized
+  name. Coded observation keys are unchanged. On open,
   `db._migrate_vault` recomputes existing uncoded FHIR observation keys from their stored name, effective date,
-  numeric/text value and unit with the same key helper; these columns contain every required key part, including
-  component values and comparator text. Collisions keep the existing key and data. The settings row
+  numeric/text value and unit with the same key helper. Values come from the row's own resource or component
+  in `raw_json` when present, preserving negative zero and numeric text/unit types that SQLite columns coerce;
+  value extraction is shared with the importer, whose keys do not change. Collisions keep the existing key and data. The settings row
   `migration:fhir_uncoded_names_v1` guards this migration once, in the same write transaction. Previously merged
   concepts cannot be reconstructed; the kept row survives, and re-import adds the other concept.
 - **Condition dates.** `condition.recorded` is nullable and is added on open for older vaults. `recordedDate`
@@ -204,13 +206,16 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   and its precision is kept in `raw_json._caduceus.recorded_precision`. A Condition with no onset but a valid
   recorded date has NULL onset and key `_key([system, code, None, name])`; known-onset keys are unchanged.
   Its search timestamp uses the recorded date and its title appends ` [onset unknown; recorded <date>]`.
-  Identity-based retraction works with unknown onset. Conditions with neither valid date are skipped; no
+  Identity-based retraction removes a matching NULL-onset row even when the retraction gives an onset.
+  A known onset withdraws the same identity's matching unknown-onset assertion through the same removal path,
+  including its search document; other identities' assertions remain. A recorded-only copy arriving after a
+  matching known-onset row adds nothing, counted like an existing row. Conditions with neither valid date are skipped; no
   missing year/month/day or onset is invented.
 - **Identity.** A resource is named by its Bundle entry's `fullUrl` when there is one, absolute URL or `urn:uuid` alike (ids repeat across providers and bundles), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
 - **Statuses.**
   - Observations with status `entered-in-error` or `cancelled`, Conditions verified `entered-in-error` or `refuted`, and medications `entered-in-error` or `cancelled`, are skipped.
   - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. A row that another resource still asserts is kept, without the withdrawn identity.
-  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value. Each copy's resource is listed in `_caduceus.superseded` with the content key of the copy it sent, so a re-send of that same copy is ignored as stale, a different value from it is stored as its own, and a later retraction of the correction removes it.
+  - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value. Each copy's resource is listed in `_caduceus.superseded` with the content key of the copy it sent, so a re-send of that same copy is ignored as stale, a different value from it is stored as its own, and a later retraction of the correction removes it. For uncoded observations, stale matching accepts both the current key and the pre-0.3.1 key without the normalized name, preserving superseded references across migration; coded matching is unchanged.
 - **Panels.** Each component row stores only its own component, without the panel's own value, interpretation, reference range or notes, so neither a sibling's nor the panel's content sits under another row's category. No row of a panel keeps the narrative (`text`), which describes every part.
 - **Medications.**
   - `completed` and `stopped` with an end date give a start and a stop.
@@ -225,6 +230,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - mental-health and pregnancy LOINC codes.
 
   A code with no system is matched by its shape, so privacy fails closed. The SNOMED list is not exhaustive: unlisted child concepts with no display text are not caught.
+- **Erase backfill disclosure.** Erase preview and confirmation use the same `hae_backfill_days` validation as
+  sync: an integer from 1 through 3,650, excluding booleans; other values fall back to 90. The schedule text thus
+  describes the backfill the next sync would actually use. Erase targets and settings are unchanged.
 - **Known limits (follow-ups):**
   - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time (medication retractions also check the drug and start).
   - A resource imported with a `fullUrl` and retracted without one (or the reverse) is not matched: identities are compared as given.
@@ -270,11 +278,17 @@ The five marker definitions live in module-level `DERIVED_MARKERS`, shared by `d
 filtered by `allowed(policy, categorize(genes=[gene], default=Category.PGX))` before aggregation, filters each
 derived item's own category, and counts withheld items without naming them. If PGX is hidden, the whole profile
 is omitted and counted. Every complete DNA callset supports a profile even without a variant report; existing
-`top_findings` are unchanged. The gene tool keeps the gene-level policy check first, then looks up the ordered,
+`top_findings` are unchanged. The gene tool keeps the gene-level policy check first (using PGX as the default
+for genes with pack or derived markers even when report rows exist), then looks up the ordered,
 deduplicated union of derived-definition markers, knowledge-pack markers and annotated report markers.
 `_lookup` still caps results at 50, and every result includes `annotations` (an empty list when none are visible),
-for both gene and lookup operations. When `derive` has a row for the gene, the gene reply puts that single row
-under `derived` before `results`, or omits it and increments `withheld` if its category is hidden. A note identifies
+for both gene and lookup operations. A reverse marker-to-genes index is built once on first use from the pack
+and `DERIVED_MARKERS`. Lookup markers must pass their annotation category and every indexed gene's
+`categorize(genes=[gene], default=Category.PGX)` category; aliases check both requested and resolved markers.
+Markers outside that index keep their annotation-only rule. When `derive` has a row for the gene, the gene reply
+puts that single row under `derived` before `results`. Both gene and derived operations use one visibility helper:
+the row's own category and every basis marker's annotation and indexed gene categories must be allowed.
+Hidden markers and derived rows are omitted and counted in `withheld`, without naming them. A note identifies
 markers supplied by the pack or derived definitions that have no report row. APOE stays hidden at standard level.
 
 **`run_watch`:**

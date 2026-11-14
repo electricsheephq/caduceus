@@ -144,7 +144,7 @@ def _key(parts):
 
 
 def _normalized_name(name):
-    return " ".join(name.lower().split())
+    return " ".join(str(name).lower().split())
 
 
 def _observation_key(system, code, when, num, text, unit, component, name):
@@ -152,6 +152,18 @@ def _observation_key(system, code, when, num, text, unit, component, name):
     if system is None and code is None:
         parts.append(_normalized_name(name))
     return _key(parts)
+
+
+def _observation_value(part):
+    """Key values before SQLite's column affinities can coerce their JSON types."""
+    quantity = part.get("valueQuantity") or {}
+    num, text = _number(quantity.get("value")), part.get("valueString")
+    if "valueCodeableConcept" in part:
+        text = _display(part["valueCodeableConcept"])
+    if quantity.get("comparator"):
+        num = None
+        text = str(quantity["comparator"]) + str(quantity.get("value", ""))
+    return num, text, quantity.get("unit") or quantity.get("code")
 
 
 def _raw(resource, precision, **metadata):
@@ -210,14 +222,15 @@ def _stricter(new, stored):
     return new, False
 
 
-def _stale(document, identity, key):
+def _stale(document, identity, key, legacy_key=None):
     """Whether a non-correction only re-sends what a stored correction replaced: anything at this code and time from
     the correcting resource, or the identical copy another resource had sent. A different value is new."""
     if document.get("status") not in ("corrected", "amended"):
         return False
     if identity in _resource_ids(document):
         return True
-    return ((document.get("_caduceus") or {}).get("superseded") or {}).get(identity) == key
+    superseded = ((document.get("_caduceus") or {}).get("superseded") or {}).get(identity)
+    return superseded == key or (legacy_key is not None and superseded == legacy_key)
 
 
 def _restatus(vault, kind, ref, fields, metadata):
@@ -334,20 +347,15 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         own = base if component is None else {**parent, "component": [part]}
         concept = part.get("code") or {}
         system, code, name = _concept(concept, loinc=True)
-        quantity = part.get("valueQuantity") or {}
-        num, text = _number(quantity.get("value")), part.get("valueString")
-        if "valueCodeableConcept" in part:
-            text = _display(part["valueCodeableConcept"])
-        if quantity.get("comparator"):
-            num = None
-            text = str(quantity["comparator"]) + str(quantity.get("value", ""))
-        unit = quantity.get("unit") or quantity.get("code")
+        num, text, unit = _observation_value(part)
         rr = (part.get("referenceRange") or [{}])[0]
         interpretations = [_concept(c)[2] for c in part.get("interpretation", [])]
         # The value can carry the diagnosis too ("Symptom" = depression), so it counts toward the category.
         category = _category([resource.get("code") or {}, concept, part.get("valueCodeableConcept") or {}],
                              Category.RECORDS)
         key = _observation_key(system, code, when, num, text, unit, component is not None, name)
+        legacy_key = _key(["Observation", system, code, when, [num, text], unit, None]) if (
+            system is None and code is None) else None
         identities = {identity} if identity else set()
         superseded = {}  # resource -> content key of its identical copy that a correction replaced
         if identity:
@@ -357,7 +365,7 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
                 "OR EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.superseded') WHERE key=?))",
                 (system, code, identity, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)
                 and (system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name))]
-            if not corrected and any(_stale(json.loads(row["raw_json"]), identity, key) for row in previous):
+            if not corrected and any(_stale(json.loads(row["raw_json"]), identity, key, legacy_key) for row in previous):
                 counts["observation_ignored_after_correction"] = counts.get("observation_ignored_after_correction", 0)+1
                 continue
             if corrected:
@@ -419,6 +427,21 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
     return inserted
 
 
+def _withdraw_row(vault, table, row, identity):
+    """Withdraw one identity and its search document, retaining any other resource's assertion."""
+    document = json.loads(row["raw_json"])
+    others = _resource_ids(document) - {identity}
+    if others:
+        document.setdefault("_caduceus", {})["resource_ids"] = sorted(others)
+        raw = json.dumps(document, sort_keys=True, separators=(",", ":"))
+        vault.execute(f"UPDATE {table} SET raw_json=? WHERE id=?", (raw, row["id"]))
+        vault.execute("UPDATE search_doc SET body=? WHERE kind=? AND ref=?", (raw, table, str(row["id"])))
+        return False
+    search.remove_doc(vault, kind=table, ref=str(row["id"]))
+    vault.execute(f"DELETE FROM {table} WHERE id=?", (row["id"],))
+    return True
+
+
 def _retract(vault, resource, kind, counts, full_url=None):
     """A resource re-sent as entered-in-error, cancelled or refuted withdraws what an earlier import stored for it.
 
@@ -447,21 +470,11 @@ def _retract(vault, resource, kind, counts, full_url=None):
         "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)", (identity,)).fetchall()
     removed = 0
     for row in rows:
-        if when is not None and _instant(row["at"]) != when:
+        if when is not None and not (kind == "Condition" and row["at"] is None) and _instant(row["at"]) != when:
             continue
         if codes and row["code"] is not None and str(row["code"]).strip().upper() not in codes:
             continue
-        document = json.loads(row["raw_json"])
-        others = _resource_ids(document) - {identity}
-        if others:  # another resource still says this: keep the value, drop only the withdrawn identity
-            document.setdefault("_caduceus", {})["resource_ids"] = sorted(others)
-            raw = json.dumps(document, sort_keys=True, separators=(",", ":"))
-            vault.execute(f"UPDATE {table} SET raw_json=? WHERE id=?", (raw, row["id"]))
-            vault.execute("UPDATE search_doc SET body=? WHERE kind=? AND ref=?", (raw, table, str(row["id"])))
-            continue
-        search.remove_doc(vault, kind=table, ref=str(row["id"]))
-        vault.execute(f"DELETE FROM {table} WHERE id=?", (row["id"],))
-        removed += 1
+        removed += _withdraw_row(vault, table, row, identity)
     if removed:
         counts[f"{table}_retracted"] = counts.get(f"{table}_retracted", 0) + removed
 
@@ -500,6 +513,18 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
     current = False if clinical in ("resolved", "inactive", "remission") else (
         True if clinical in ("active", "recurrence", "relapse") else None)
     identity = _identity(resource, full_url)
+    if identity:
+        same = [row for row in vault.execute(
+            "SELECT id,onset,name,raw_json FROM condition WHERE source='fhir' AND code_system IS ? AND code IS ? "
+            "AND EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)",
+            (system, code, identity)).fetchall()
+            if system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name)]
+        if when is None and any(row["onset"] is not None for row in same):
+            return  # an existing known onset wins; like a duplicate, this adds no row
+        if when is not None:
+            for row in same:
+                if row["onset"] is None:
+                    _withdraw_row(vault, "condition", row, identity)
     scope = {"full_url": full_url} if full_url else {}
     title = name + (f" [verification: {verification}]" if verification else "")
     if current is False:
