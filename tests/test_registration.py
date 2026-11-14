@@ -26,7 +26,7 @@ def test_registers_manifest_tools_command_skills_and_blueprints(data_dir):
         assert spec["schema"]["parameters"]["type"] == "object"
         assert "Never open or read" in spec["schema"]["description"] or name == "caduceus_trend"
     assert "caduceus" in ctx.commands
-    assert set(ctx.skills) == {"caduceus-setup", "caduceus-guide", "caduceus-research", "caduceus-report-problem"}
+    assert set(ctx.skills) == {"caduceus-setup", "caduceus-guide", "caduceus-research", "caduceus-report-problem", "caduceus-session"}
     for entry in ctx.skills.values():
         assert entry["path"].is_file()
     assert set(ctx.blueprints) == {"research-watch", "daily-check", "hae-sync"}
