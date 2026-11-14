@@ -5,17 +5,49 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 ## 0.3.1 — 2026-11-14
 
 ### Fixed
-- **Gene views list every marker that matters (#27).** `caduceus_genome op=gene` now includes the gene's derived-call markers and its knowledge-pack markers, not only those with a variant-report row, so APOE lists both rs429358 and rs7412. The gene's derived call (the APOE type, for example) comes first. Privacy checks are unchanged: at `standard`, APOE stays hidden and is counted. Every marker result now has an `annotations` list, empty when there is none.
-- **FHIR results without a code stay apart (#20).** Two results with no LOINC or other code, on the same date with the same value, used to be stored as one. Their names now keep them apart. The first time 0.3.1 opens an older vault it re-keys these rows once, so re-importing the same file adds nothing. Two results already merged cannot be split again, but re-importing their file adds the missing one.
-- **Conditions with only a recorded date are kept (#23).** A FHIR Condition with no onset date but a `recordedDate` used to be skipped. It is now stored with its onset unknown, and search shows it as "onset unknown; recorded <date>". No date is invented, and a Condition with neither date is still skipped.
-- **Erase names the schedules that keep running (#26).** `/caduceus erase` and its confirmation say that schedules armed with `/blueprint` keep running, and what each one's next run does: the research watch starts a new vault, the Health Auto Export sync imports the last `hae_backfill_days` days again, and the daily check finds nothing until data returns.
-- **Mixed sleep formats in one Health Auto Export file (#18).** A file whose first or last night has another source's sleep summary no longer clears the sleep stages already stored for that night (in the reported case, a 6-hour night dropped to 2 hours). Where one source gives both a summary and the stages for the same night, the summary is used and the stages are left out (counted as `sleep_segments_omitted`), so the night is no longer counted twice. Sync is unchanged; it asks for stages only.
+- **The Health Auto Export sync reads the real server (#25).**
+  - **What was wrong.** 0.3.0's sync expected the app's file-export format. The app's MCP server sends day buckets with `start` and `end` but no `date`, writes times with AM and PM, and names weight `weight_body_mass`. So a first sync imported nothing yet still moved its start forward.
+  - **Now.** The sync reads these replies and asks for `weight_body_mass`. It asks for whole days in the phone's own time zone, so a day is never split when the phone and the computer are in different time zones. Sleep arrives as one total per night and is placed on the night that ends that morning.
+  - **If one kind can't be read.** If no entry of one kind (health metrics, sleep or workouts) can be read, the sync fails, says which kind, and keeps its start, so the next sync reads those days again.
+- **Gene views list every marker that matters (#27).** `caduceus_genome op=gene` now includes the gene's derived-call markers and its knowledge-pack markers, not only those with a variant-report row, so APOE lists both rs429358 and rs7412. The gene's derived call (the APOE type, for example) comes first. Every marker result now has an `annotations` list, empty when there is none.
+- **A marker follows its gene's privacy category.** In 0.3.0, `op=lookup` showed a drug-response marker even with `pgx` hidden, and `op=derived` could show the genotypes behind a call when one of those markers was hidden.
+  - A marker that the knowledge pack or a derived call uses for a gene is now shown only when that gene's category is allowed.
+  - A derived call is shown only when every marker it rests on can be shown.
+  - Gene views, lookups and derived calls all follow these rules. At `standard`, APOE stays hidden and is counted.
+- **FHIR results without a code stay apart (#20).** Two results with no LOINC or other code, on the same date with the same value, used to be stored as one. Their names now keep them apart.
+  - The first time 0.3.1 opens an older vault, it re-keys these rows once. Corrections made before the upgrade still hold.
+  - To get back a result that an earlier version merged into another, import its file once more (see Upgrading).
+- **Conditions with only a recorded date are kept (#23).** A FHIR Condition with no onset date but a `recordedDate` used to be skipped. It is now stored with its onset unknown, and search shows it as "onset unknown; recorded <date>".
+  - When a later export gives the onset, the condition keeps a single row, with that onset.
+  - A retraction removes it whether or not the retraction gives an onset.
+  - No date is invented, and a Condition with neither date is still skipped.
+- **Erase names the schedules that keep running (#26).** `/caduceus erase` and its confirmation say that schedules armed with `/blueprint` keep running, and what each one's next run does:
+  - the research watch starts a new vault;
+  - the Health Auto Export sync imports the last `hae_backfill_days` days again (90 when the setting is missing or invalid, as the sync itself uses);
+  - the daily check finds nothing until data returns.
+- **Mixed sleep formats in one Health Auto Export file (#18).**
+  - A file whose first or last night has another source's sleep summary no longer clears the sleep stages already stored for that night. In the reported case, a 6-hour night dropped to 2 hours.
+  - Where one source gives both a summary and the stages for the same night, the summary is used and the stages are left out (counted as `sleep_segments_omitted`), so the night is no longer counted twice.
+  - A source whose summary a file uses also replaces that source's earlier rows for the night, so they no longer add to the summary.
+
+### Upgrading
+- To pick up conditions and results that earlier versions skipped or merged, import your FHIR files or your Apple Health `export.zip` once more.
+  - For an `export.zip`, only its health records are read again, not its Apple Health samples.
+  - Records already stored are not duplicated.
 
 ### Added
-- **The `caduceus-session` skill (#28, first step).** Ask your agent to walk you through your results. It covers one area at a time: your own numbers first, then the findings you can act on, sensitive results only after you say yes, gene–drug results after asking what you take now, and light traits last. It ends with a brief for your clinician, which leaves out sensitive results unless you ask for them.
+- **The `caduceus-session` skill (#28, first step).** Ask your agent to walk you through your results. It covers one area at a time:
+  1. your own numbers first;
+  2. then the findings you can act on;
+  3. sensitive results only after you say yes;
+  4. gene–drug results after asking what you take now;
+  5. light traits last.
+
+  It ends with a brief for your clinician. The brief shows what your privacy settings allow, so the skill first asks whether any sensitive area should stay out; you hide it with `/caduceus hide <category>`. It gives the questions for your clinician in the chat.
 
 ### Changed
 - The vault's `condition` table gains a `recorded` column, added automatically the first time 0.3.1 opens the vault.
+- The FHIR importer's version is now 2, and the clinical records inside an Apple Health export have their own import run. That is what lets a second import of the same file read the records again.
 
 ### Docs
 - The disclosure in the README, the manifest and SECURITY.md says the Health Auto Export sync "sends none of your data out", the same words as the catalog entry.

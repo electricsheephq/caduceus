@@ -113,7 +113,8 @@ Other health plugins in the Hermes catalog read Apple Health, records or medicat
 
 Give your agent the file's path, and Caduceus copies the file into its vault and imports it.
 - The agent is told never to open these files itself.
-- Big imports keep running in the background, and re-importing a file does nothing.
+- Big imports keep running in the background. Re-importing a file does nothing, unless a newer Caduceus reads more
+  from it; then only what is new is added.
 - An interrupted import resumes where it stopped.
 - A FHIR condition that gives only the date it was recorded is kept, with its onset unknown. Results without a code
   are told apart by name.
@@ -144,6 +145,8 @@ defaults to 90 for the first sync, and a first sync that fails or is interrupted
 Later syncs start two days before the last day read in full. A day whose reply was too large is read again by the
 next sync. A sync in which no reply could be read fails and says so, and the next one reads those days again. When
 the server answers with an error, Caduceus reports a fixed message and never passes on the server's own text.
+The sync asks for whole days in the phone's own time zone. If no entry of one kind (health metrics, sleep or
+workouts) can be read, the sync fails, says which kind, and the next one reads those days again.
 If a file holds a night's sleep summary and that night's stages from the same source, the summary is used, so the
 night counts once.
 
@@ -172,7 +175,8 @@ A gene–drug result keeps three outcomes apart:
 
 You change these yourself, with `/caduceus privacy standard`, `/caduceus hide <category>`, `/caduceus unlock <category>`
 and so on (`/caduceus help` lists them), or in the plugin settings. Your agent can read the settings but cannot change
-them. Hidden results are counted, never described.
+them. Hidden results are counted, never described. A marker follows its gene's category: hiding `pgx` hides the
+drug-response genes' markers in every view, and a derived call shows only when every marker behind it can.
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
