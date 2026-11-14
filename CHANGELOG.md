@@ -2,6 +2,24 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.1 — 2026-11-14
+
+### Fixed
+- **Gene views list every marker that matters (#27).** `caduceus_genome op=gene` now includes the gene's derived-call markers and its knowledge-pack markers, not only those with a variant-report row, so APOE lists both rs429358 and rs7412. The gene's derived call (the APOE type, for example) comes first. Privacy checks are unchanged: at `standard`, APOE stays hidden and is counted. Every marker result now has an `annotations` list, empty when there is none.
+- **FHIR results without a code stay apart (#20).** Two results with no LOINC or other code, on the same date with the same value, used to be stored as one. Their names now keep them apart. The first time 0.3.1 opens an older vault it re-keys these rows once, so re-importing the same file adds nothing. Two results already merged cannot be split again, but re-importing their file adds the missing one.
+- **Conditions with only a recorded date are kept (#23).** A FHIR Condition with no onset date but a `recordedDate` used to be skipped. It is now stored with its onset unknown, and search shows it as "onset unknown; recorded <date>". No date is invented, and a Condition with neither date is still skipped.
+- **Erase names the schedules that keep running (#26).** `/caduceus erase` and its confirmation say that schedules armed with `/blueprint` keep running, and what each one's next run does: the research watch starts a new vault, the Health Auto Export sync imports the last `hae_backfill_days` days again, and the daily check finds nothing until data returns.
+- **Mixed sleep formats in one Health Auto Export file (#18).** A file whose first or last night has another source's sleep summary no longer clears the sleep stages already stored for that night (in the reported case, a 6-hour night dropped to 2 hours). Where one source gives both a summary and the stages for the same night, the summary is used and the stages are left out (counted as `sleep_segments_omitted`), so the night is no longer counted twice. Sync is unchanged; it asks for stages only.
+
+### Added
+- **The `caduceus-session` skill (#28, first step).** Ask your agent to walk you through your results. It covers one area at a time: your own numbers first, then the findings you can act on, sensitive results only after you say yes, gene–drug results after asking what you take now, and light traits last. It ends with a brief for your clinician, which leaves out sensitive results unless you ask for them.
+
+### Changed
+- The vault's `condition` table gains a `recorded` column, added automatically the first time 0.3.1 opens the vault.
+
+### Docs
+- The disclosure in the README, the manifest and SECURITY.md says the Health Auto Export sync "sends none of your data out", the same words as the catalog entry.
+
 ## 0.3.0 — 2026-11-14
 
 ### Added

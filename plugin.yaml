@@ -1,5 +1,5 @@
 name: caduceus
-version: "0.3.0"
+version: "0.3.1"
 description: >-
   Caduceus: Personalized Health & DNA AI. A private, searchable memory of your DNA raw data,
   your Promethease report, Apple Health and health records, kept in SQLite on your own machine,

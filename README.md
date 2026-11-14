@@ -28,6 +28,9 @@ demo below. To use your own files, tell your agent **"set up Caduceus"**. The se
 3. choosing a privacy level;
 4. turning on the research watch.
 
+Once your files are in, ask **"walk me through my results"**. The session skill goes one area at a time, asks
+before it shows any sensitive result, and ends with a brief for your clinician.
+
 Caduceus is also in the Hermes plugin catalog. Installing it by name (`hermes plugins install caduceus --enable`) needs a
 Hermes that can read the current catalog ([hermes-agent#151856](https://github.com/NousResearch/hermes-agent/issues/151856));
 the line above always works. Without `--enable`, Hermes installs the plugin switched off; `hermes plugins enable caduceus`
@@ -112,6 +115,8 @@ Give your agent the file's path, and Caduceus copies the file into its vault and
 - The agent is told never to open these files itself.
 - Big imports keep running in the background, and re-importing a file does nothing.
 - An interrupted import resumes where it stopped.
+- A FHIR condition that gives only the date it was recorded is kept, with its onset unknown. Results without a code
+  are told apart by name.
 - A vault holds one person. A second DNA file is compared with the first on shared markers, and if it looks like a
   different person, you are told, and answers carry a warning. Keep each person in their own Hermes profile.
 
@@ -139,13 +144,15 @@ defaults to 90 for the first sync, and a first sync that fails or is interrupted
 Later syncs start two days before the last day read in full. A day whose reply was too large is read again by the
 next sync. A sync in which no reply could be read fails and says so, and the next one reads those days again. When
 the server answers with an error, Caduceus reports a fixed message and never passes on the server's own text.
+If a file holds a night's sleep summary and that night's stages from the same source, the summary is used, so the
+night counts once.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
 | `caduceus_search` | Full-text search across your annotations, research, labs, conditions, medications and notes, with cited snippets; lists everything of one kind, such as your medications |
-| `caduceus_genome` | Your genotype at any marker, gene views, gene–drug checks (CPIC guidance plus GLP-1 research), derived calls (APOE, CYP2C19, CYP2C9 and others), a gene–drug profile, top findings, and the rebuilt variant report |
+| `caduceus_genome` | Your genotype at any marker, gene views (every marker Caduceus knows for the gene, its derived call first), gene–drug checks (CPIC guidance plus GLP-1 research), derived calls (APOE, CYP2C19, CYP2C9 and others), a gene–drug profile, top findings, and the rebuilt variant report |
 | `caduceus_trend` | Apple Health trends with units, coverage gaps and a calculation version; before and after a medication start; lab results over time; a daily signal check |
 | `caduceus_capture` | Imports and their progress, medications (recorded only after you confirm), notes, the research watch, settings, and the health brief |
 
@@ -177,7 +184,8 @@ no telemetry. Includes a report-a-problem skill: the agent drafts a bug report, 
 check it holds no health data, and files it to this repository with `gh` only after you
 approve the draft.
 
-To delete everything Caduceus stored, run `/caduceus erase`: it shows what would go, and `/caduceus erase confirm` deletes it. Your settings stay.
+To delete everything Caduceus stored, run `/caduceus erase`: it shows what would go, and `/caduceus erase confirm` deletes it. Your settings stay, and so do schedules you created with `/blueprint`: the
+preview names each one and what its next run will do.
 
 Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is not encrypted at rest; encrypted and local-model levels are planned for v0.4. See [SECURITY.md](SECURITY.md) for the boundaries.
 
