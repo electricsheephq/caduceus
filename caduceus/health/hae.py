@@ -426,6 +426,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
     run = sources.begin_run(vault, src, "hae_sync", PARSER_VERSION)
     counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0}
     warnings, status, denied = [], "succeeded", False
+    earliest_unreadable_start = None
     try:
         with _run_lock(samples, vault, run.id, cancel):
             previous = vault.execute(
@@ -436,6 +437,14 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
             if previous:
                 since = max(date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2),
                             through - timedelta(days=3650))
+            else:
+                earlier = vault.execute(
+                    "SELECT counts_json FROM import_run WHERE source_id=? AND parser='hae_sync' AND id<? "
+                    "AND json_extract(counts_json,'$.since') IS NOT NULL ORDER BY id DESC LIMIT 1",
+                    (src.id, run.id)).fetchone()
+                if earlier:
+                    since = max(min(since, date.fromisoformat(json.loads(earlier[0])["since"])),
+                                through - timedelta(days=3650))
             counts.update(since=since.isoformat(), through=through.isoformat())
             state = {"sleep_clear_from": since}
             offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
@@ -463,7 +472,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                 envelope = call(tool, args)
                 counts["windows"] += 1
                 if isinstance(envelope, dict) and envelope.get("ok") is False:
-                    raise _ServerError("Health Auto Export did not answer: " + str(envelope.get("error", ""))[:200])
+                    raise _ServerError("Health Auto Export did not answer the request. "
+                                       "Check that the app is open and its MCP server is running.")
                 data = _unwrap(envelope)
                 truncated = isinstance(envelope, dict) and envelope.get("truncated")
                 if truncated and start < end:
@@ -476,6 +486,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     warnings.append(f"{kind}: skipped request window {start}")
                 elif data is None:
                     counts["windows_empty"] += 1
+                    earliest_unreadable_start = (start if earliest_unreadable_start is None else
+                                                 min(earliest_unreadable_start, start))
                     warnings.append(f"{kind} {start} to {end}: no data in the reply")
                 else:
                     ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
@@ -500,6 +512,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
     except Exception as exc:
         status = "failed"
         warnings.append(type(exc).__name__)
+    if earliest_unreadable_start is not None:
+        counts["through"] = min(today, earliest_unreadable_start - timedelta(days=1)).isoformat()
     sources.finish_import(vault, run.id, counts=counts, status=status, errors=warnings)
     if denied and counts["samples"] == 0 and counts["workouts"] == 0:
         # Denial leaves an unused vault empty. Other failures keep a receipt for the next sync.

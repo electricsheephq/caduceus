@@ -144,10 +144,19 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 - **`sync_hae`:** `call(tool, arguments)` supplies Hermes MCP envelopes. Sleep requests start one day before
   `since`, in seven-day windows, with `sleep_clear_from=since` and no `sleep_keep`. Only truncated replies split
   a window. An unusable non-truncated reply counts as `windows_empty` and warns using only request dates;
-  empty data objects are normal.
+  empty data objects are normal and do not pin the watermark. If any windows are unreadable, stores
+  `counts["through"]` as the earlier of today and the day before the earliest unreadable window's start,
+  without changing the run's status or other counts, so the next sync requests that window again.
+  A first sync starts at `today - (backfill_days - 1)`. Until a run of this source succeeds, the most recent
+  earlier `hae_sync` run with a stored `since` preserves that start: takes the earlier of its `since` and the
+  backfill start, never before `today - 3650 days`. After a succeeded run, starts two days before that run's
+  `through`, with the same 3,650-day floor.
   `local_offset` overrides the machine's local offset for tests. A permission-denied run with no sample/workout
   writes and no other runs for its virtual source removes its run and source together; the failure still comes
   back in the result. Other failures retain the run so the next sync can report it, even on a first empty sync.
+  An `ok=false` server envelope fails with exactly: "Health Auto Export did not answer the request. Check that
+  the app is open and its MCP server is running." Server-provided error text is never copied into warnings,
+  stored errors, progress or logs; `previous_sync.error` receives the fixed message too.
   Skipped one-day truncated windows fail the run, retain writes and never advance the successful-sync watermark.
 - **Run exclusion:** both HAE entry points begin a visible `running` run before acquiring a per-samples-file
   thread lock, held through rollup recomputation. On systems with `fcntl`, a nonempty `main` path from
