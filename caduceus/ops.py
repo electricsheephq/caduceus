@@ -26,6 +26,8 @@ from .core.policy import (DEFAULTS, MARKER_CATEGORY, SENSITIVE, Category, Policy
                           medication_category, visible)
 from .tools import LIMITS, ToolError
 
+_CONFIG_DEFAULTS = {**DEFAULTS, "hae_mcp_server": "health-auto-export", "hae_backfill_days": 90}
+
 IMPORT_WAIT_S = 45.0       # Hermes cuts a tool call off at 420 s; imports keep going in the background
 WATCH_WAIT_S = 300.0
 ROLLUP_WAIT_S = 20.0       # the one-time rebuild after an update; most vaults finish well inside this
@@ -59,7 +61,7 @@ def _cfg(ctx, key, default=None):
         value = ctx.get_config(key, None)
     except Exception:
         value = None
-    return DEFAULTS.get(key, default) if value is None else value
+    return _CONFIG_DEFAULTS.get(key, default) if value is None else value
 
 
 def policy_for(ctx) -> Policy:
@@ -701,6 +703,7 @@ _IMPORTERS = {
     SourceKind.DTC.value: ("genome.dtc", "import_dtc", "vault"),
     SourceKind.PROMETHEASE.value: ("genome.promethease", "import_promethease", "vault"),
     SourceKind.APPLE_HEALTH.value: ("health.apple", "import_apple_health", "both"),
+    SourceKind.HAE.value: ("health.hae", "import_hae", "both"),
     SourceKind.FHIR.value: ("health.fhir", "import_fhir", "vault"),
 }
 
@@ -714,7 +717,7 @@ def _import(args: dict) -> dict:
     if kind not in _IMPORTERS:
         raise ToolError("not a recognised file: expected 23andMe, AncestryDNA, MyHeritage, FamilyTreeDNA or Living DNA raw data, "
                         "a Promethease report, "
-                        "an Apple Health export.zip or FHIR JSON. Whole-genome VCF files are not supported yet.")
+                        "an Apple Health export.zip, Health Auto Export JSON or FHIR JSON. Whole-genome VCF files are not supported yet.")
     module, name, dbs = _IMPORTERS[kind]
     importer = _need(module, name)
 
@@ -745,6 +748,38 @@ def _import(args: dict) -> dict:
     note = ("Already importing this file." if outcome["state"] == "busy" else
             "The import continues in the background; check it with caduceus_capture op=status.")
     return {**base, "status": "running", "import_run_id": run_id, "note": note}
+
+
+def _sync(ctx) -> dict:
+    call_mcp = getattr(ctx, "call_mcp", None)
+    if not callable(call_mcp):
+        raise ToolError("This Hermes cannot give plugins MCP access; Health Auto Export sync needs Hermes 0.23.0 or newer.")
+    server = _cfg(ctx, "hae_mcp_server")
+    if not isinstance(server, str) or not server.strip():
+        server = _CONFIG_DEFAULTS["hae_mcp_server"]
+    backfill = _cfg(ctx, "hae_backfill_days")
+    if isinstance(backfill, bool) or not isinstance(backfill, int) or not 1 <= backfill <= 3650:
+        backfill = 90
+    sync = _need("health.hae", "sync_hae")
+
+    def run():
+        with closing(open_vault()) as vault, closing(open_samples()) as samples:
+            return sync(lambda tool, args: call_mcp(server, tool, args, timeout=120), samples, vault,
+                        server=server, backfill_days=backfill, today=date.today()).as_dict()
+
+    with jobs.preparing():
+        with _Store() as store:
+            src = sources.virtual_source(store.vault, "hae_sync", server,
+                                         f"Health Auto Export (MCP server {server})")
+        outcome = jobs.submit("hae-sync:" + server, run, wait_s=IMPORT_WAIT_S)
+    base = {"file": src.original_name, "kind": src.kind, "source_id": src.id}
+    if outcome["state"] == "done":
+        return {**base, **outcome["result"]}
+    if outcome["state"] == "error":
+        raise ToolError("Health Auto Export sync failed")
+    with _Store() as store:
+        run_id = sources.running_run_for(store.vault, src.id)
+    return {**base, "status": "busy" if outcome["state"] == "busy" else "running", "import_run_id": run_id}
 
 
 # ---------------------------------------------------------------- caduceus_capture: records
@@ -939,7 +974,7 @@ def _settings(ctx) -> dict:
                      "privacy settings, with /caduceus privacy, hide, show, unlock or lock.")}
 
 
-_CAPTURE_OPS = ("import", "status", "medication", "journal", "watch_run", "settings", "brief", "sources")
+_CAPTURE_OPS = ("import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources")
 
 
 def capture_tool(ctx, args: dict) -> dict:
@@ -948,6 +983,8 @@ def capture_tool(ctx, args: dict) -> dict:
         raise ToolError("op must be one of " + ", ".join(_CAPTURE_OPS))
     if op == "import":
         return _import(args)
+    if op == "sync":
+        return _sync(ctx)
     if op == "medication":
         return _medication(ctx, args)
     if op == "journal":

@@ -38,6 +38,8 @@ For "What stands out in my DNA?" without a variant report, use `caduceus_genome 
 `gene_drug_profile`. Explain a flag as "guidance exists if you are ever prescribed it"; it is not a diagnosis,
 and `no_flag` does not mean normal.
 
+Health Auto Export data answers the same trend questions as Apple Health data.
+
 ## Which tool for what
 
 | Question | Call |

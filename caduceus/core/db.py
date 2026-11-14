@@ -55,6 +55,12 @@ def open_vault(path=None) -> sqlite3.Connection:
 def _migrate_vault(conn: sqlite3.Connection) -> None:
     """Columns added after a vault was created. CREATE TABLE IF NOT EXISTS never adds them to an existing table."""
     with write_txn(conn):
+        # A virtual source has many successful syncs; file imports still succeed only once per parser version.
+        index_sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='import_run_once'").fetchone()
+        if index_sql and "hae_sync" not in index_sql[0]:
+            conn.execute("DROP INDEX import_run_once")
+            conn.execute("CREATE UNIQUE INDEX import_run_once ON import_run(source_id,parser,parser_version) "
+                         "WHERE status='succeeded' AND parser <> 'hae_sync'")
         if "comparison_json" not in {row[1] for row in conn.execute("PRAGMA table_info(callset)")}:
             conn.execute("ALTER TABLE callset ADD COLUMN comparison_json TEXT NOT NULL DEFAULT '[]'")
 
@@ -86,7 +92,18 @@ def open_samples(path=None) -> sqlite3.Connection:
 
     conn = connect(path or samples_path())
     apply_schema(conn, "samples")
+    _migrate_samples(conn)
     return conn
+
+
+def _migrate_samples(conn: sqlite3.Connection) -> None:
+    def has_column():
+        return "provider" in {row[1] for row in conn.execute("PRAGMA table_info(sample)")}
+
+    if not has_column():
+        with write_txn(conn):
+            if not has_column():
+                conn.execute("ALTER TABLE sample ADD COLUMN provider TEXT NOT NULL DEFAULT 'apple'")
 
 
 def db_dir(conn: sqlite3.Connection) -> Path:

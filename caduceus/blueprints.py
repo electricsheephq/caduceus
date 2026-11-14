@@ -53,4 +53,20 @@ BLUEPRINTS = (
         "skills": ["caduceus:caduceus-guide"],
         "tags": ["health", "daily"],
     }),
+    ("hae-sync", {
+        "title": "Health Auto Export sync",
+        "description": (
+            "Once a day, reads new Apple Health data from the Health Auto Export app into your vault. "
+            "Stays silent unless the sync fails. Costs one model call a day."
+        ),
+        "category": "health",
+        "schedule_template": "{minute} {hour} * * *",
+        "prompt_template": (
+            "Call caduceus_capture with op=sync. If the result's status is succeeded, running or busy, "
+            "reply exactly [SILENT]. Otherwise reply with one plain sentence giving the error as the tool gave it."
+        ),
+        "slots": [_TIME("06:30"), _DELIVER],
+        "skills": ["caduceus:caduceus-guide"],
+        "tags": ["health", "daily"],
+    }),
 )

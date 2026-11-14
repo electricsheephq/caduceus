@@ -105,6 +105,7 @@ Other health plugins in the Hermes catalog read Apple Health, records or medicat
 | Living DNA raw data, `.zip` or `.txt` | Download your raw data in your Living DNA settings |
 | Promethease report, `.zip` or `.html` | The report file you downloaded from Promethease |
 | Apple Health export: the `.zip` from an iPhone in any language, or the export XML inside it | iPhone Health app → your picture → Export All Health Data. With Health Records connected, the zip includes your clinical records |
+| Health Auto Export JSON (or a zip of JSON exports) | In Health Auto Export, use Manual Export or an automation that saves metrics as JSON |
 | FHIR R4 JSON (labs, conditions, medications) | A patient portal's FHIR or "download my record" export |
 
 Give your agent the file's path, and Caduceus copies the file into its vault and imports it.
@@ -113,6 +114,26 @@ Give your agent the file's path, and Caduceus copies the file into its vault and
 - An interrupted import resumes where it stopped.
 - A vault holds one person. A second DNA file is compared with the first on shared markers, and if it looks like a
   different person, you are told, and answers carry a warning. Keep each person in their own Hermes profile.
+
+### Health Auto Export
+
+For a **JSON export**, use Manual Export in Health Auto Export (HAE), or an automation that saves JSON files to a
+folder, then import the file with `caduceus_capture op=import`. `.hae` AutoSync files are HAE's private format and
+cannot be imported.
+
+For **live sync**, run the HAE app's MCP server and configure it in Hermes. The operator allows its server name in
+`config.yaml` (use your configured name if different):
+
+```yaml
+plugins:
+  entries:
+    caduceus:
+      mcp_allowlist: [health-auto-export]
+```
+
+Then call `caduceus_capture op=sync`. `/blueprint caduceus:hae-sync` keeps it current daily and stays silent unless
+sync fails. The `hae_mcp_server` setting defaults to `health-auto-export`; `hae_backfill_days` defaults to 90 for the
+first sync. Later syncs start two days before the last synced day.
 
 ## Tools
 

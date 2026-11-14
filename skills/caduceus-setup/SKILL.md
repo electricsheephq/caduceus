@@ -54,6 +54,15 @@ For each file:
    - **If it says `skipped`, it was already imported.**
    - **If it says `failed`, show the error and stop on that file.**
 
+### Health Auto Export
+
+- **JSON export:** in HAE, export metrics as JSON using Manual Export, or an automation that saves JSON files to a
+  folder. Import that file with `caduceus_capture op=import`.
+- **Live sync:** if the HAE app's MCP server is running and configured in Hermes, the operator adds its server name
+  to `plugins.entries.caduceus.mcp_allowlist` in `config.yaml`. Then call `caduceus_capture op=sync`;
+  `/blueprint caduceus:hae-sync` keeps it current.
+- `.hae` AutoSync files are HAE's private format and cannot be imported.
+
 ## 2. Their medications
 
 Ask which medications they take and roughly when each started. These dates let Caduceus compare trends before and after.

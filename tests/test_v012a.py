@@ -237,5 +237,5 @@ def test_vcf_refusal_explains_unsupported_format(tmp_path):
     with pytest.raises(tools.ToolError, match="VCF") as error:
         ops._import({"path": str(path)})
     assert str(error.value) == ("not a recognised file: expected 23andMe, AncestryDNA, MyHeritage, FamilyTreeDNA "
-                                "or Living DNA raw data, a Promethease report, an Apple Health export.zip or "
-                                "FHIR JSON. Whole-genome VCF files are not supported yet.")
+                                "or Living DNA raw data, a Promethease report, an Apple Health export.zip, "
+                                "Health Auto Export JSON or FHIR JSON. Whole-genome VCF files are not supported yet.")

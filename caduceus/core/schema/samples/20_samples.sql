@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS sample (
     id INTEGER PRIMARY KEY,
     source_id INTEGER NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'apple',
     type TEXT NOT NULL,
     source_name TEXT NOT NULL,
     unit TEXT,

@@ -22,6 +22,16 @@ requires_hermes: ">=0.23.0"
 license: Apache-2.0
 homepage: https://github.com/electricsheephq/caduceus
 config_schema:
+  hae_mcp_server:
+    type: str
+    default: "health-auto-export"
+    label: "Health Auto Export MCP server"
+    description: "The name of the Health Auto Export MCP server in your Hermes config (mcp_servers). op=sync reads from it only after you add that name to plugins.entries.caduceus.mcp_allowlist."
+  hae_backfill_days:
+    type: int
+    default: 90
+    label: "Health Auto Export first sync (days)"
+    description: "How many days the first sync reads. Later syncs start two days before the last synced day."
   privacy_level:
     type: str
     default: "open"

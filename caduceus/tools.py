@@ -95,15 +95,16 @@ TOOLS = (
         "description": (
             "Add to or manage the user's Caduceus vault. op=import copies a file into the vault and imports it in "
             "the background: 23andMe or AncestryDNA raw data (.zip or .txt), a Promethease report (.zip), an "
-            "Apple Health export.zip (including its clinical records), or FHIR JSON; pass its absolute path. "
-            "op=status shows import progress. op=medication records a medication start, dose change or stop: show "
+            "Apple Health export.zip (including its clinical records), FHIR JSON, or a Health Auto Export JSON export; pass its absolute path. "
+            "op=sync reads new data from the Health Auto Export app's MCP server once the operator has allowed it "
+            "in Hermes config, and returns counts only. op=status shows import progress. op=medication records a medication start, dose change or stop: show "
             "the user the details and set confirm=true only after they agree. op=journal stores a note. "
             "op=watch_run runs the research watch now. op=settings shows the privacy settings. op=brief writes a "
             "local HTML health brief with charts. op=sources lists imported files. " + NEVER_READ
         ),
         "parameters": _obj({
             "op": {"type": "string", "enum": [
-                "import", "status", "medication", "journal", "watch_run", "settings", "brief", "sources"]},
+                "import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources"]},
             "path": {"type": "string", "description": "Absolute path of the file to import."},
             "run_id": {"type": "integer"},
             "drug": STR,
