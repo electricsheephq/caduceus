@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS condition (
     name TEXT NOT NULL,
     clinical_status TEXT,
     onset TEXT,
+    recorded TEXT,
     category TEXT NOT NULL DEFAULT 'records',
     source TEXT NOT NULL,
     source_id INTEGER REFERENCES source_artifact(id),

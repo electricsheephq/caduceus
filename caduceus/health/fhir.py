@@ -143,6 +143,29 @@ def _key(parts):
     return hashlib.sha1(json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _normalized_name(name):
+    return " ".join(str(name).lower().split())
+
+
+def _observation_key(system, code, when, num, text, unit, component, name):
+    parts = ["Observation", system, code, when, [num, text], unit, code if component else None]
+    if system is None and code is None:
+        parts.append(_normalized_name(name))
+    return _key(parts)
+
+
+def _observation_value(part):
+    """Key values before SQLite's column affinities can coerce their JSON types."""
+    quantity = part.get("valueQuantity") or {}
+    num, text = _number(quantity.get("value")), part.get("valueString")
+    if "valueCodeableConcept" in part:
+        text = _display(part["valueCodeableConcept"])
+    if quantity.get("comparator"):
+        num = None
+        text = str(quantity["comparator"]) + str(quantity.get("value", ""))
+    return num, text, quantity.get("unit") or quantity.get("code")
+
+
 def _raw(resource, precision, **metadata):
     return json.dumps({**resource, "_caduceus": {"date_precision": precision, **metadata}}, sort_keys=True, separators=(",", ":"))
 
@@ -199,14 +222,15 @@ def _stricter(new, stored):
     return new, False
 
 
-def _stale(document, identity, key):
+def _stale(document, identity, key, legacy_key=None):
     """Whether a non-correction only re-sends what a stored correction replaced: anything at this code and time from
     the correcting resource, or the identical copy another resource had sent. A different value is new."""
     if document.get("status") not in ("corrected", "amended"):
         return False
     if identity in _resource_ids(document):
         return True
-    return ((document.get("_caduceus") or {}).get("superseded") or {}).get(identity) == key
+    superseded = ((document.get("_caduceus") or {}).get("superseded") or {}).get(identity)
+    return superseded == key or (legacy_key is not None and superseded == legacy_key)
 
 
 def _restatus(vault, kind, ref, fields, metadata):
@@ -323,35 +347,36 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         own = base if component is None else {**parent, "component": [part]}
         concept = part.get("code") or {}
         system, code, name = _concept(concept, loinc=True)
-        quantity = part.get("valueQuantity") or {}
-        num, text = _number(quantity.get("value")), part.get("valueString")
-        if "valueCodeableConcept" in part:
-            text = _display(part["valueCodeableConcept"])
-        if quantity.get("comparator"):
-            num = None
-            text = str(quantity["comparator"]) + str(quantity.get("value", ""))
-        unit = quantity.get("unit") or quantity.get("code")
+        num, text, unit = _observation_value(part)
         rr = (part.get("referenceRange") or [{}])[0]
         interpretations = [_concept(c)[2] for c in part.get("interpretation", [])]
+        ref_low = _number((rr.get("low") or {}).get("value"))
+        ref_high = _number((rr.get("high") or {}).get("value"))
+        interpretation = "; ".join(interpretations) or None
         # The value can carry the diagnosis too ("Symptom" = depression), so it counts toward the category.
         category = _category([resource.get("code") or {}, concept, part.get("valueCodeableConcept") or {}],
                              Category.RECORDS)
-        key = _key(["Observation", system, code, when, [num, text], unit, code if component is not None else None])
+        key = _observation_key(system, code, when, num, text, unit, component is not None, name)
+        legacy_key = _key(["Observation", system, code, when, [num, text], unit, None]) if (
+            system is None and code is None) else None
         identities = {identity} if identity else set()
         superseded = {}  # resource -> content key of its identical copy that a correction replaced
         if identity:
             previous = [row for row in vault.execute(
-                "SELECT id,dedupe_key,raw_json,effective_at FROM observation WHERE source='fhir' AND code_system IS ? "
+                "SELECT id,dedupe_key,raw_json,effective_at,name FROM observation WHERE source='fhir' AND code_system IS ? "
                 "AND code IS ? AND (EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?) "
                 "OR EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.superseded') WHERE key=?))",
-                (system, code, identity, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)]
-            if not corrected and any(_stale(json.loads(row["raw_json"]), identity, key) for row in previous):
+                (system, code, identity, identity)).fetchall() if _instant(row["effective_at"]) == _instant(when)
+                and (system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name))]
+            if not corrected and any(_stale(json.loads(row["raw_json"]), identity, key, legacy_key) for row in previous):
                 counts["observation_ignored_after_correction"] = counts.get("observation_ignored_after_correction", 0)+1
                 continue
             if corrected:
                 for row in previous:
                     document = json.loads(row["raw_json"])
                     meta = document.setdefault("_caduceus", {})
+                    if row["dedupe_key"] == key and document.get("status") in ("corrected", "amended"):
+                        continue  # re-reading an existing correction upserts it without superseding it again
                     if identity not in _resource_ids(document):
                         # Another resource's correction already replaced this one's copy: that corrected value stays,
                         # and this correction stands on its own.
@@ -387,8 +412,7 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         cur = vault.execute(
             "INSERT OR IGNORE INTO observation(code_system,code,name,value_num,value_text,unit,effective_at,"
             "ref_low,ref_high,interpretation,category,source,source_id,dedupe_key,raw_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (system, code, name, num, text, unit, when, _number((rr.get("low") or {}).get("value")),
-             _number((rr.get("high") or {}).get("value")), "; ".join(interpretations) or None,
+            (system, code, name, num, text, unit, when, ref_low, ref_high, interpretation,
              category.value, "fhir", source_id, key, raw))
         if cur.rowcount:
             search.index_doc(vault, kind="observation", ref=str(cur.lastrowid), title=name,
@@ -397,14 +421,30 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         elif existing:
             # Natural-key dedupe must retain all resource ids for later corrections.
             if corrected:
-                vault.execute("UPDATE observation SET raw_json=?,name=?,category=?,source_id=? WHERE id=?",
-                              (raw, name, category.value, source_id, existing["id"]))
+                vault.execute("UPDATE observation SET raw_json=?,name=?,category=?,source_id=?,"
+                              "ref_low=?,ref_high=?,interpretation=? WHERE id=?",
+                              (raw, name, category.value, source_id, ref_low, ref_high, interpretation, existing["id"]))
             else:
                 vault.execute("UPDATE observation SET raw_json=? WHERE id=?", (raw, existing["id"]))
             search.index_doc(vault, kind="observation", ref=str(existing["id"]),
                              title=name if corrected else existing["name"], body=raw,
                              category=category if corrected else existing["category"], ts=when)
     return inserted
+
+
+def _withdraw_row(vault, table, row, identity):
+    """Withdraw one identity and its search document, retaining any other resource's assertion."""
+    document = json.loads(row["raw_json"])
+    others = _resource_ids(document) - {identity}
+    if others:
+        document.setdefault("_caduceus", {})["resource_ids"] = sorted(others)
+        raw = json.dumps(document, sort_keys=True, separators=(",", ":"))
+        vault.execute(f"UPDATE {table} SET raw_json=? WHERE id=?", (raw, row["id"]))
+        vault.execute("UPDATE search_doc SET body=? WHERE kind=? AND ref=?", (raw, table, str(row["id"])))
+        return False
+    search.remove_doc(vault, kind=table, ref=str(row["id"]))
+    vault.execute(f"DELETE FROM {table} WHERE id=?", (row["id"],))
+    return True
 
 
 def _retract(vault, resource, kind, counts, full_url=None):
@@ -435,21 +475,11 @@ def _retract(vault, resource, kind, counts, full_url=None):
         "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)", (identity,)).fetchall()
     removed = 0
     for row in rows:
-        if when is not None and _instant(row["at"]) != when:
+        if when is not None and not (kind == "Condition" and row["at"] is None) and _instant(row["at"]) != when:
             continue
         if codes and row["code"] is not None and str(row["code"]).strip().upper() not in codes:
             continue
-        document = json.loads(row["raw_json"])
-        others = _resource_ids(document) - {identity}
-        if others:  # another resource still says this: keep the value, drop only the withdrawn identity
-            document.setdefault("_caduceus", {})["resource_ids"] = sorted(others)
-            raw = json.dumps(document, sort_keys=True, separators=(",", ":"))
-            vault.execute(f"UPDATE {table} SET raw_json=? WHERE id=?", (raw, row["id"]))
-            vault.execute("UPDATE search_doc SET body=? WHERE kind=? AND ref=?", (raw, table, str(row["id"])))
-            continue
-        search.remove_doc(vault, kind=table, ref=str(row["id"]))
-        vault.execute(f"DELETE FROM {table} WHERE id=?", (row["id"],))
-        removed += 1
+        removed += _withdraw_row(vault, table, row, identity)
     if removed:
         counts[f"{table}_retracted"] = counts.get(f"{table}_retracted", 0) + removed
 
@@ -482,38 +512,81 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
     system, code, name = _concept(concept)
     category = _category([concept], Category.RECORDS)
     key = _key([system, code, when, name])
+    recorded, recorded_precision = _date_value(resource.get("recordedDate"))
     clinical = _status(resource.get("clinicalStatus"))
     verification = _status(resource.get("verificationStatus"))
     current = False if clinical in ("resolved", "inactive", "remission") else (
         True if clinical in ("active", "recurrence", "relapse") else None)
     identity = _identity(resource, full_url)
+    inherited_category = False
+    if identity:
+        same = [row for row in vault.execute(
+            "SELECT id,onset,name,raw_json,category FROM condition WHERE source='fhir' AND code_system IS ? AND code IS ? "
+            "AND EXISTS (SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?) ORDER BY id",
+            (system, code, identity)).fetchall()
+            if system is not None or code is not None or _normalized_name(row["name"]) == _normalized_name(name)]
+        known = [row for row in same if row["onset"] is not None]
+        if when is None and known:
+            for row in known:
+                old = json.loads(row["raw_json"])
+                # Keep the known dates and document; only the incoming statuses move.
+                document = {k: v for k, v in old.items() if k not in ("clinicalStatus", "verificationStatus")}
+                document.update({k: resource[k] for k in ("id", "clinicalStatus", "verificationStatus") if k in resource})
+                _condition(vault, document, source_id, row["onset"], old.get("_caduceus", {}).get("date_precision"),
+                           counts, full_url)
+            return
+        if when is not None:
+            unknown = [row for row in same if row["onset"] is None]
+            stored = next((row for row in unknown if row["category"] in {c.value for c in SENSITIVE}), None)
+            if stored is not None:
+                inherited_category = True
+                category, conflict = _stricter(category, stored["category"])
+                if conflict:
+                    old = json.loads(stored["raw_json"])
+                    moving = ("clinicalStatus", "verificationStatus", "onsetDateTime", "onsetPeriod")
+                    document = {k: v for k, v in old.items() if k not in moving}
+                    document.update({k: resource[k] for k in moving if k in resource})
+                    resource = document
+                    name = _concept(resource.get("code"))[2]
+                    recorded, recorded_precision = _date_value(resource.get("recordedDate"))
+            for row in unknown:
+                _withdraw_row(vault, "condition", row, identity)
     scope = {"full_url": full_url} if full_url else {}
     title = name + (f" [verification: {verification}]" if verification else "")
     if current is False:
         title += f" [not current: {clinical}]"
-    previous = vault.execute("SELECT id,clinical_status,raw_json,category FROM condition WHERE dedupe_key=?", (key,)).fetchone()
+    if when is None:
+        title += f" [onset unknown; recorded {recorded}]"
+    previous = vault.execute("SELECT id,clinical_status,raw_json,category,recorded FROM condition WHERE dedupe_key=?", (key,)).fetchone()
     if previous is None:
         raw = _raw(resource, precision, verification_status=verification, current=current,
-                   resource_ids=[identity] if identity else [], **scope)
+                   resource_ids=[identity] if identity else [], recorded_precision=recorded_precision, **scope)
         cur = vault.execute(
-            "INSERT INTO condition(code_system,code,name,clinical_status,onset,category,source,source_id,dedupe_key,raw_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)", (system, code, name, clinical, when, category.value, "fhir", source_id, key, raw))
-        search.index_doc(vault, kind="condition", ref=str(cur.lastrowid), title=title, body=raw, category=category, ts=when)
+            "INSERT INTO condition(code_system,code,name,clinical_status,onset,recorded,category,source,source_id,dedupe_key,raw_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (system, code, name, clinical, when, recorded, category.value, "fhir", source_id, key, raw))
+        search.index_doc(vault, kind="condition", ref=str(cur.lastrowid), title=title, body=raw, category=category, ts=when or recorded)
         counts["condition"] += 1
         return
     old = json.loads(previous["raw_json"])
     ids = _resource_ids(old) | ({identity} if identity else set())
-    if previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification:
+    if (previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification
+            or previous["recorded"] != recorded or inherited_category):
         category, conflict = _stricter(category, previous["category"])
         document = resource
         if conflict:  # the stored text stays under its own category; only the status moves
             document = {key: value for key, value in old.items() if key not in ("clinicalStatus", "verificationStatus")}
             document.update({key: resource[key] for key in ("clinicalStatus", "verificationStatus") if key in resource})
-        raw = _raw(document, precision, verification_status=verification, current=current, resource_ids=sorted(ids), **scope)
-        vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=? WHERE id=?",
-                      (clinical, raw, source_id, category.value, previous["id"]))
+            title = _concept(old.get("code"))[2] + title[len(name):]
+            recorded = previous["recorded"]
+            recorded_precision = old.get("_caduceus", {}).get("recorded_precision")
+            if when is None:
+                title = title.rsplit(" [onset unknown; recorded ", 1)[0] + f" [onset unknown; recorded {recorded}]"
+        raw = _raw(document, precision, verification_status=verification, current=current, resource_ids=sorted(ids),
+                   recorded_precision=recorded_precision, **scope)
+        vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=?,recorded=? WHERE id=?",
+                      (clinical, raw, source_id, category.value, recorded, previous["id"]))
         search.index_doc(vault, kind="condition", ref=str(previous["id"]), title=title, body=raw,
-                         category=category, ts=when)
+                         category=category, ts=when or recorded)
         counts["condition_updated"] = counts.get("condition_updated", 0)+1
     elif ids != _resource_ids(old):  # the same condition from another resource: remember who else asserts it
         old.setdefault("_caduceus", {})["resource_ids"] = sorted(ids)
@@ -566,7 +639,7 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
         else:
             when = resource.get("onsetDateTime") or (resource.get("onsetPeriod") or {}).get("start")
         when, precision = _date_value(when)
-        if when is None:
+        if when is None and not (kind == "Condition" and _date_value(resource.get("recordedDate"))[0] is not None):
             _skip(counts, kind, "date")
             continue
         with write_txn(vault):

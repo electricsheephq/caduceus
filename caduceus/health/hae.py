@@ -109,6 +109,15 @@ def _run_lock(samples, vault, run_id, cancel):
 
 
 def _date(text):
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}) (\d{1,2}):(\d{2}):(\d{2}) ?([AaPp])\.?[Mm]\.? ([+-]\d{2}:?\d{2})",
+                         text) if isinstance(text, str) else None
+    if match:
+        day, hour, minute, second, meridiem, offset = match.groups()
+        hour = int(hour)
+        if not 1 <= hour <= 12:
+            raise ValueError("invalid 12-hour time")
+        hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
+        text = f"{day} {hour:02d}:{minute}:{second} {offset}"
     try:
         value = datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
     except (TypeError, ValueError):
@@ -136,8 +145,9 @@ def _source(entry):
 
 
 def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, end=None):
-    start = start if start is not None else _date(entry.get("start", entry["date"]))
-    end = end if end is not None else _date(entry.get("end", entry["date"]))
+    when = entry["date"] if "date" in entry else entry["start"]
+    start = start if start is not None else _date(entry.get("start", when))
+    end = end if end is not None else _date(entry.get("end", when))
     if end < start:
         raise ValueError("invalid interval")
     source = _source(entry)
@@ -153,11 +163,17 @@ def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, 
             day.isoformat(), value, text, _key(identity), "wellness")
 
 
+def _sleep_bucket_start(entry, hours):
+    """Keep a day bucket's whole duration in the night ending at its day's noon."""
+    noon = _date(entry["start"]).replace(hour=12, minute=0, second=0, microsecond=0)
+    return noon - timedelta(hours=hours)
+
+
 def _metric_rows(name, metric, entry, source_id):
     if not isinstance(entry, dict):
         raise ValueError("entry must be an object")
-    # Even entries with explicit start/end must have a valid, offset-bearing date.
-    _date(entry["date"])
+    # Files supply date; MCP day buckets supply start. Both require an offset.
+    _date(entry["date"] if "date" in entry else entry["start"])
     unit = metric.get("units")
     if unit is not None and not isinstance(unit, str):
         raise ValueError("unit must be text")
@@ -168,12 +184,22 @@ def _metric_rows(name, metric, entry, source_id):
             start = _date(entry.get("start", entry.get("startDate")))
             end = _date(entry.get("end", entry.get("endDate")))
         else:
-            hours = (_number(entry["totalSleep"]) if "totalSleep" in entry else
-                     sum(_number(entry.get(k, 0)) for k in ("asleep", "core", "deep", "rem")))
-            if not ("totalSleep" in entry or "asleep" in entry) or not 0 < hours <= 24:
+            values = {k: _number(entry.get(k, 0))
+                      for k in ("totalSleep", "asleep", "core", "deep", "rem", "inBed")}
+            hours = values["totalSleep"] or sum(values[k] for k in ("asleep", "core", "deep", "rem"))
+            if (not ("totalSleep" in entry or "asleep" in entry)
+                    or any(value < 0 for value in values.values()) or hours > 24):
                 raise ValueError("invalid sleep duration")
-            end = _date(entry.get("sleepEnd") or entry.get("inBedEnd"))
-            start, text = end - timedelta(hours=hours), SLEEP["Asleep"]
+            if hours == 0:
+                return []  # valid iPhone-only in-bed buckets are read, but contain no sleep
+            sleep_end = entry.get("sleepEnd") or entry.get("inBedEnd")
+            if sleep_end:
+                end = _date(sleep_end)
+                start = end - timedelta(hours=hours)
+            else:
+                start = _sleep_bucket_start(entry, hours)
+                end = start + timedelta(hours=hours)
+            text = SLEEP["Asleep"]
         return [_sample("SleepAnalysis", entry, source_id, "h", text=text, start=start, end=end)]
     if name == "blood_pressure":
         return [_sample("BloodPressure" + side.title(), entry, source_id, unit, _number(entry[side]))
@@ -219,9 +245,14 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
     if not isinstance(data, dict):
         raise ValueError("payload must be an object")
     cleared = run_state.setdefault("cleared", set())
+    sleep_sources_cleared = run_state.setdefault("sleep_sources_cleared", set())
     sleep_clear_from = run_state.get("sleep_clear_from")
     sleep_keep = run_state.get("sleep_keep", set())
     pending, workouts = [], []
+
+    def count_entry(kind, outcome):
+        if "sync_entries" in run_state:
+            run_state["sync_entries"][kind][outcome] += 1
 
     def flush():
         _check_cancel(cancel)
@@ -229,12 +260,19 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         pairs = {(kind, day) for kind, day in pairs
                  if kind != "HKCategoryTypeIdentifierSleepAnalysis" or
                  (day not in sleep_keep and (sleep_clear_from is None or day >= sleep_clear_from.isoformat()))}
+        sleep_sources = {(r[7], r[2]) for r in pending
+                         if r[1] == "HKCategoryTypeIdentifierSleepAnalysis" and r[7] in sleep_keep
+                         and r[2] in run_state.get("sleep_summaries", {}).get(r[7], set())} - sleep_sources_cleared
         replaced = 0
         with write_txn(samples):
             samples.execute("CREATE INDEX IF NOT EXISTS sample_hae_type_day ON sample(provider,type,local_day)")
             for kind, day in sorted(pairs):
                 replaced += samples.execute("DELETE FROM sample WHERE provider='hae' AND type=? AND local_day=?",
                                             (kind, day)).rowcount
+            for day, source in sorted(sleep_sources):
+                replaced += samples.execute(
+                    "DELETE FROM sample WHERE provider='hae' AND type='HKCategoryTypeIdentifierSleepAnalysis' "
+                    "AND local_day=? AND source_name=?", (day, source)).rowcount
             before = samples.total_changes
             samples.executemany(
                 "INSERT INTO sample(source_id,type,source_name,unit,start_utc,end_utc,tz_offset_min,local_day,"
@@ -249,6 +287,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
                 "duration_unit,statistics_json,dedupe_key) VALUES (?,?,?,?,?,?,?,?,?)", workouts)
             added_workouts = samples.total_changes - before
         cleared.update(pairs)
+        sleep_sources_cleared.update(sleep_sources)
         counts["samples_replaced"] += replaced
         counts["samples"] += written
         counts["workouts"] += added_workouts
@@ -259,6 +298,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         _check_cancel(cancel)
         if not isinstance(metric, dict) or not isinstance(metric.get("name"), str):
             counts["entries_skipped"] += 1
+            count_entry(run_state.get("sync_kind", "metrics"), "skipped")
             continue
         name = metric["name"]
         if name not in MAPPING:
@@ -269,12 +309,21 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
             ignored[name] = ignored.get(name, 0) + 1
             continue
         skipped = 0
+        kind = "sleep" if name == "sleep_analysis" else "metrics"
         for entry in metric.get("data", []):
             _check_cancel(cancel)
             try:
                 rows = _metric_rows(name, metric, entry, source_id)
             except (KeyError, ValueError, TypeError, OverflowError):
                 skipped += 1
+                count_entry(kind, "skipped")
+                continue
+            count_entry(kind, "parsed")
+            if not rows:
+                continue
+            if (name == "sleep_analysis" and "value" in entry
+                    and rows[0][2] in run_state.get("sleep_summaries", {}).get(rows[0][7], set())):
+                counts["sleep_segments_omitted"] = counts.get("sleep_segments_omitted", 0) + 1
                 continue
             if len(pending) + len(rows) > BATCH:
                 flush()
@@ -290,7 +339,9 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
             row = _workout(entry, source_id)
         except (KeyError, ValueError, TypeError, OverflowError):
             counts["entries_skipped"] += 1
+            count_entry("workouts", "skipped")
             continue
+        count_entry("workouts", "parsed")
         if len(pending) + len(workouts) >= BATCH:
             flush()
         workouts.append(row)
@@ -332,18 +383,30 @@ def _read_json(stream):
 
 def _sleep_nights(data, *, cancel=None):
     """Collect valid segment and summary nights before any file rows are ingested."""
-    segments, summaries = set(), set()
+    segments, summaries = {}, {}
     for metric in data.get("metrics", []):
         if not isinstance(metric, dict) or metric.get("name") != "sleep_analysis":
             continue
         for entry in metric.get("data", []):
             _check_cancel(cancel)
             try:
-                day = _metric_rows("sleep_analysis", metric, entry, None)[0][7]
+                rows = _metric_rows("sleep_analysis", metric, entry, None)
             except (KeyError, ValueError, TypeError, OverflowError):
                 continue
-            (segments if "value" in entry else summaries).add(day)
+            if not rows:
+                continue
+            row = rows[0]
+            (segments if "value" in entry else summaries).setdefault(row[7], set()).add(row[2])
     return segments, summaries
+
+
+def _sleep_state(segments, summaries, warnings):
+    edges = {min(segments), max(segments)} if segments else set()
+    mixed = sorted(day for day, names in segments.items() if names & summaries.get(day, set()))
+    if mixed:
+        warnings.append("Sleep summaries used instead of same-source segments for nights: " + ", ".join(mixed))
+    return {"sleep_keep": {day for day in edges if not segments[day] <= summaries.get(day, set())},
+            "sleep_summaries": summaries}
 
 
 def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
@@ -358,15 +421,16 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
             if zipfile.is_zipfile(stored):
                 with zipfile.ZipFile(stored) as archive:
                     members = _safe_members(archive)
-                    segments, summaries = set(), set()
+                    segments, summaries = {}, {}
                     # Scan every member before ingesting: zip order need not be date order.
                     for member in members:
                         _check_cancel(cancel)
                         with archive.open(member) as stream:
                             member_segments, member_summaries = _sleep_nights(_read_json(stream), cancel=cancel)
-                        segments.update(member_segments)
-                        summaries.update(member_summaries)
-                    state["sleep_keep"] = ({min(segments), max(segments)} if segments else set()) - summaries
+                        for target, member_nights in ((segments, member_segments), (summaries, member_summaries)):
+                            for day, names in member_nights.items():
+                                target.setdefault(day, set()).update(names)
+                    state.update(_sleep_state(segments, summaries, warnings))
                     for member in members:
                         _check_cancel(cancel)
                         with archive.open(member) as stream:
@@ -379,7 +443,7 @@ def import_hae(samples, vault, src, *, cancel=None) -> ImportResult:
                 with stored.open("rb") as stream:
                     data = _read_json(stream)
                 segments, summaries = _sleep_nights(data, cancel=cancel)
-                state["sleep_keep"] = ({min(segments), max(segments)} if segments else set()) - summaries
+                state.update(_sleep_state(segments, summaries, warnings))
                 ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
             _check_cancel(cancel)
             warnings.extend(recompute_rollups(samples))
@@ -426,9 +490,11 @@ def _unwrap(envelope):
 
 
 def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None, local_offset=None) -> ImportResult:
+    """Sync phone-local day buckets; local_offset is retained but unused by requests."""
     src = sources.virtual_source(vault, "hae_sync", server, f"Health Auto Export (MCP server {server})")
     run = sources.begin_run(vault, src, "hae_sync", PARSER_VERSION)
     counts = {**_counts(), "windows": 0, "windows_skipped": 0, "windows_empty": 0}
+    counts["entries_by_kind"] = {kind: {"parsed": 0, "skipped": 0} for kind in ("metrics", "sleep", "workouts")}
     warnings, status, denied = [], "succeeded", False
     readable_replies = 0
     try:
@@ -454,9 +520,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                 vault.execute("UPDATE import_run SET counts_json=? WHERE id=?",
                               (json.dumps({"since": counts["since"], "through": counts["through"]},
                                           sort_keys=True), run.id))
-            state = {"sleep_clear_from": since}
-            offset = local_offset if local_offset is not None else datetime.now().astimezone().strftime("%z")
-            quantities = ",".join(n for n in MAPPING if n not in ("weight_body_mass", "sleep_analysis"))
+            state = {"sleep_clear_from": since, "sync_entries": counts["entries_by_kind"]}
+            quantities = ",".join(n for n in MAPPING if n not in ("body_mass", "sleep_analysis"))
             windows = []
             for kind, size in (("quantity", 14), ("sleep", 7), ("workouts", 31)):
                 start = since - timedelta(days=1) if kind == "sleep" else since
@@ -469,7 +534,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
             while windows:
                 _check_cancel(cancel)
                 start, end, kind = windows.pop(0)
-                args = {"start": f"{start} 00:00:00 {offset}", "end": f"{end} 23:59:59 {offset}"}
+                args = {"start": start.isoformat(), "end": (end + timedelta(days=1)).isoformat()}
                 if kind == "workouts":
                     tool = "get_workouts"
                     args.update(includeMetadata=False, includeRoutes=False)
@@ -497,11 +562,21 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     warnings.append(f"{kind} {start} to {end}: no data in the reply")
                 else:
                     readable_replies += 1
+                    state["sync_kind"] = "metrics" if kind == "quantity" else kind
                     ingest_payload(samples, data, src.id, run_state=state, counts=counts, warnings=warnings, cancel=cancel)
                 done += 1
                 sources.update_progress(vault, run.id, {"windows_done": done, "windows_total": total})
             _check_cancel(cancel)
             warnings.extend(recompute_rollups(samples))
+            unreadable = [kind for kind, tally in counts["entries_by_kind"].items()
+                          if tally["skipped"] > 0 and tally["parsed"] == 0]
+            if unreadable:
+                status = "failed"
+                counts["unreadable_kinds"] = unreadable
+                labels = {"metrics": "health metric", "sleep": "sleep", "workouts": "workout"}
+                for kind in unreadable:
+                    warnings.append(f"Health Auto Export sent {labels[kind]} data that Caduceus cannot read, "
+                                    "so none was imported. The next sync reads these days again.")
             if counts["windows_skipped"]:
                 status = "failed"
                 warnings.append(f"Health Auto Export replies for {counts['windows_skipped']} one-day requests "

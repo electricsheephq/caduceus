@@ -12,6 +12,13 @@ from ..core.contracts import CallState
 from ..core.policy import Category, categorize
 
 PACK_VERSION = "2026.11.0"
+DERIVED_MARKERS = [
+    ("APOE", [("rs429358", "C", "T"), ("rs7412", "T", "C")]),
+    ("CYP2C19", [("rs4244285", "A", "G"), ("rs4986893", "A", "G"), ("rs12248560", "T", "C")]),
+    ("CYP2C9", [("rs1799853", "T", "C"), ("rs1057910", "C", "A")]),
+    ("SLCO1B1", [("rs4149056", "C", "T")]),
+    ("VKORC1", [("rs9923231", "T", "C")]),
+]
 DATA = Path(__file__).with_name("data")
 DISCLAIMER = (
     "Information with limits, not a diagnosis or a dosing recommendation. Chip data do not replace "
@@ -167,15 +174,8 @@ def _haplotypes(basis, markers, haplotypes):
 
 
 def derive(pack, calls) -> list[dict]:
-    definitions = [
-        ("APOE", [("rs429358", "C", "T"), ("rs7412", "T", "C")]),
-        ("CYP2C19", [("rs4244285", "A", "G"), ("rs4986893", "A", "G"), ("rs12248560", "T", "C")]),
-        ("CYP2C9", [("rs1799853", "T", "C"), ("rs1057910", "C", "A")]),
-        ("SLCO1B1", [("rs4149056", "C", "T")]),
-        ("VKORC1", [("rs9923231", "T", "C")]),
-    ]
     results = []
-    for name, markers in definitions:
+    for name, markers in DERIVED_MARKERS:
         basis, reasons = _basis(calls, markers)
         row = {"name": name, "value": None, "confidence": "not_assessed", "basis": basis,
                "category": categorize(genes=[name], default=Category.PGX).value,

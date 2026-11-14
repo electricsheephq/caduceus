@@ -168,13 +168,15 @@ def test_raw_only_profile_privacy_and_gene_fallback(vault, tmp_path, fake_ctx):
     assert result["derived"] == ops.genome_tool(fake_ctx, {"op": "derived"})["derived"]
     assert "not a diagnosis" in result["note"] and "'no flag' does not mean normal" in result["note"]
     gene = ops.genome_tool(fake_ctx, {"op": "gene", "gene": "GLP1R"})
-    assert gene["note"] == "From the built-in knowledge pack; your variant report has no rows for this gene."
+    assert gene["note"] == ("Includes markers from the built-in knowledge pack or derived-call definitions "
+                            "that have no rows in your variant report.")
     assert {r["marker"]: r["genotype"] for r in gene["results"]} == {"rs6923761": "AA", "rs10305420": "CC"}
     with write_txn(vault):
         vault.execute("INSERT INTO annotation_snapshot(source_id, ordinal, kind, marker, genes_json, record_json) "
                       "SELECT source_id, 1, 'snp', 'rs1', '[\"GLP1R\"]', '{}' FROM callset LIMIT 1")
     report_gene = ops.genome_tool(fake_ctx, {"op": "gene", "gene": "GLP1R"})
-    assert "note" not in report_gene and [r["marker"] for r in report_gene["results"]] == ["rs1"]
+    assert "built-in knowledge pack" in report_gene["note"]
+    assert [r["marker"] for r in report_gene["results"]] == ["rs10305420", "rs6923761", "rs1"]
 
 
 def test_hidden_pgx_omits_profile_and_counts_it(vault, tmp_path, fake_ctx):
