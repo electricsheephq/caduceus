@@ -131,9 +131,10 @@ def test_date_never_drops_marks_or_offset(text):
 
 @pytest.mark.parametrize("text", [
     "2026-11-14 12:00:00.1 AM +0900", "2026-11-14 12:00:00.123 PM +0900", "2026-11-14 1:05:09.123456\u202fPM +0900",
+    "2026-11-14 01:05:09.123456 PM +0900", "2026-11-14 01:05:09.123456 XM +0900",
 ])
 def test_date_rejects_fractions_with_marks(text):
-    """0.3.1 never read a fraction with AM/PM; it still raises rather than guessing."""
+    """A fraction with AM/PM raises. 0.3.1 read a 6-digit one through its ISO fallback and dropped the mark."""
     with pytest.raises(ValueError):
         hae._date(text)
 

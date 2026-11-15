@@ -7,6 +7,7 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 ### Fixed
 - **The Health Auto Export sync reads times written with 12-hour time on macOS (#35).** It accepts a narrow no-break space before AM or PM and hours written without a leading zero.
 - **Workouts whose source is an object are read.** The source's name is kept with the workout.
+- **A PM time with a long fraction of a second is no longer stored as AM.** 0.3.1 read `01:05:09.123456 PM` as 01:05:09 and dropped the mark. A fraction with AM or PM is now refused, and 24-hour times with a fraction are read as before.
 - **Failed syncs say why entries were skipped.** Reasons and counts are reported, with no health values or device names.
 
 ## 0.3.1 — 2026-11-14
