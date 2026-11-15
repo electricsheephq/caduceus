@@ -130,7 +130,7 @@ def test_date_never_drops_marks_or_offset(text):
 
 
 @pytest.mark.parametrize("text", [
-    "2026-11-14 12:00:00.1 AM +0900", "2026-11-14 12:00:00.123 PM +0900", "2026-11-14 1:05:09.123456 PM +0900",
+    "2026-11-14 12:00:00.1 AM +0900", "2026-11-14 12:00:00.123 PM +0900", "2026-11-14 1:05:09.123456\u202fPM +0900",
 ])
 def test_date_rejects_fractions_with_marks(text):
     """0.3.1 never read a fraction with AM/PM; it still raises rather than guessing."""
@@ -138,10 +138,17 @@ def test_date_rejects_fractions_with_marks(text):
         hae._date(text)
 
 
+@pytest.mark.parametrize("text", ["2026-11-14 13:05:09.123456 +0900", "2026-11-14 13:05:09.123456 +09:00"])
+def test_date_keeps_24_hour_fractions_read_by_0_3_1(text):
+    moment = hae._date(text)
+    assert (moment.hour, moment.minute, moment.second, moment.microsecond) == (13, 5, 9, 123456)
+    assert moment.utcoffset() == timedelta(hours=9)
+
+
 def test_date_rejects_long_text_quickly():
     """A long run of spaces cannot make the parser backtrack: text over 64 characters is refused first."""
     import time
-    for text in ("2026-11-14 1:05:09" + " " * 2000 + "PM", "2026-11-14 1:05:09 " + "A" * 70 + " +0900"):
+    for text in ("2026-11-14 1:05:09" + "\u202f" * 2000 + "PM", "2026-11-14 1:05:09 " + "A" * 70 + " +0900"):
         started = time.perf_counter()
         with pytest.raises(ValueError):
             hae._date(text)

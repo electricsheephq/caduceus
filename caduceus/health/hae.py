@@ -123,16 +123,17 @@ def _date(text):
         if isinstance(text, str) and len(text) > 64:  # real times are about 30 characters; bounds the regex below
             raise ValueError("time text too long")
         match = re.fullmatch(
-            r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(.*?)\s+([+-]\d{2}:?\d{2})",
+            r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})([.,]\d+)?\s*(.*?)\s+([+-]\d{2}:?\d{2})",
             text) if isinstance(text, str) else None
         if match:
-            day, hour, minute, second, mark, offset = match.groups()
+            day, hour, minute, second, fraction, mark, offset = match.groups()
             if mark:
                 meridiem = re.fullmatch(r"([AaPp])\.?\s*[Mm]\.?", mark)
-                if meridiem is None or not 1 <= int(hour) <= 12:
+                if fraction or meridiem is None or not 1 <= int(hour) <= 12:
                     raise ValueError("invalid 12-hour time")
                 hour = str(int(hour) % 12 + (12 if meridiem[1].lower() == "p" else 0))
-            text = f"{day} {int(hour):02d}:{minute}:{second} {offset}"
+            if not fraction:  # a 24-hour time with a fraction goes to the fallback parsers unchanged, as in 0.3.1
+                text = f"{day} {int(hour):02d}:{minute}:{second} {offset}"
         try:
             value = datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
         except (TypeError, ValueError):
