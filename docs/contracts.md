@@ -189,8 +189,14 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   `sync_kind` identifies the request kind for malformed metric containers with no usable name. After all windows,
   any kind with skipped > 0 and parsed == 0 fails the run and appears in `counts.unreadable_kinds` (a list of
   kind keys, absent when empty). Each gets the fixed warning: "Health Auto Export sent <kind> data that Caduceus
-  cannot read, so none was imported. The next sync reads these days again." The label is `health metric`, `sleep`
-  or `workout`, with no server text. Already written rows stay, and the failed run never moves the watermark;
+  cannot read (<reason>), so none was imported. The next sync reads these days again." The label is `health metric`, `sleep`
+  or `workout`, with no server text. `<reason>` is the plain words for that kind's most frequent skip reason
+  (ties go to the first in this order): `time` "times not recognised", `source` "source not recognised",
+  `number` "values not numbers", `missing` "fields missing", `interval` "end before start", `other`
+  "unexpected format". Every skipped entry, in syncs and file imports, adds 1 to
+  `counts.skip_reasons.<metrics|sleep|workouts>.<code>`, so `entries_skipped` equals their sum. The code is the
+  first fault an entry raises; no value, name or server text is recorded. A time string longer than 64 characters
+  is rejected as `time` before it is parsed. Already written rows stay, and the failed run never moves the watermark;
   retrying replaces them. A kind with some parsed entries keeps the usual malformed-entry warnings and does
   not fail for partial skips. Empty metrics lists succeed. This failure rule does not apply to file imports.
   A permission-denied run with no sample/workout

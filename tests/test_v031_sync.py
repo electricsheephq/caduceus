@@ -180,7 +180,8 @@ def test_unreadable_kind_fails_and_retry_keeps_start_without_duplicates(samples,
     target.clear()
     target.update(start=original["start"], unknown_shape="untrusted synthetic server text")
     failed = _sync(_server(metrics, workouts), samples, vault, days=35)
-    warning = (f"Health Auto Export sent {label} data that Caduceus cannot read, so none was imported. "
+    reason = "unexpected format" if kind == "sleep" else "fields missing"
+    warning = (f"Health Auto Export sent {label} data that Caduceus cannot read ({reason}), so none was imported. "
                "The next sync reads these days again.")
     assert failed.status == "failed" and failed.warnings[-1] == warning
     assert failed.counts["unreadable_kinds"] == [kind]
