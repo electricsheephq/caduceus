@@ -2,6 +2,13 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.2 — 2026-11-16
+
+### Fixed
+- **The Health Auto Export sync reads times written with 12-hour time on macOS (#35).** It accepts a narrow no-break space before AM or PM and hours written without a leading zero.
+- **Workouts whose source is an object are read.** The source's name is kept with the workout.
+- **Failed syncs say why entries were skipped.** Reasons and counts are reported, with no health values or device names.
+
 ## 0.3.1 — 2026-11-14
 
 ### Fixed

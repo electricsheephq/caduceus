@@ -25,7 +25,7 @@ except ImportError:  # Windows: the process-local lock still serializes runs.
 _RUN_LOCKS = {}
 _RUN_LOCKS_GUARD = threading.Lock()
 
-PARSER_VERSION = "1"
+PARSER_VERSION = "2"
 BATCH = 10_000
 MAX_JSON = 512 << 20
 MAX_TOTAL = 16 << 30
@@ -49,6 +49,16 @@ SLEEP = {name: "HKCategoryValueSleepAnalysis" + suffix for name, suffix in {
     "Core": "AsleepCore", "Deep": "AsleepDeep", "REM": "AsleepREM", "Asleep": "AsleepUnspecified",
     "Unspecified": "AsleepUnspecified", "In Bed": "InBed", "Awake": "Awake"}.items()}
 IGNORED_ARRAYS = ("stateOfMind", "medications", "symptoms", "cycleTracking", "ecg", "heartRateNotifications")
+SKIP_REASONS = {
+    "time": "times not recognised", "source": "source not recognised", "number": "values not numbers",
+    "missing": "fields missing", "interval": "end before start", "other": "unexpected format",
+}
+
+
+class _EntryError(ValueError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
 
 class _Cancelled(Exception):
@@ -109,21 +119,26 @@ def _run_lock(samples, vault, run_id, cancel):
 
 
 def _date(text):
-    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}) (\d{1,2}):(\d{2}):(\d{2}) ?([AaPp])\.?[Mm]\.? ([+-]\d{2}:?\d{2})",
-                         text) if isinstance(text, str) else None
-    if match:
-        day, hour, minute, second, meridiem, offset = match.groups()
-        hour = int(hour)
-        if not 1 <= hour <= 12:
-            raise ValueError("invalid 12-hour time")
-        hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
-        text = f"{day} {hour:02d}:{minute}:{second} {offset}"
     try:
-        value = datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
-    except (TypeError, ValueError):
-        value = datetime.fromisoformat(text)
-    if value.utcoffset() is None:
-        raise ValueError("date requires an offset")
+        match = re.fullmatch(
+            r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2}):(\d{2}(?:[.,]\d+)?)\s*(.*?)\s+([+-]\d{2}:?\d{2})",
+            text) if isinstance(text, str) else None
+        if match:
+            day, hour, minute, second, mark, offset = match.groups()
+            if mark:
+                meridiem = re.fullmatch(r"([AaPp])\.?\s*[Mm]\.?", mark)
+                if meridiem is None or not 1 <= int(hour) <= 12:
+                    raise ValueError("invalid 12-hour time")
+                hour = str(int(hour) % 12 + (12 if meridiem[1].lower() == "p" else 0))
+            text = f"{day} {int(hour):02d}:{minute}:{second} {offset}"
+        try:
+            value = datetime.strptime(text, "%Y-%m-%d %H:%M:%S %z")
+        except (TypeError, ValueError):
+            value = datetime.fromisoformat(text)
+        if value.utcoffset() is None:
+            raise ValueError("date requires an offset")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise _EntryError("time") from exc
     return value
 
 
@@ -132,15 +147,22 @@ def _utc(value):
 
 
 def _number(value):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise ValueError("finite number required")
-    return float(value)
+    try:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError("finite number required")
+        return float(value)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise _EntryError("number") from exc
 
 
 def _source(entry):
     value = entry.get("source", "Health Auto Export")
+    if isinstance(value, dict):
+        value = value.get("name")
+        if not isinstance(value, str) or not value:
+            raise _EntryError("source")
     if not isinstance(value, str):
-        raise ValueError("source must be text")
+        raise _EntryError("source")
     return value
 
 
@@ -149,7 +171,7 @@ def _sample(kind, entry, source_id, unit, value=None, text=None, *, start=None, 
     start = start if start is not None else _date(entry.get("start", when))
     end = end if end is not None else _date(entry.get("end", when))
     if end < start:
-        raise ValueError("invalid interval")
+        raise _EntryError("interval")
     source = _source(entry)
     is_sleep = kind == "SleepAnalysis"
     kind = ("HKCategoryTypeIdentifier" if is_sleep else "HKQuantityTypeIdentifier") + kind
@@ -219,7 +241,7 @@ def _workout(entry, source_id):
         raise ValueError("invalid workout name")
     start, end = _date(entry["start"]), _date(entry["end"])
     if end < start:
-        raise ValueError("invalid workout interval")
+        raise _EntryError("interval")
     duration = entry.get("duration")
     if isinstance(duration, (int, float)):
         duration = _number(duration)
@@ -237,7 +259,8 @@ def _workout(entry, source_id):
 
 
 def _counts():
-    return {"samples": 0, "samples_replaced": 0, "workouts": 0, "entries_skipped": 0, "metrics_ignored": {}}
+    return {"samples": 0, "samples_replaced": 0, "workouts": 0, "entries_skipped": 0, "metrics_ignored": {},
+            "skip_reasons": {kind: {} for kind in ("metrics", "sleep", "workouts")}}
 
 
 def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warnings, cancel=None):
@@ -253,6 +276,12 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
     def count_entry(kind, outcome):
         if "sync_entries" in run_state:
             run_state["sync_entries"][kind][outcome] += 1
+
+    def count_skip(kind, exc):
+        code = exc.code if isinstance(exc, _EntryError) else "missing" if isinstance(exc, KeyError) else "other"
+        reasons = counts.setdefault("skip_reasons", {}).setdefault(kind, {})
+        reasons[code] = reasons.get(code, 0) + 1
+        count_entry(kind, "skipped")
 
     def flush():
         _check_cancel(cancel)
@@ -298,7 +327,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         _check_cancel(cancel)
         if not isinstance(metric, dict) or not isinstance(metric.get("name"), str):
             counts["entries_skipped"] += 1
-            count_entry(run_state.get("sync_kind", "metrics"), "skipped")
+            count_skip(run_state.get("sync_kind", "metrics"), ValueError())
             continue
         name = metric["name"]
         if name not in MAPPING:
@@ -314,9 +343,9 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
             _check_cancel(cancel)
             try:
                 rows = _metric_rows(name, metric, entry, source_id)
-            except (KeyError, ValueError, TypeError, OverflowError):
+            except (KeyError, ValueError, TypeError, OverflowError) as exc:
                 skipped += 1
-                count_entry(kind, "skipped")
+                count_skip(kind, exc)
                 continue
             count_entry(kind, "parsed")
             if not rows:
@@ -337,9 +366,9 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         _check_cancel(cancel)
         try:
             row = _workout(entry, source_id)
-        except (KeyError, ValueError, TypeError, OverflowError):
+        except (KeyError, ValueError, TypeError, OverflowError) as exc:
             counts["entries_skipped"] += 1
-            count_entry("workouts", "skipped")
+            count_skip("workouts", exc)
             continue
         count_entry("workouts", "parsed")
         if len(pending) + len(workouts) >= BATCH:
@@ -575,7 +604,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                 counts["unreadable_kinds"] = unreadable
                 labels = {"metrics": "health metric", "sleep": "sleep", "workouts": "workout"}
                 for kind in unreadable:
-                    warnings.append(f"Health Auto Export sent {labels[kind]} data that Caduceus cannot read, "
+                    reasons = counts["skip_reasons"][kind]
+                    main_reason = max(SKIP_REASONS, key=lambda code: reasons.get(code, 0))
+                    warnings.append(f"Health Auto Export sent {labels[kind]} data that Caduceus cannot read "
+                                    f"({SKIP_REASONS[main_reason]}), "
                                     "so none was imported. The next sync reads these days again.")
             if counts["windows_skipped"]:
                 status = "failed"
