@@ -120,8 +120,10 @@ def _run_lock(samples, vault, run_id, cancel):
 
 def _date(text):
     try:
+        if isinstance(text, str) and len(text) > 64:  # real times are about 30 characters; bounds the regex below
+            raise ValueError("time text too long")
         match = re.fullmatch(
-            r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2}):(\d{2}(?:[.,]\d+)?)\s*(.*?)\s+([+-]\d{2}:?\d{2})",
+            r"(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(.*?)\s+([+-]\d{2}:?\d{2})",
             text) if isinstance(text, str) else None
         if match:
             day, hour, minute, second, mark, offset = match.groups()

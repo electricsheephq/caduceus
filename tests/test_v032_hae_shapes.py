@@ -129,6 +129,25 @@ def test_date_never_drops_marks_or_offset(text):
         hae._date(text)
 
 
+@pytest.mark.parametrize("text", [
+    "2026-11-14 12:00:00.1 AM +0900", "2026-11-14 12:00:00.123 PM +0900", "2026-11-14 1:05:09.123456 PM +0900",
+])
+def test_date_rejects_fractions_with_marks(text):
+    """0.3.1 never read a fraction with AM/PM; it still raises rather than guessing."""
+    with pytest.raises(ValueError):
+        hae._date(text)
+
+
+def test_date_rejects_long_text_quickly():
+    """A long run of spaces cannot make the parser backtrack: text over 64 characters is refused first."""
+    import time
+    for text in ("2026-11-14 1:05:09" + " " * 2000 + "PM", "2026-11-14 1:05:09 " + "A" * 70 + " +0900"):
+        started = time.perf_counter()
+        with pytest.raises(ValueError):
+            hae._date(text)
+        assert time.perf_counter() - started < 0.5
+
+
 def test_unknown_metric_marks_count_only_time_reasons(samples, vault):
     entries = [_bucket(qty=876543) for _ in range(3)]
     for entry in entries:
