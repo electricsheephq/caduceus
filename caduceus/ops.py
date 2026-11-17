@@ -213,8 +213,14 @@ def search_tool(ctx, args: dict) -> dict:
     limit = _int(args, "limit", 8, 1, 25)
     kinds = _strings(args, "kinds")
     with _Store() as store:
+        def allow_record(row):
+            if row["kind"] != "phenotype":
+                return True
+            note = store.vault.execute("SELECT * FROM phenotype_note WHERE id=?", (row["ref"],)).fetchone()
+            return note is not None and _phenotype_visible(store.vault, policy, note)
+
         if args.get("ref"):
-            record = search_index.fetch(store.vault, str(args["ref"]), policy=policy)
+            record = search_index.fetch(store.vault, str(args["ref"]), policy=policy, allow=allow_record)
             if record is None:
                 raise ToolError("no record with that ref")
             if record.get("kind") == "medication":
@@ -223,9 +229,9 @@ def search_tool(ctx, args: dict) -> dict:
         query = str(args.get("query") or "").strip()
         listed = [k for k in kinds if k in search_index.KINDS]
         if query:
-            found = search_index.search(store.vault, query, policy=policy, kinds=kinds, limit=limit)
+            found = search_index.search(store.vault, query, policy=policy, kinds=kinds, limit=limit, allow=allow_record)
         elif listed:
-            found = search_index.browse(store.vault, policy=policy, kinds=listed, limit=limit)
+            found = search_index.browse(store.vault, policy=policy, kinds=listed, limit=limit, allow=allow_record)
         elif kinds:  # an unknown kind must not read as "you have none"
             raise ToolError("unknown kinds; use one of: " + ", ".join(search_index.KINDS))
         else:
@@ -261,11 +267,15 @@ def _marker_category(vault, marker: str) -> str:
         return _SENSITIVE_MARKERS[marker.lower()].value
     sensitive = sorted(c.value for c in SENSITIVE)
     row = vault.execute(
-        "SELECT category FROM annotation_snapshot WHERE marker=? COLLATE NOCASE AND kind='snp' "
+        "SELECT category FROM annotation_snapshot WHERE marker=? COLLATE NOCASE AND kind IN ('snp','genoset') "
         f"ORDER BY category IN ({','.join('?' * len(sensitive))}) DESC, id DESC LIMIT 1",
         (marker, *sensitive),
     ).fetchone()
-    return row["category"] if row else Category.GENERAL.value
+    if row:
+        return row["category"]
+    if marker.upper() in {name for name, _ in _need("knowledge.pack", "DERIVED_MARKERS")}:
+        return categorize(genes=[marker.upper()], default=Category.PGX).value
+    return Category.GENERAL.value
 
 
 @lru_cache(maxsize=1)
@@ -282,14 +292,57 @@ def _marker_genes():
 
 
 def _marker_visible(vault, policy, marker):
+    genes = _marker_genes().get(marker.lower(), ())
+    if marker.lower() in _phenotype_gene_names():
+        genes = (marker.upper(),)
     return (allowed(policy, _marker_category(vault, marker))
             and all(allowed(policy, categorize(genes=[gene], default=Category.PGX))
-                    for gene in _marker_genes().get(marker.lower(), ())))
+                    for gene in genes))
 
 
 def _derived_visible(vault, policy, row):
     return (allowed(policy, row.get("category", Category.PGX))
             and all(_marker_visible(vault, policy, marker) for marker in row.get("basis", {})))
+
+
+def _phenotype_markers(vault, marker):
+    """Use lookup's resolution; without a complete callset, retain every known alias target for privacy."""
+    if not marker:
+        return ()
+    marker = marker.lower()
+    try:
+        call = _need("genome.calls", "get_calls")(vault, [marker])[marker]
+    except _need("genome.calls", "NoCallset"):
+        call = None
+    if call is not None and call.resolved_marker:
+        return tuple(dict.fromkeys((marker, call.resolved_marker.lower())))
+    if call is not None and call.state.value != "unresolved":
+        return (marker,)
+    aliases = [r[0].strip().lower() for r in vault.execute(
+        "SELECT marker FROM marker_alias WHERE alias=? COLLATE NOCASE ORDER BY marker", (marker,))]
+    return tuple(dict.fromkeys((marker, *aliases)))
+
+
+def _phenotype_gene_names():
+    return {gene.lower() for genes in _marker_genes().values() for gene in genes}
+
+
+def _phenotype_visible(vault, policy, row):
+    return (visible(policy, row["category"], kind="phenotype")
+            and all(_marker_visible(vault, policy, marker)
+                    for marker in _phenotype_markers(vault, row["marker"])))
+
+
+def _phenotype_rows(vault, markers):
+    return vault.execute(
+        "SELECT * FROM phenotype_note WHERE marker COLLATE NOCASE IN (" + ",".join("?" for _ in markers) +
+        ") ORDER BY created_at DESC,id DESC", tuple(markers)).fetchall()
+
+
+def _phenotype_notes(vault, policy, rows):
+    shown = [r for r in rows if _phenotype_visible(vault, policy, r)]
+    return ([{"id": r["id"], "stance": r["stance"], "trait": r["trait"], "text": r["text"],
+              "date": r["created_at"]} for r in shown], len(rows) - len(shown))
 
 
 def _snapshot_rows(vault, where: str, params=(), limit=50):
@@ -321,13 +374,18 @@ def _lookup(store, policy, markers) -> dict:
     for name in wanted:
         call = calls.get(name)
         key = call.resolved_marker if call is not None and call.resolved_marker else name
+        phenotype_rows = _phenotype_rows(store.vault, (key, name))
         if not (_marker_visible(store.vault, policy, key) and _marker_visible(store.vault, policy, name)):
-            withheld += 1
+            withheld += 1 + len(phenotype_rows)
             continue
         entry = call.as_dict() if call is not None else {"marker": name, "state": "not_on_chip"}
         notes = [_snapshot_dict(r) for r in _snapshot_rows(store.vault, "marker=? COLLATE NOCASE", (key,), 5)
                  if allowed(policy, r["category"])]
         entry["annotations"] = notes
+        phenotype_notes, hidden_notes = _phenotype_notes(store.vault, policy, phenotype_rows)
+        withheld += hidden_notes
+        if phenotype_notes:
+            entry["phenotype_notes"] = phenotype_notes
         results.append(entry)
     return {"results": results, "limits": [CHIP_LIMITS, LIMITS], **_withheld(withheld)}
 
@@ -421,8 +479,9 @@ def genome_tool(ctx, args: dict) -> dict:
             gene = str(args.get("gene") or "").strip().upper()
             if not _GENE.match(gene):
                 raise ToolError("give a gene symbol such as GLP1R")
+            gene_rows = _phenotype_rows(store.vault, (gene,))
             if not allowed(policy, categorize(genes=[gene])):
-                return {"gene": gene, "results": [], **_withheld(1), **warning}
+                return {"gene": gene, "results": [], **_withheld(1 + len(gene_rows)), **warning}
             rows = _snapshot_rows(store.vault, "genes_json LIKE ?", (f'%"{gene}"%',), _int(args, "limit", 40, 1, 100))
             pack = _pack()
             definitions = _need("knowledge.pack", "DERIVED_MARKERS")
@@ -431,19 +490,21 @@ def genome_tool(ctx, args: dict) -> dict:
             report_markers = [r["marker"] for r in rows if r["marker"]]
             markers = list(dict.fromkeys(derived_markers + pack_markers + report_markers))
             if (derived_markers or pack_markers) and not allowed(policy, categorize(genes=[gene], default=Category.PGX)):
-                return {"gene": gene, "results": [], **_withheld(1), **warning}
+                return {"gene": gene, "results": [], **_withheld(1 + len(gene_rows)), **warning}
+            gene_notes, hidden_notes = _phenotype_notes(store.vault, policy, gene_rows)
+            named_notes = {"phenotype_notes": gene_notes} if gene_notes else {}
             if not markers:
                 return {"gene": gene, "results": [], "note": "No markers for this gene in your variant report.",
-                        **warning}
+                        **named_notes, **_withheld(hidden_notes), **warning}
             derived = next((d for d in _need("knowledge.pack", "derive")(
                 pack, _get_calls(store.vault, derived_markers)) if d["name"] == gene), None) if derived_markers else None
-            result = {"gene": gene}
-            hidden = 0
+            result = {"gene": gene, **named_notes}
+            hidden = hidden_notes
             if derived is not None:
                 if _derived_visible(store.vault, policy, derived):
                     result["derived"] = derived
                 else:
-                    hidden = 1
+                    hidden += 1
             result.update(_lookup(store, policy, markers))
             if hidden:
                 result.update(_withheld(result.get("withheld", 0) + hidden))
@@ -937,6 +998,86 @@ def _journal(args: dict) -> dict:
     return {"saved": True, "date": when.isoformat(), "category": category.value}
 
 
+def _consent(args: dict) -> dict:
+    note = ("Consent memory records your answer and never changes visibility. Only the user changes what is "
+            "shown or hidden with /caduceus privacy, hide, show, unlock or lock.")
+    category, answer = args.get("category"), args.get("answer")
+    if category is not None and (not isinstance(category, str) or category not in SENSITIVE):
+        raise ToolError("category must be a sensitive category: " + ", ".join(sorted(SENSITIVE)))
+    if answer is not None:
+        if category not in SENSITIVE:
+            raise ToolError("give a sensitive category when recording an answer")
+        if answer not in ("yes", "no", "ask_later", "clear"):
+            raise ToolError("answer must be yes, no, ask_later or clear")
+    with _Store() as store, write_txn(store.vault):
+        if answer == "clear":
+            store.vault.execute("DELETE FROM settings WHERE key=?", (f"consent:{category}",))
+        elif answer is not None:
+            now = sources.now_iso()
+            store.vault.execute(
+                "INSERT INTO settings(key,value_json,updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at",
+                (f"consent:{category}", json.dumps({"answer": answer, "at": now}), now))
+        consent = {row["key"].partition(":")[2]: json.loads(row["value_json"])
+                   for row in store.vault.execute("SELECT key,value_json FROM settings WHERE key LIKE 'consent:%'")
+                   if row["key"].partition(":")[2] in SENSITIVE}
+    return {"consent": consent, "note": note}
+
+
+def _phenotype(ctx, args: dict) -> dict:
+    marker, trait, text = (args.get(k) for k in ("marker", "trait", "text"))
+    if marker is not None and not isinstance(marker, str):
+        raise ToolError("marker must be an rs/i/gs id or a derived-call name")
+    marker = (marker or "").strip().lower()
+    if trait is not None and (not isinstance(trait, str) or len(trait) > 200):
+        raise ToolError("trait must be text of at most 200 characters")
+    trait = (trait or "").strip()
+    if not marker and not trait:
+        raise ToolError("give a marker or a trait")
+    if not isinstance(text, str) or not text.strip() or len(text) > 2000:
+        raise ToolError("text must contain the user's words, at most 2,000 characters")
+    stance = args.get("stance")
+    if stance not in ("confirms", "refutes", "unsure"):
+        raise ToolError("stance must be confirms, refutes or unsure")
+    now = sources.now_iso()
+    with _Store() as store, write_txn(store.vault):
+        gene_names = _phenotype_gene_names()
+        if marker and not re.fullmatch(r"(?:rs|i|gs)\d+", marker) and marker not in gene_names:
+            raise ToolError("marker must be an rs/i/gs id, a known gene or a derived-call name")
+        markers = _phenotype_markers(store.vault, marker)
+        categories = [Category(_marker_category(store.vault, name)) for name in markers]
+        category = next((c for c in categories if c in SENSITIVE),
+                        categories[0] if categories else Category.TRAIT)
+        sensitive = categorize(text=trait + " " + text)
+        if category not in SENSITIVE:
+            if sensitive in SENSITIVE:
+                category = sensitive
+            elif any(_marker_genes().get(name) or name in gene_names for name in markers) or Category.PGX in categories:
+                category = Category.PGX
+        row = store.vault.execute(
+            "SELECT * FROM phenotype_note WHERE marker IS ? AND trait IS ? AND stance=? AND text=? "
+            "AND substr(created_at,1,10)=? ORDER BY id LIMIT 1",
+            (marker or None, trait or None, stance, text, now[:10])).fetchone()
+        already_saved = row is not None
+        if row is None:
+            cur = store.vault.execute(
+                "INSERT INTO phenotype_note(marker,trait,stance,text,category,created_at) VALUES (?,?,?,?,?,?)",
+                (marker or None, trait or None, stance, text, category.value, now))
+            ref = cur.lastrowid
+            search_index.index_doc(store.vault, kind="phenotype", ref=str(ref), title=trait or marker,
+                                   body=text, category=category, ts=now)
+            row = store.vault.execute("SELECT * FROM phenotype_note WHERE id=?", (ref,)).fetchone()
+        ref, category, now = row["id"], Category(row["category"]), row["created_at"]
+        shown = _phenotype_visible(store.vault, policy_for(ctx), row)
+    message = "Already saved." if already_saved else "Recorded."
+    if not shown:
+        return {"saved": True, "note": message + " Your privacy settings hide this note; only the user can change "
+                "visibility with /caduceus."}
+    return {"saved": True, "id": ref, "marker": marker or None, "trait": trait or None, "stance": stance,
+            "text": text, "category": category.value, "date": now,
+            **({"note": message} if already_saved else {})}
+
+
 # ---------------------------------------------------------------- caduceus_capture: research watch
 
 _WATCH_LOCK = threading.Lock()
@@ -1042,6 +1183,7 @@ def _settings(ctx) -> dict:
 
 
 _CAPTURE_OPS = ("import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources")
+_CAPTURE_OPS += ("consent", "phenotype")
 
 
 def capture_tool(ctx, args: dict) -> dict:
@@ -1056,6 +1198,10 @@ def capture_tool(ctx, args: dict) -> dict:
         return _medication(ctx, args)
     if op == "journal":
         return _journal(args)
+    if op == "consent":
+        return _consent(args)
+    if op == "phenotype":
+        return _phenotype(ctx, args)
     if op == "watch_run":
         return _watch_run(ctx, args)
     if op == "settings":
@@ -1064,7 +1210,9 @@ def capture_tool(ctx, args: dict) -> dict:
         policy = policy_for(ctx)
         with _Store() as store:
             note = _refresh_rollups(store) if allowed(policy, Category.WELLNESS) else None
-            path = _need("brief", "write_brief")(store.vault, store.samples, reports_dir(), policy=policy)
+            path = _need("brief", "write_brief")(store.vault, store.samples, reports_dir(), policy=policy,
+                                                specialty=args.get("specialty", "general"),
+                                                questions=args.get("questions", []))
         result = {**_file_url(path), "note": "Your health brief was written on this machine. Open it in a browser."}
         if note:
             result["rebuilding"] = _BRIEF_NOTES[note]

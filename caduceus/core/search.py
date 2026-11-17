@@ -12,6 +12,7 @@ from .policy import Category, Policy, visible
 
 _TOKEN = re.compile(r"[\w][\w.'*-]*", re.UNICODE)
 KINDS = ("annotation", "assertion", "research", "observation", "condition", "medication", "journal", "finding", "pgx")
+KINDS += ("phenotype",)
 
 
 def sanitize(query: object, *, max_terms: int = 16) -> str:
@@ -53,7 +54,7 @@ def _query(conn, match: str, kinds, limit: int):
     return conn.execute(sql, params).fetchall()
 
 
-def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8) -> dict:
+def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8, allow=None) -> dict:
     """Ranked hits allowed by *policy*: all terms first, any term when that finds nothing."""
     if isinstance(kinds, str):
         kinds = [kinds]
@@ -69,7 +70,7 @@ def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=Non
         mode = "any_term"
     results, withheld = [], 0
     for row in rows:
-        if not visible(policy, row["category"], kind=row["kind"]):
+        if not visible(policy, row["category"], kind=row["kind"]) or (allow is not None and not allow(row)):
             withheld += 1
             continue
         if len(results) < limit:
@@ -80,7 +81,7 @@ def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=Non
     return {"results": results, "withheld": withheld, "match": mode}
 
 
-def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8) -> dict:
+def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8, allow=None) -> dict:
     """List recorded kinds newest first, filtering and counting hidden rows before limiting visible hits."""
     if isinstance(kinds, str):
         kinds = [kinds]
@@ -92,7 +93,7 @@ def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8) -
             "SELECT kind, ref, title, body, category, ts FROM search_doc "
             f"WHERE kind IN ({','.join('?' * len(kinds))}) ORDER BY ts DESC, id DESC", kinds)
         for row in rows:
-            if not visible(policy, row["category"], kind=row["kind"]):
+            if not visible(policy, row["category"], kind=row["kind"]) or (allow is not None and not allow(row)):
                 withheld += 1
                 continue
             if len(results) < limit:
@@ -103,7 +104,7 @@ def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8) -
     return {"results": results, "withheld": withheld, "match": "browse"}
 
 
-def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy) -> dict | None:
+def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy, allow=None) -> dict | None:
     """One indexed record in full, by the ``kind:ref`` a search returned. None when absent or withheld."""
     kind, _, key = str(ref or "").partition(":")
     row = conn.execute(
@@ -111,7 +112,7 @@ def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy) -> dict | None:
     ).fetchone()
     if row is None:
         return None
-    if not visible(policy, row["category"], kind=row["kind"]):
+    if not visible(policy, row["category"], kind=row["kind"]) or (allow is not None and not allow(row)):
         return {"ref": ref, "withheld": True, "reason": "hidden by your privacy settings"}
     return {"ref": ref, "kind": row["kind"], "title": row["title"], "body": row["body"],
             "category": row["category"], "date": row["ts"]}
