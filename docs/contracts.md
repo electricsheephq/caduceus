@@ -17,11 +17,28 @@ duplicates.
 | `sources.update_progress(conn, run_id, dict)` | Call about every 10k–50k rows. |
 | `sources.finish_import(conn, run_id, *, counts, status, errors=())` | `status` is one of `succeeded`, `failed`, `cancelled`. Stores at most 50 errors: when over the cap, keeps the first 49 and the last error. |
 | `search.index_doc(conn, *, kind, ref, title, body, category, ts=None)` | Upsert into the search index. `kind` is in `search.KINDS`; `category` is a `policy.Category`. |
-| `search.browse(conn, *, policy, kinds, limit=8, allow=None) -> dict` | Same hit shape as search, newest first, limited to visible records of the given kinds; `withheld` counts hidden records. Search, browse and fetch accept an optional `allow(row)` predicate in addition to policy filtering, applied before returning or limiting visible hits; the tools use it to recheck phenotype markers. |
+| `search.browse(conn, *, policy, kinds, limit=8, allow=None) -> dict` | Same hit shape as search, newest first, limited to visible records of the given kinds; `withheld` counts hidden records. Search, browse and fetch accept an optional `allow(row)` predicate in addition to policy filtering, applied before returning or limiting visible hits; the tools use it to recheck phenotype markers and stored medication notes. |
 | `policy.Category`, `policy.Policy`, `policy.allowed(policy, category)`, `policy.categorize(genes=…, text=…, markers=…, default=…)` | Categorize every record you index or store. `markers` applies the fixed categories in `policy.MARKER_CATEGORY` (APOE and the BRCA founder variants), whatever the text says. |
 | `policy.visible(policy, category, *, kind=None)` | What the tools show: the item's own category **and** the base category of its kind (`observation` and `condition` → records, `medication` → medication, `research` → research). Hiding `medication` hides a contraceptive too. |
+| `policy.sensitive_categories(text, *, among=SENSITIVE) -> frozenset[Category]` | Every sensitive category matched by `categorize`'s gene-word and text patterns within `among`. Only those categories' patterns are evaluated. Does not change `categorize`'s first-match result or stored categories. |
+| `policy.text_visible(policy, text) -> bool` | Checks only sensitive categories currently hidden by explicit hides or standard-level locks. With none hidden it returns true without scanning text. |
+| `search.medication_text(conn, row) -> str` | Medication drug/brand/note plus its indexed body, keyed by `user:<id>` for user rows and `<id>` for imports. The body preserves FHIR `note`/`reasonCode` words absent from the medication row's metadata-only note. Read-only; no index changes. |
 | `policy.medication_category(text)` | The category of one of the user's own medications: sensitive when its text says so or when the drug is prescribed mainly for a sensitive condition (an SSRI, a contraceptive). Never used for gene–drug records, which stay drug-response items. |
 | `contracts.ImportResult`, `contracts.Call`, `contracts.CallState`, `contracts.SourceKind` | Shared types. |
+
+**Free-text privacy on read (#43):** `journal`, `phenotype`, `medication` and clinical `report` items
+must also pass `allowed` for **every** category in `sensitive_categories` of their words. Search query,
+browse and fetch check the full search document title and body, never just its snippet. Other readers check
+the stored text: journal text, phenotype trait/text, and report name/conclusion/narrative. Medication readers
+combine drug/brand/note with the search-document body: user documents omit notes, whereas FHIR notes and
+reasons live only in that body. Search, capture replies, medication listings, brief medications and their
+chart markers, trend drug-start dates and research-watch terms/reasons all use this complete text.
+Lookup/gene phenotype notes use the same visibility rule; hidden
+captures return only `saved` and a note, without names, text or dates. Hidden read items are counted without
+their details. Brief questions likewise check every named category. Existing marker, linked-report and base-kind
+checks still apply. Annotations, assertions, findings, observations, conditions and research keep their curated
+or coded category checks and are **not** re-scanned. Read-time scans run only patterns for currently hidden
+sensitive categories and do no scanning when none are hidden. Writes and stored single-category selection are unchanged.
 
 **Importer error handling:** catch exceptions, call `finish_import(status="failed", errors=[...])`, and return the result. Check
 an optional `cancel: threading.Event` between batches, and finish `cancelled` when it is set.
@@ -381,7 +398,8 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - With no end date, the start is kept with `{"status": ..., "current": false}` in its note. No date is ever invented.
   - A later import of the same medication and date updates the stored status.
   - A row's category never loosens. A sensitive row keeps its category even when a later import describes it under another sensitive category; it then keeps its stored text, and only its status moves (conditions too). The same resource's other events (a new stop) take the kept category and the stored text. A user's own record does the same: details that point at another sensitive category are not applied.
-  - When a confirmed medication's category is hidden, the reply is `{"saved": true, ...the details just given, "note"}`: nothing stored earlier (dose, brand, previous dose, whether it already existed) comes back.
+  - When a confirmed medication's category or any sensitive topic in its stored name/notes is hidden, the reply
+    contains only `saved` and a note: no name, date, dose, brand, previous dose or existence details come back.
   - `medication_event.category` holds each row's category (`policy.medication_category` for the user's own records and for imports).
 - **Sensitive categories** come from display text first, then from codes in `code`, in components and in `valueCodeableConcept`:
   - ICD-10 (CM and WHO) and ICD-9-CM ranges, written with or without the dot: mental health and pregnancy, plus Alzheimer's disease and the dementias (G30, F00–F03; 290, 294.1, 331.0), genetic susceptibility to and family history of cancer (Z15, Z80; V84.0, V16) and carrier status (Z14, Z84.81; V83);
@@ -457,6 +475,13 @@ markers supplied by the pack or derived definitions that have no report row. APO
 
 **`run_watch`:**
 - **Query terms** come from the pack's watch list, the user's medications and their topics, never from genotypes. With `allow` (a category predicate), medications the privacy settings hide are left out, so they never become search terms sent to the research services.
+- Medication selection in `default_watch` and every `run_watch` checks each row's category and every hidden
+  sensitive topic in its drug/brand/note plus indexed body. The same filtered terms build `_why`'s medication
+  pairs, so a hidden medication supplies neither requests nor personalized reason text. Stored custom-watch
+  drug terms cannot reintroduce a hidden-only medication, including its normalized aliases; a drug the pack does
+  not know is matched by its brand and each word (in any script) of its name. A drug's newest event decides whether it is current even when
+  that event is hidden, so a hidden stop or restart keeps it out of the watch. With no sensitive category hidden,
+  medication selection does no text scan.
 - **Matching** to the user's genotypes happens locally.
 - **Dedupe:** by PMID, DOI or ClinVar id.
 - **Digests:** the first run gives a top-3 seed digest; later runs give only new items.
@@ -484,7 +509,7 @@ markers supplied by the pack or derived definitions that have no report row. APO
 **Session memory and specialty briefs (0.4.0 U4a):**
 - `caduceus_capture op=consent category=<sensitive category> answer=yes|no|ask_later|clear` records only an answer the user gave in the conversation, never an inferred answer. The five `SENSITIVE` categories are accepted. `settings['consent:<category>']` holds JSON `{answer, at}`; clear deletes it. Without answer, return every recorded answer under `consent`. Every response explains that **consent never changes visibility**; only the user's privacy settings do.
 - `op=phenotype marker=<rs/i/gs id, known pack gene or derived-call name> trait=<up to 200 characters> stance=confirms|refutes|unsure text=<the user's words, up to 2,000 characters>` needs marker or trait. `phenotype_note(id, subject_id DEFAULT 1, marker, trait, stance, text, category, created_at)` is added on open, including existing vaults. Markers are lowercased. Check the marker and its lookup-resolved alias at write time: a sensitive category from either takes precedence and is never replaced by the trait/text category. Otherwise sensitive trait/text wins, then PGX for markers with pack or derived genes, then the marker category (TRAIT for a trait-only note). The row and search document (`kind=phenotype`) share that category; the search document's title is `<Stance>: <trait or marker>` (for example `Refutes: lactose intolerance`), so search and fetch keep the stance. Hidden capture replies return only `saved` and a fixed note, without stored details. An identical normalized marker, trait, stance and exact text on the same UTC day reuses the existing row and search document and replies that it was already saved; a later day or changed content records a new note.
-- Lookup and gene results attach visible `phenotype_notes: [{id, stance, trait, text, date}]` to matching markers, newest first (id breaks timestamp ties); hidden notes add to `withheld`. Search query/browse/fetch and lookup/gene check the stored category, the sensitive category named in the note's own trait and text (a marker's sensitive category is stored, so a second one in the words is re-checked on every read), AND current `_marker_visible` for the note marker and its resolved alias. A lookup of a marker also attaches notes recorded against any alias of it. Without a complete callset, known alias targets are still checked; ambiguous aliases require every candidate to be visible. Hidden notes contribute only to `withheld`, never text, marker or date, even when the marker category changed after capture. Trait-only notes use their stored category and their words' category. Gene-name or derived-name notes attach to the gene reply under top-level `phenotype_notes`, using the same checks. Browse stays newest first.
+- Lookup and gene results attach visible `phenotype_notes: [{id, stance, trait, text, date}]` to matching markers, newest first (id breaks timestamp ties); hidden notes add to `withheld`. Search query/browse/fetch and lookup/gene check the stored category, every sensitive category named in the note's own trait and text (a marker's sensitive category is stored, so the words are re-checked on every read), AND current `_marker_visible` for the note marker and its resolved alias. A lookup of a marker also attaches notes recorded against any alias of it. Without a complete callset, known alias targets are still checked; ambiguous aliases require every candidate to be visible. Hidden notes contribute only to `withheld`, never text, marker or date, even when the marker category changed after capture. Trait-only notes use their stored category and every sensitive category in their words. Gene-name or derived-name notes attach to the gene reply under top-level `phenotype_notes`, using the same checks. Browse stays newest first.
 - `brief.write_brief(vault, samples, out_dir, *, policy, today=None, specialty="general", questions=None) -> Path`: specialty definitions and display titles live in `knowledge/data/specialties.json`. General and primary care retain the default sections; other specialties use the stored clinical codes and U3b series readers/ranges and filter gene–drug entries by specialty genes. Specialty lab tables also include visible text-valued `unplotted_points`, once each; points with a different known unit remain excluded. Medications, supplements and Apple Health trends retain their policy. Non-general briefs show `Prepared for: <title>` and use `health-brief-<date>-<specialty>.html`; general keeps its original filename. Unknown specialties raise `ToolError` listing valid names. Up to ten questions of at most 500 characters each appear HTML-escaped at the end; hidden-category questions are omitted and counted. All output remains local.
 
 The tools call the functions above and run imports through `core.jobs.submit`. They filter every result through the policy.
@@ -493,7 +518,8 @@ watch starts a new vault, Health Auto Export sync re-imports the configured `hae
 daily check finds nothing until data returns. Settings stay unchanged.
 Search distinguishes query matches from kind listings with `scope_note`; medication hits carry prescriber `guidance`.
 Trend `compare`/`series` add the metric's full stored `data_range` when present, without changing window `coverage`;
-`window_note` flags an earlier end. Compares carry `guidance`; drug pivots also suggest a local `op=pgx` call.
+`window_note` flags an earlier end. Compares carry `guidance`; drug pivots also suggest a local `op=pgx` call. A drug
+pivot uses the latest visible start; matching starts the policy hides add to `withheld`, never their dates.
 
 **Clinical discovery and counts:**
 - `caduceus_trend op=metrics` returns the existing wellness `metrics` plus `clinical_series`, even when wellness is hidden (`metrics: []`, counted in `withheld`). A rollup `rebuilding` note is preserved. Clinical rows pass `visible(policy, category or records, kind="observation")` before grouping; hidden rows add only their count to the top-level `withheld`/`withheld_note`.

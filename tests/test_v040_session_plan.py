@@ -450,3 +450,30 @@ def test_fix_round2_retired_cpic_label_limit_and_marker_tier(vault, fake_ctx, tm
     assert item["limits"] == entry["limits"]
     annotation = next(i for i in reply["actionable"]["items"] if i["marker"] == "rs900082")
     assert annotation["evidence"] == "research"
+
+
+@pytest.mark.parametrize("origin", ["user", "note"])
+def test_u6_medication_words_naming_hidden_topic_stay_off_record(populated, fake_ctx, origin):
+    words = "My anxiety got worse during pregnancy"
+    if origin == "user":
+        ops.capture_tool(fake_ctx, {"op": "medication", "drug": "simvastatin", "text": words,
+                                    "date": "2026-02-07", "confirm": True})
+    else:
+        # FHIR note text is kept only in the search index, never in the medication row.
+        from caduceus.health.fhir import ingest
+        resource = {"resourceType": "MedicationRequest", "id": "synthetic-statin", "status": "active",
+                    "medicationCodeableConcept": {"text": "simvastatin"}, "authoredOn": "2026-02-07",
+                    "note": [{"text": words}]}
+        with write_txn(populated):
+            assert ingest(populated, resource, None)["medication"] == 1
+
+    def statin(reply):
+        return next(i for i in areas(reply)["gene_drug"]["items"] if "simvastatin" in i["drugs"])
+
+    shown = plan(fake_ctx)
+    assert sorted(m["date"] for m in statin(shown)["on_record"]) == ["2026-01-01", "2026-02-07"]
+    fake_ctx.config.update(privacy_level="open", hidden_categories=["reproductive"])
+    hidden = plan(fake_ctx)
+    assert [m["date"] for m in statin(hidden)["on_record"]] == ["2026-01-01"]
+    assert hidden.get("withheld", 0) == shown.get("withheld", 0) + 1
+    assert "2026-02-07" not in json.dumps(hidden) and "anxiety" not in json.dumps(hidden).lower()

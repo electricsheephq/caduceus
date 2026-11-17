@@ -117,6 +117,12 @@ _GENE_WORD = re.compile(
     r"(?<![A-Za-z0-9])(" + "|".join(sorted((g for g in _GENE_CATEGORY if g != "APC"), key=len, reverse=True))
     + r")(?![A-Za-z0-9])"
 )
+_GENE_TEXT_CATEGORY = tuple(
+    (re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(sorted(
+        (gene for gene, cat in _GENE_CATEGORY.items() if cat == category and gene != "APC"),
+        key=len, reverse=True)) + r")(?![A-Za-z0-9])"), category)
+    for category in sorted(set(_GENE_CATEGORY.values()))
+)
 _TEXT_CATEGORY = (
     (re.compile(r"alzheimer|dementia|\bapo-?e(?:[234]|\b)", re.I), Category.ALZHEIMERS),
     (re.compile(r"\bbrca[12]?\b", re.I), Category.CANCER_RISK),
@@ -152,6 +158,23 @@ def visible(policy: Policy, category: object, *, kind: str | None = None) -> boo
     """True when an item may be shown: its own category and the base category of its kind are both allowed."""
     base = _KIND_BASE.get(kind or "")
     return allowed(policy, category) and (base is None or allowed(policy, base))
+
+
+def sensitive_categories(text: str, *, among: Iterable[Category] = SENSITIVE) -> frozenset[Category]:
+    """Named sensitive categories, evaluating only patterns for the requested categories."""
+    selected = SENSITIVE.intersection(among)
+    if not selected or not text:
+        return frozenset()
+    return frozenset(cat for pattern, cat in (*_GENE_TEXT_CATEGORY, *_TEXT_CATEGORY)
+                     if cat in selected and pattern.search(text))
+
+
+def text_visible(policy: Policy, text: str) -> bool:
+    """Check only hidden sensitive topics; when none are hidden, do not scan the text."""
+    hidden = SENSITIVE & policy.hidden
+    if policy.level != "open":
+        hidden |= SENSITIVE - policy.unlocked
+    return not hidden or not sensitive_categories(text, among=hidden)
 
 
 def categorize(*, genes: Iterable[str] = (), text: str = "", markers: Iterable[str] = (),
