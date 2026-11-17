@@ -124,6 +124,7 @@ def test_never_looser_than_matching_the_stored_text(text):
     ("Depression; breast\u200bcancer", Category.MENTAL_HEALTH),
     ("Anxiety and BRCA1\u00b9", Category.CANCER_RISK),
     ("Normal\u00a0result; breast\u00a0cancer", Category.CANCER_RISK),
+    ("breast cancer and \uff21\uff30\uff2f\uff25 assessment", Category.CANCER_RISK),
 ])
 def test_category_from_the_stored_text_wins(text, expected):
     """A normalized reading decides only when the stored text names no topic, so a stored category never moves."""
