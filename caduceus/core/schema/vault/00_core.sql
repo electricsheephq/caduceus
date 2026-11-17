@@ -110,6 +110,26 @@ CREATE TABLE IF NOT EXISTS condition (
     raw_json TEXT
 );
 
+-- Searchable FHIR reports. Attachments stay private; no URLs are fetched.
+CREATE TABLE IF NOT EXISTS clinical_report (
+    id INTEGER PRIMARY KEY,
+    subject_id INTEGER NOT NULL DEFAULT 1 REFERENCES subject(id),
+    resource_type TEXT NOT NULL CHECK (resource_type IN ('DiagnosticReport', 'DocumentReference', 'Composition', 'ImagingStudy')),
+    code_system TEXT,
+    code TEXT,
+    name TEXT NOT NULL,
+    status TEXT,
+    effective_at TEXT NOT NULL,
+    issued TEXT,
+    conclusion TEXT,
+    narrative TEXT,
+    category TEXT NOT NULL DEFAULT 'records',
+    source TEXT NOT NULL,
+    source_id INTEGER REFERENCES source_artifact(id),
+    dedupe_key TEXT NOT NULL UNIQUE,
+    raw_json TEXT
+);
+
 CREATE TABLE IF NOT EXISTS journal (
     id INTEGER PRIMARY KEY,
     subject_id INTEGER NOT NULL DEFAULT 1 REFERENCES subject(id),
