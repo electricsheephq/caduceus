@@ -73,3 +73,24 @@ def test_search_snippet_and_visibility_share_a_snapshot(vault, monkeypatch, data
         assert not vault.in_transaction
     finally:
         writer.close()
+
+
+@pytest.mark.parametrize("shape", [
+    {"code": [{"text": "x"}]}, {"code": "plain"}, {"code": {"coding": ["text"]}},
+    {"valueCodeableConcept": "plain"}, {"component": "plain"}, {"component": [{"code": "plain"}]},
+])
+def test_malformed_contained_target_does_not_fail_import(vault, tmp_path, shape):
+    from tests.test_v040_reports import _bundle, _import
+    target = {"resourceType": "Observation", "id": "private", **shape}
+    result = _import(vault, tmp_path, _bundle(_report(result=[{"reference": "#private"}], contained=[target])))
+    assert result.status == "succeeded"
+    assert vault.execute("SELECT count(*) FROM clinical_report").fetchone()[0] == 1
+
+
+def test_contained_panel_component_category_withholds_report(vault):
+    panel = {"resourceType": "Observation", "id": "panel", "code": {"text": "Panel"},
+             "component": [{"code": {"coding": [{"system": "http://loinc.org", "code": "44261-6"}]},
+                            "valueQuantity": {"value": 987654}}]}
+    fhir.ingest(vault, _report(conclusion="repeatedvalue 987654", result=[{"reference": "#panel"}],
+                               contained=[panel]), None)
+    _hidden(vault, Policy(level="standard"))

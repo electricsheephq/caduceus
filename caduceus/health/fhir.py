@@ -935,9 +935,15 @@ def _report(vault, resource, source_id, counts, full_url=None, resolver=None):
             target = contained.get(link.get("reference")) if isinstance(link.get("reference"), str) else None
             if not isinstance(target, dict):
                 continue
-            coded = _category([target.get("code") or {}, target.get("valueCodeableConcept") or {}], Category.RECORDS)
+            parts = [target, *_read_objects(target.get("component"))]  # a contained panel's components count too
+            for part in parts:
+                coded = _category([_report_concept(part.get("code")), _report_concept(part.get("valueCodeableConcept"))],
+                                  Category.RECORDS)
+                if coded in SENSITIVE:
+                    contained_categories.add(coded)
             worded = categorize(text=_report_text(target.get("description")), default=Category.RECORDS)
-            contained_categories.update(c for c in (coded, worded) if c in SENSITIVE)
+            if worded in SENSITIVE:
+                contained_categories.add(worded)
     if category not in SENSITIVE and contained_categories:
         category = sorted(contained_categories, key=lambda c: c.value)[0]
     identity = _report_identity(resource, full_url)
