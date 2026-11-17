@@ -37,6 +37,16 @@ def _timestamp(now):
     return now.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _drug_key(name):
+    """The pack's name for a drug, else the first word of its name, so a hidden drug the pack does not know still
+    matches a stored term ("Synthdrugol 500 mg" and "synthdrugol" share a key)."""
+    drug = normalize_drug(name)
+    if drug:
+        return drug
+    words = re.findall(r"[a-z][a-z-]{2,}", str(name or "").lower())
+    return words[0] if words else None
+
+
 def _medications(conn, allow=None):
     """Current medications the knowledge pack knows. *allow* (a category predicate) leaves out the ones the user's
     privacy settings hide. Return visible current drugs and hidden-only names to exclude from stored watch terms."""
@@ -45,17 +55,20 @@ def _medications(conn, allow=None):
     latest, starts = {}, {}
     hidden_drugs = set()
     for row in rows:
-        drug = normalize_drug(row["drug"])
-        if ((allow is not None and not allow(row["category"])) or
-                (hidden_categories and sensitive_categories(medication_text(conn, row), among=hidden_categories))):
-            if drug:
-                hidden_drugs.add(drug)
+        key = _drug_key(row["drug"])
+        if not key:
             continue
-        if drug and drug not in latest:
-            latest[drug] = row["event"]
-        if drug and row["event"] == "start" and drug not in starts:
-            starts[drug] = row["occurred_on"]
-    current = sorted(drug for drug, event in latest.items() if event != "stop")
+        hidden = ((allow is not None and not allow(row["category"])) or
+                  bool(hidden_categories and sensitive_categories(medication_text(conn, row), among=hidden_categories)))
+        if hidden:
+            hidden_drugs.add(key)
+        # The newest event decides, even when hidden: a hidden stop or restart keeps the drug out of the watch
+        # instead of letting an older visible start make it current again.
+        if key not in latest:
+            latest[key] = None if hidden or not normalize_drug(row["drug"]) else row["event"]
+        if not hidden and row["event"] == "start" and key not in starts:
+            starts[key] = row["occurred_on"]
+    current = sorted(drug for drug, event in latest.items() if event not in (None, "stop"))
     return sorted(current, key=lambda drug: starts.get(drug, ""), reverse=True), hidden_drugs - set(current)
 
 
@@ -223,7 +236,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
     medications, hidden_drugs = _medications(conn, allow)
     terms["drugs"] = (medications if watch["name"] == "default" else
                       medications + sorted(drug for drug in set(terms.get("drugs", [])) - set(medications)
-                                           if normalize_drug(drug) not in hidden_drugs))
+                                           if _drug_key(drug) not in hidden_drugs))
     sources = _terms(watch["sources_json"])
     stamp = _timestamp(now)
     until = stamp[:10]

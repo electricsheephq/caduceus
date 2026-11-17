@@ -337,3 +337,59 @@ def test_fix1_watch_excludes_hidden_medication_words(fake_ctx, vault, origin, su
         assert all(item["why"]["drugs"] == [] for item in result["new_items"])
         assert "warfarin" not in json.dumps(result).lower()
         assert "warfarin" not in json.dumps(http.requests).lower()
+
+
+def test_bot_previous_dose_naming_hidden_topic_is_not_echoed(fake_ctx, vault):
+    _hide(fake_ctx)
+    first = ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "dose": "5 mg during pregnancy",
+                                        "date": DAY, "confirm": True})
+    assert "pregnancy" not in json.dumps(first).lower()
+    reply = ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "dose": "10 mg",
+                                        "date": DAY, "confirm": True})
+    assert reply["saved"] is True and "previous_dose" not in reply
+    assert "pregnancy" not in json.dumps(reply).lower()
+    fake_ctx.config["hidden_categories"] = []
+    shown = ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "dose": "12 mg",
+                                        "date": DAY, "confirm": True})
+    assert shown["updated"] is True and shown["previous_dose"] == "10 mg"
+
+
+def test_bot_hidden_stop_keeps_drug_out_of_watch(fake_ctx, vault):
+    from caduceus.research.watch import _medications
+
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "date": DAY, "confirm": True})
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "event": "stop", "text": WORDS,
+                                "date": "2001-03-03", "confirm": True})
+    assert _medications(vault)[0] == []
+    allow = lambda category: policy.visible(HIDDEN, category, kind="medication")
+    current, hidden = _medications(vault, allow)
+    assert current == [] and "warfarin" in hidden
+
+
+def test_bot_unknown_hidden_drug_is_not_sent_from_custom_watch(fake_ctx, vault):
+    from caduceus.research.watch import default_watch, normalize_drug, run_watch
+
+    assert normalize_drug("Synthdrugol 500 mg") is None
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "Synthdrugol 500 mg", "text": WORDS,
+                                "date": DAY, "confirm": True})
+    watch = default_watch(vault)
+    terms = {**json.loads(watch["terms_json"]), "drugs": ["synthdrugol", "warfarin"]}
+    with write_txn(vault):
+        vault.execute("UPDATE watch SET name='synthetic-custom', sources_json='[\"europepmc\"]', terms_json=? "
+                      "WHERE id=?", (json.dumps(terms), watch["id"]))
+    allow = lambda category: policy.visible(HIDDEN, category, kind="medication")
+    http = _Fix1Http()
+    run_watch(vault, watch, http=http, now="2026-11-17", budget=8, allow=allow)
+    sent = json.dumps(http.requests).lower()
+    assert "synthdrugol" not in sent and "warfarin" in sent
+
+
+def test_bot_hidden_later_start_is_counted_with_visible_pivot(fake_ctx, vault, samples):
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "date": DAY, "confirm": True})
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "warfarin", "text": WORDS,
+                                "date": "2001-05-05", "confirm": True})
+    assert ops._drug_start(vault, "warfarin", HIDDEN) == (date.fromisoformat(DAY), 1)
+    _hide(fake_ctx)
+    reply = ops.trend_tool(fake_ctx, {"op": "compare", "metric": "weight", "drug": "warfarin"})
+    assert reply["pivot"] == DAY and reply["withheld"] == 1
+    assert "2001-05-05" not in json.dumps(reply)

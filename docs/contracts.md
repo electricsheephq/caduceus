@@ -478,8 +478,10 @@ markers supplied by the pack or derived definitions that have no report row. APO
 - Medication selection in `default_watch` and every `run_watch` checks each row's category and every hidden
   sensitive topic in its drug/brand/note plus indexed body. The same filtered terms build `_why`'s medication
   pairs, so a hidden medication supplies neither requests nor personalized reason text. Stored custom-watch
-  drug terms cannot reintroduce a hidden-only medication, including its normalized aliases. With no sensitive
-  category hidden, medication selection does no text scan.
+  drug terms cannot reintroduce a hidden-only medication, including its normalized aliases; a drug the pack does
+  not know is matched by the first word of its name. A drug's newest event decides whether it is current even when
+  that event is hidden, so a hidden stop or restart keeps it out of the watch. With no sensitive category hidden,
+  medication selection does no text scan.
 - **Matching** to the user's genotypes happens locally.
 - **Dedupe:** by PMID, DOI or ClinVar id.
 - **Digests:** the first run gives a top-3 seed digest; later runs give only new items.
@@ -516,7 +518,8 @@ watch starts a new vault, Health Auto Export sync re-imports the configured `hae
 daily check finds nothing until data returns. Settings stay unchanged.
 Search distinguishes query matches from kind listings with `scope_note`; medication hits carry prescriber `guidance`.
 Trend `compare`/`series` add the metric's full stored `data_range` when present, without changing window `coverage`;
-`window_note` flags an earlier end. Compares carry `guidance`; drug pivots also suggest a local `op=pgx` call.
+`window_note` flags an earlier end. Compares carry `guidance`; drug pivots also suggest a local `op=pgx` call. A drug
+pivot uses the latest visible start; matching starts the policy hides add to `withheld`, never their dates.
 
 **Clinical discovery and counts:**
 - `caduceus_trend op=metrics` returns the existing wellness `metrics` plus `clinical_series`, even when wellness is hidden (`metrics: []`, counted in `withheld`). A rollup `rebuilding` note is preserved. Clinical rows pass `visible(policy, category or records, kind="observation")` before grouping; hidden rows add only their count to the top-level `withheld`/`withheld_note`.

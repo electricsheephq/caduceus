@@ -669,10 +669,11 @@ def _drug_start(vault, drug: str, policy) -> tuple[date | None, int]:
         if same_drug(drug, r["drug"]) or same_drug(drug, r["brand"] or "")]
     shown = [r for r in rows if medication_visible(policy, r["category"], text=search_index.medication_text(vault, r))]
     starts = [r["occurred_on"] for r in shown if r["occurred_on"] and _ISO_DAY.match(r["occurred_on"])]
+    hidden = len(rows) - len(shown)
     if starts:
-        return date.fromisoformat(starts[-1][:10]), 0
-    if len(shown) < len(rows):
-        return None, len(rows) - len(shown)
+        return date.fromisoformat(starts[-1][:10]), hidden
+    if hidden:
+        return None, hidden
     if shown:
         raise ToolError(f"the recorded start of {drug} has no day (only {shown[-1]['occurred_on']}): give a pivot date")
     raise ToolError(f"no start date recorded for {drug}: record it with caduceus_capture op=medication")
@@ -775,6 +776,8 @@ def trend_tool(ctx, args: dict) -> dict:
             result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
                            before_days=before_days, after_days=after_days)
             result = {**result, "pivot": pivot.isoformat()}
+            if drug_pivot:
+                result.update(_withheld(hidden))  # a matching start the policy hides: counted, never described
             end = pivot + timedelta(days=after_days - 1)
             if drug_pivot:
                 result["next_step"] = (f"For gene–drug evidence about {drug}, "
@@ -1003,7 +1006,7 @@ def _medication(ctx, args: dict) -> dict:
                 "note": (f"Recorded. Your privacy settings hide {category.value} items, so this medication and "
                          "anything already stored about it stay out of searches, the brief and this reply until the "
                          "user unlocks it with /caduceus.")}
-    if not medication_visible(policy_for(ctx), category, text=stored_text):
+    if not medication_visible(policy_for(ctx), category, text=f"{stored_text} {previous_dose or ''}"):
         return {"saved": True, "note": "Recorded. Your privacy settings hide this medication; only the user can "
                 "change visibility with /caduceus."}
     out = {"recorded": outcome == "recorded", "already_recorded": outcome == "already_recorded",
