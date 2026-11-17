@@ -109,7 +109,7 @@ Other health plugins in the Hermes catalog read Apple Health, records or medicat
 | Promethease report, `.zip` or `.html` | The report file you downloaded from Promethease |
 | Apple Health export: the `.zip` from an iPhone in any language, or the export XML inside it | iPhone Health app → your picture → Export All Health Data. With Health Records connected, the zip includes your clinical records |
 | Health Auto Export JSON (or a zip of JSON exports) | In Health Auto Export, use Manual Export or an automation that saves metrics as JSON |
-| FHIR R4 JSON (labs, conditions, medications) | A patient portal's FHIR or "download my record" export |
+| FHIR R4 JSON (labs, conditions, medications, reports and documents) | A patient portal's FHIR or "download my record" export |
 
 Give your agent the file's path, and Caduceus copies the file into its vault and imports it.
 - The agent is told never to open these files itself.
@@ -117,6 +117,11 @@ Give your agent the file's path, and Caduceus copies the file into its vault and
 - An interrupted import resumes where it stopped.
 - A FHIR condition that gives only the date it was recorded is kept, with its onset unknown. Results without a code
   are told apart by name.
+- Diagnostic reports, documents and notes are stored and searchable; imaging studies are kept as metadata. Text
+  attachments sent inline are read locally; PDFs and images are only listed, and attachment links are never followed.
+- After an update, `caduceus_capture op=settings` says when stored clinical files hold records an earlier version skipped, merged
+  or ignored. `caduceus_capture op=replay` re-reads them locally and adds only what is missing, never changing a stored
+  record; it refuses, writing nothing, when the history can't be rebuilt exactly.
 - A vault holds one person. A second DNA file is compared with the first on shared markers, and if it looks like a
   different person, you are told, and answers carry a warning. Keep each person in their own Hermes profile.
 
@@ -153,10 +158,10 @@ night counts once.
 
 | Tool | What it does |
 |---|---|
-| `caduceus_search` | Full-text search across your annotations, research, labs, conditions, medications and notes, with cited snippets; lists everything of one kind, such as your medications |
+| `caduceus_search` | Full-text search across your annotations, research, labs, conditions, medications, clinical reports and notes, with cited snippets; lists everything of one kind, such as your medications; fetches a report with its linked results |
 | `caduceus_genome` | Your genotype at any marker, gene views (every marker Caduceus knows for the gene, its derived call first), gene–drug checks (CPIC guidance plus GLP-1 research), derived calls (APOE, CYP2C19, CYP2C9 and others), a gene–drug profile, top findings, and the rebuilt variant report |
-| `caduceus_trend` | Apple Health trends with units, coverage gaps and a calculation version; before and after a medication start; lab results over time; a daily signal check |
-| `caduceus_capture` | Imports and their progress, medications (recorded only after you confirm), notes, the research watch, settings, and the health brief |
+| `caduceus_trend` | Apple Health trends with units, coverage gaps and a calculation version; before and after a medication start; lab results over time with reference ranges as recorded; every clinical series you hold; a daily signal check |
+| `caduceus_capture` | Imports and their progress, medications (recorded only after you confirm), notes, phenotype notes that confirm or correct a finding, consent answers for a guided session, a one-call plan for a first session, the research watch, settings, the health brief (also for a specialty, with your questions), and recovery of records earlier versions missed |
 
 A gene–drug result keeps three outcomes apart:
 - **flag:** you carry the effect allele;
@@ -177,7 +182,10 @@ and so on (`/caduceus help` lists them), or in the plugin settings. Your agent c
 them. Hidden results are counted, never described. A marker follows its gene's category: hiding `pgx` hides the
 drug-response genes' markers in gene views, lookups, gene–drug checks and the summary's gene–drug profile, and a
 derived call shows only when every marker behind it can. Variant-report listings (filters, top findings, the rebuilt
-report) follow each annotation's own category.
+report) follow each annotation's own category. Your own words (notes, phenotype notes, medication notes and doses,
+report text and brief questions) are shown only when every sensitive topic they name is visible, so a note about
+anxiety during pregnancy stays hidden when either topic is. A clinical report is withheld whole when anything it links
+is hidden. Consent answers are remembered so a guided session asks once, but they never change what is shown.
 
 Disclosure — imports, search and reports run locally, and the vault is never uploaded as a
 whole; tool results (slices of your data) enter the conversation, so the model provider you
