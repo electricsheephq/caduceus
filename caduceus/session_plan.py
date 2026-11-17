@@ -230,6 +230,9 @@ def session_plan(ctx, args):
                 continue
             key = "carrier_and_screening" if category in ("carrier", "cancer_risk") else "sensitive"
             by_key[key]["items"].append(item)
+        for key in ("sensitive", "carrier_and_screening"):
+            # Hidden areas come after visible ones, so they never push a visible area past max_items.
+            by_key[key]["items"].sort(key=lambda i: i.get("hidden", False))
         for area in areas:
             area["more"] = max(0, len(area["items"]) - limit)
             area["items"] = area["items"][:limit]

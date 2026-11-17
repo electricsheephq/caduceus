@@ -496,3 +496,12 @@ def test_session_plan_lists_no_hidden_areas_without_dna(vault, samples, fake_ctx
     fake_ctx.config["privacy_level"] = "standard"
     reply = areas(plan(fake_ctx))
     assert reply["sensitive"]["items"] == [] and reply["carrier_and_screening"]["items"] == []
+
+
+def test_hidden_areas_never_push_visible_areas_past_the_cap(vault, samples, fake_ctx, tmp_path):
+    report(vault, tmp_path, [finding("rs900003", "CFTR", 4, "Synthetic carrier finding"),
+                             finding("rs900005", "BRCA1", 4, "Synthetic screening finding")])
+    fake_ctx.config["hidden_categories"] = ["carrier"]
+    area = areas(plan(fake_ctx, max_items=1))["carrier_and_screening"]
+    assert [i["category"] for i in area["items"]] == ["cancer_risk"] and area["more"] == 1
+    assert area["items"][0]["findings"] == 1 and "hidden" not in area["items"][0]

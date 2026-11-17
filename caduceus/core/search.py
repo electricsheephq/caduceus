@@ -198,11 +198,11 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
         if not visible(policy, row["category"], kind="observation"):
             withheld += 1
             continue
-        # Imaging rows also return their stored modalities and body sites: check every topic those name.
+        # Imaging rows also return their stored status, modalities, body sites and counts: check every word in those.
         meta = document.get("_caduceus", {})
         if kind == "report" and not text_visible(policy, "\n".join([
-                *(row[key] or "" for key in ("name", "conclusion", "narrative")),
-                _strings(meta.get("modalities")), _strings(meta.get("body_sites"))])):
+                *(row[key] or "" for key in ("name", "conclusion", "narrative")), _strings(document.get("status")),
+                *(_strings(meta.get(key)) for key in ("modalities", "body_sites", "numberOfSeries", "numberOfInstances"))])):
             withheld += 1
             continue
         result = {"ref": f"{kind}:{row['id']}", "title": row["name"], "date": row["effective_at"],

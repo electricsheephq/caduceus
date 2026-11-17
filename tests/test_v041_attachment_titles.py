@@ -100,3 +100,20 @@ def test_linked_imaging_words_are_checked_field_by_field(vault, tmp_path):
     assert _import(vault, tmp_path, _bundle(_report(imagingStudy=[{"reference": "urn:uuid:scan-one"}]), scan)).status == "succeeded"
     fetched = _fetch(vault, policy=Policy(hidden=frozenset({Category.MENTAL_HEALTH})))
     assert fetched["imaging"] == [] and fetched["withheld"] == 1
+
+
+@pytest.mark.parametrize("field", ["status", "numberOfSeries", "numberOfInstances"])
+def test_linked_imaging_status_and_counts_are_checked(vault, tmp_path, field):
+    """Malformed FHIR can put words where a code or a number belongs; the row is withheld, not shown."""
+    scan = _report("ImagingStudy", "scan-one", **{field: "pregnancy"})
+    assert _import(vault, tmp_path, _bundle(_report(imagingStudy=[{"reference": "urn:uuid:scan-one"}]), scan)).status == "succeeded"
+    assert "pregnancy" in json.dumps(_fetch(vault))
+    fetched = _fetch(vault, policy=Policy(hidden=frozenset({Category.REPRODUCTIVE})))
+    assert fetched["imaging"] == [] and fetched["withheld"] == 1 and "pregnancy" not in json.dumps(fetched)
+
+
+def test_linked_imaging_with_numeric_counts_is_shown(vault, tmp_path):
+    scan = _report("ImagingStudy", "scan-one", numberOfSeries=2, numberOfInstances=40)
+    assert _import(vault, tmp_path, _bundle(_report(imagingStudy=[{"reference": "urn:uuid:scan-one"}]), scan)).status == "succeeded"
+    fetched = _fetch(vault, policy=Policy(hidden=frozenset({Category.REPRODUCTIVE})))
+    assert fetched["imaging"][0]["numberOfSeries"] == 2 and fetched["withheld"] == 0
