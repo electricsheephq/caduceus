@@ -188,6 +188,20 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   among all this source's `hae_sync` runs, including failed or interrupted runs, with the same 3,650-day floor.
   Records `counts.reread=true` only when this version rule fires. A failed re-read does not advance the succeeded
   run, so the next sync re-reads again; after a successful re-read the same parser returns to the two-day overlap.
+  If the latest succeeded run has `counts.refill_from` (an ISO request start date), takes the earlier of that
+  date and the overlap/version re-read start, with the same 3,650-day floor. Records `counts.refill=true` only
+  when this lowers the final `since`. After all windows have been ingested, finds this source's earliest
+  stored day: the minimum of `sample.local_day` and the date part of `workout.start_utc`, both restricted to
+  `source_id=src.id` in samples.db. An empty window qualifies for refill only when its end is on or after
+  that day; with no stored rows for this source, empty windows never qualify. Still-truncated one-day windows
+  always qualify. A succeeded run with qualifying windows stores their earliest request start as
+  `counts.refill_from` and `counts.refill_tries=1`, or the latest succeeded
+  run's `refill_tries + 1` if it has `refill_from`, even when that date did not lower `since`. If this would
+  exceed 3, stores neither retry key and adds one warning listing only qualifying request kinds and dates:
+  "Health Auto Export gave no readable reply for these days after 3 tries (it may have no data for them),
+  so they are not retried automatically: <kind> <start> to <end>; ...".
+  A run with no qualifying windows stores neither key. Failed and cancelled runs
+  leave the last succeeded run's refill state and watermark in effect; their own counts do not store retry keys.
   Stores ISO `since` and `through` in the running import's `counts_json`
   inside `write_txn` before its first MCP request, so an interrupted first sync also preserves its start;
   `finish_import` replaces these with the full counts.
@@ -213,7 +227,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   An `ok=false` server envelope fails with exactly: "Health Auto Export did not answer the request. Check that
   the app is open and its MCP server is running." Server-provided error text is never copied into warnings,
   stored errors, progress or logs; `previous_sync.error` receives the fixed message too.
-  Skipped one-day truncated windows fail the run, retain writes and never advance the successful-sync watermark.
+  Skipped one-day truncated windows count as `windows_skipped`, warn with counts and request dates, retain
+  writes and feed the bounded refill state; they do not fail a run with other readable replies on their own.
+  A run with no readable replies still fails, including when all replies remain truncated at one day.
 - **Run exclusion:** both HAE entry points begin a visible `running` run before acquiring a per-samples-file
   thread lock, held through rollup recomputation. On systems with `fcntl`, a nonempty `main` path from
   `PRAGMA database_list` also uses an exclusive nonblocking flock on `<samples path>-hae-lock`. In-memory databases

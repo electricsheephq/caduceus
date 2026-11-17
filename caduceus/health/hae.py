@@ -537,10 +537,11 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
             previous = vault.execute(
                 "SELECT counts_json,parser_version FROM import_run WHERE source_id=? AND parser='hae_sync' AND status='succeeded' "
                 "ORDER BY id DESC LIMIT 1", (src.id,)).fetchone()
+            previous_counts = json.loads(previous[0]) if previous else {}
             through = today
             since = through - timedelta(days=backfill_days - 1)
             if previous:
-                since = date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2)
+                since = date.fromisoformat(previous_counts["through"]) - timedelta(days=2)
                 if previous[1] != PARSER_VERSION:
                     earliest = vault.execute(
                         "SELECT min(json_extract(counts_json,'$.since')) FROM import_run "
@@ -549,6 +550,12 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                         since = min(since, date.fromisoformat(earliest))
                     counts["reread"] = True
                 since = max(since, through - timedelta(days=3650))
+                if previous_counts.get("refill_from"):
+                    refill_since = max(min(since, date.fromisoformat(previous_counts["refill_from"])),
+                                       through - timedelta(days=3650))
+                    if refill_since < since:
+                        counts["refill"] = True
+                    since = refill_since
             else:
                 earlier = vault.execute(
                     "SELECT counts_json FROM import_run WHERE source_id=? AND parser='hae_sync' AND id<? "
@@ -573,6 +580,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     start = end + timedelta(days=1)
             windows.sort(key=lambda w: (w[0], w[1], w[2]))
             done, total = 0, len(windows)
+            refill_windows, empty_windows = [], []
             while windows:
                 _check_cancel(cancel)
                 start, end, kind = windows.pop(0)
@@ -598,9 +606,11 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                     total += 2
                 elif truncated:
                     counts["windows_skipped"] += 1
+                    refill_windows.append((start, end, kind))
                     warnings.append(f"{kind}: skipped request window {start}")
                 elif data is None:
                     counts["windows_empty"] += 1
+                    empty_windows.append((start, end, kind))
                     warnings.append(f"{kind} {start} to {end}: no data in the reply")
                 else:
                     readable_replies += 1
@@ -623,13 +633,31 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
                                     f"({SKIP_REASONS[main_reason]}), "
                                     "so none was imported. The next sync reads these days again.")
             if counts["windows_skipped"]:
-                status = "failed"
                 warnings.append(f"Health Auto Export replies for {counts['windows_skipped']} one-day requests "
-                                "were too large to read; the next sync reads those days again.")
-            if counts["windows_empty"] > 0 and readable_replies == 0:
+                                "were too large to read; affected request dates are listed above.")
+            if (refill_windows or empty_windows) and readable_replies == 0:
                 status = "failed"
                 warnings.append("None of Health Auto Export's replies could be read, so nothing was imported. "
                                 "The next sync reads these days again.")
+            if status == "succeeded" and empty_windows:
+                # Later replies may establish the source's first day; decide only after ingestion.
+                first_day = samples.execute(
+                    "SELECT min(day) FROM (SELECT min(local_day) AS day FROM sample WHERE source_id=? "
+                    "UNION ALL SELECT min(substr(start_utc,1,10)) FROM workout WHERE source_id=?)",
+                    (src.id, src.id)).fetchone()[0]
+                if first_day is not None:
+                    first_day = date.fromisoformat(first_day)
+                    refill_windows.extend(window for window in empty_windows if window[1] >= first_day)
+            if status == "succeeded" and refill_windows:
+                tries = previous_counts.get("refill_tries", 0) + 1 if previous_counts.get("refill_from") else 1
+                if tries <= 3:
+                    counts["refill_from"] = min(start for start, end, kind in refill_windows).isoformat()
+                    counts["refill_tries"] = tries
+                else:
+                    days = "; ".join(f"{kind} {start} to {end}" for start, end, kind in sorted(refill_windows))
+                    warnings.append("Health Auto Export gave no readable reply for these days after 3 tries "
+                                    "(it may have no data for them), "
+                                    f"so they are not retried automatically: {days}.")
     except _Cancelled:
         status = "cancelled"
     except PermissionError:

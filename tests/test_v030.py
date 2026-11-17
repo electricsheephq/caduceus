@@ -784,7 +784,7 @@ def test_unreadable_window_among_readable_replies_succeeds_through_today(samples
     assert sources.run_info(vault, out.run_id)["counts"]["through"] == out.counts["through"]
     next_sync = sync(empty, samples, vault, today=TODAY + timedelta(days=1))
     assert next_sync.status == "succeeded"
-    assert next_sync.counts["since"] == (TODAY - timedelta(days=2)).isoformat()
+    assert next_sync.counts["since"] == unreadable_start.isoformat()
 
 
 def test_unreadable_first_sync_preserves_backfill(samples, vault):
@@ -951,10 +951,10 @@ def test_truncated_single_day_still_skips(samples, vault):
         return {"ok": True, "truncated": True, "result": "cut"} if args.get("aggregate") else empty(tool, args)
 
     out = sync(call, samples, vault)
-    assert out.status == "failed" and out.counts["windows_skipped"] == 1
+    assert out.status == "succeeded" and out.counts["windows_skipped"] == 1
     assert out.warnings == ["quantity: skipped request window " + DAY,
                             "Health Auto Export replies for 1 one-day requests were too large to read; "
-                            "the next sync reads those days again."]
+                            "affected request dates are listed above."]
 
 
 def test_begin_run_interrupts_stale_runs(vault):
@@ -979,7 +979,7 @@ def test_skipped_day_does_not_advance_sync_watermark(samples, vault):
         return empty(tool, args)
 
     failed = sync(truncated, samples, vault, today=following)
-    assert failed.status == "failed" and failed.counts["windows_skipped"] == 1
+    assert failed.status == "succeeded" and failed.counts["windows_skipped"] == 1
     assert failed.counts["samples"] > 0
     assert samples.execute("SELECT count(*) FROM sample").fetchone()[0] == failed.counts["samples"]
     seen = []
@@ -992,8 +992,8 @@ def test_skipped_day_does_not_advance_sync_watermark(samples, vault):
 
     third = sync(recovered, samples, vault, today=TODAY + timedelta(days=2))
     assert third.status == "succeeded"
-    assert third.counts["since"] == (TODAY - timedelta(days=2)).isoformat()
-    assert seen == [((TODAY - timedelta(days=2)).isoformat(), (TODAY + timedelta(days=3)).isoformat())]
+    assert third.counts["since"] == skipped.isoformat()
+    assert seen == [(skipped.isoformat(), (TODAY + timedelta(days=3)).isoformat())]
     assert samples.execute("SELECT value FROM daily_rollup WHERE metric='steps' AND day=?",
                            (str(skipped),)).fetchone()[0] == 8123
 
