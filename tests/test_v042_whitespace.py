@@ -10,7 +10,7 @@ from caduceus.core import search
 from caduceus.core.policy import Category, Policy, categorize, plain_text, text_visible
 from tests.test_v040_reports import _bundle, _fetch, _import, _report
 
-SEPARATORS = [" ", "  ", "\t", "\n", "\r\n", " ", "　", " ", " ­"]
+SEPARATORS = ["\u00a0", "  ", "\t", "\n", "\r\n", "\u202f", "\u3000", "\u2028", " \u00ad"]
 CANCER = Policy(hidden=frozenset({Category.CANCER_RISK}))
 
 
@@ -21,7 +21,7 @@ def test_phrases_match_across_any_whitespace(sep):
         assert categorize(text=phrase) == Category.CANCER_RISK
 
 
-@pytest.mark.parametrize("word", ["can­cer", "can​cer", "can‍cer", "﻿cancer", "ｃａｎｃｅｒ"])
+@pytest.mark.parametrize("word", ["can\u00adcer", "can\u200bcer", "can\u200dcer", "\ufeffcancer", "\uff43\uff41\uff4e\uff43\uff45\uff52"])
 def test_invisible_characters_and_full_width_letters_do_not_split_a_word(word):
     assert not text_visible(CANCER, f"breast {word}")
     assert plain_text(f"breast {word}") == "breast cancer"
@@ -32,10 +32,21 @@ def test_each_field_is_checked_on_its_own():
     assert not text_visible(hidden, "Bone marrow", "Depression screening")
     # Two spaces no longer defeat the exclusion: bone marrow depression is a blood finding, not mental health.
     assert text_visible(hidden, "Bone marrow  depression")
-    assert text_visible(hidden) and text_visible(hidden, "", "Scan copy")
+    assert text_visible(hidden) and text_visible(hidden, "", "Scan\u00a0copy")
 
 
-@pytest.mark.parametrize("sep", [" ", "  ", "\t"])
+@pytest.mark.parametrize("sep", ["\n", "\r\n", "\u2028"])
+def test_a_line_break_never_loosens_a_check(sep):
+    """Collapsing a line break must not let one line's last word switch off a topic on the next line."""
+    hidden = Policy(hidden=frozenset({Category.MENTAL_HEALTH}))
+    for prefix in ("Biopsy of bone marrow", "ECG showed ST", "Respiratory"):
+        note = f"{prefix}{sep}Depression is worse this week"
+        assert not text_visible(hidden, note)
+        assert categorize(text=note) == Category.MENTAL_HEALTH
+    assert text_visible(hidden, "Bone marrow depression after chemotherapy")
+
+
+@pytest.mark.parametrize("sep", ["\u00a0", "  ", "\t"])
 def test_attachment_title_with_odd_spacing_withholds_report(vault, tmp_path, sep):
     title = f"Hereditary breast{sep}cancer letter"
     report = _report(code={"text": "Alzheimer risk assessment"},
@@ -49,7 +60,7 @@ def test_attachment_title_with_odd_spacing_withholds_report(vault, tmp_path, sep
 
 
 @pytest.mark.parametrize("field,value", [
-    ("series", [{"uid": "1.2", "bodySite": {"display": "Breast cancer site"}}]),
+    ("series", [{"uid": "1.2", "bodySite": {"display": "Breast\u00a0cancer site"}}]),
     ("modality", [{"code": "MG", "display": "Hereditary\tcancer screen"}]),
     ("status", "breast  cancer"),
 ])
@@ -69,7 +80,7 @@ def test_report_status_naming_a_hidden_topic_withholds_report(vault, tmp_path):
 
 
 def test_neutral_report_with_normal_status_is_unchanged(vault, tmp_path):
-    report = _report(presentedForm=[{"contentType": "application/pdf", "title": "Scan copy"}])
+    report = _report(presentedForm=[{"contentType": "application/pdf", "title": "Scan\u00a0copy"}])
     assert _import(vault, tmp_path, _bundle(report)).status == "succeeded"
     fetched = _fetch(vault, policy=Policy(level="standard"))
-    assert fetched["status"] == "final" and fetched["attachments"][0]["title"] == "Scan copy"
+    assert fetched["status"] == "final" and fetched["attachments"][0]["title"] == "Scan\u00a0copy"

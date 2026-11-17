@@ -172,14 +172,23 @@ def plain_text(text: object) -> str:
     return " ".join(unicodedata.normalize("NFKC", str(text)).translate(_INVISIBLE).split())
 
 
+def _readings(text: object) -> tuple[str, ...]:
+    """The whole text as one plain line, then each of its lines on its own. A phrase may wrap onto the next line
+    ("breast" / "cancer"), and a line's last word must not switch off a match at the start of the next line
+    ("bone marrow" / "Depression ..."): a topic counts when any reading names it."""
+    whole = plain_text(text)
+    lines = {plain_text(line) for line in str(text).splitlines()} - {"", whole}
+    return (whole, *sorted(lines))
+
+
 def sensitive_categories(text: str, *, among: Iterable[Category] = SENSITIVE) -> frozenset[Category]:
     """Named sensitive categories, evaluating only patterns for the requested categories."""
     selected = SENSITIVE.intersection(among)
     if not selected or not text:
         return frozenset()
-    text = plain_text(text)
+    readings = _readings(text)
     return frozenset(cat for pattern, cat in (*_GENE_TEXT_CATEGORY, *_TEXT_CATEGORY)
-                     if cat in selected and pattern.search(text))
+                     if cat in selected and any(pattern.search(reading) for reading in readings))
 
 
 def text_visible(policy: Policy, *texts: str) -> bool:
@@ -205,12 +214,13 @@ def categorize(*, genes: Iterable[str] = (), text: str = "", markers: Iterable[s
         if cat is not None:
             return cat
     if text:
-        text = plain_text(text)
-        match = _GENE_WORD.search(text)
-        if match:
-            return _GENE_CATEGORY[match.group(1)]
+        readings = _readings(text)
+        for reading in readings:
+            match = _GENE_WORD.search(reading)
+            if match:
+                return _GENE_CATEGORY[match.group(1)]
         for pattern, cat in _TEXT_CATEGORY:
-            if pattern.search(text):
+            if any(pattern.search(reading) for reading in readings):
                 return cat
     return default
 
