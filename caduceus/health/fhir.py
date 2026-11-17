@@ -1295,7 +1295,7 @@ def _reference_ranges(document):
     return result
 
 
-def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict:
+def observation_series(vault, name_or_code, *, start=None, end=None, allow=None, include_other_units=False) -> dict:
     """Return one compatible unit per series, with explicit conversions/exclusions.
 
     With *allow* (a category predicate), hidden results are removed before anything else is computed from them, so
@@ -1322,7 +1322,8 @@ def observation_series(vault, name_or_code, *, start=None, end=None, allow=None)
             points.append({"date": r["effective_at"], "category": r["category"], "_hidden": True})
             continue
         document = json.loads(r["raw_json"] or "{}")
-        points.append({"date": r["effective_at"], "date_precision": _date_value(r["effective_at"])[1],
+        points.append({**({"observation_id": r["id"]} if include_other_units else {}),
+               "date": r["effective_at"], "date_precision": _date_value(r["effective_at"])[1],
                "code": r["code"], "value": r["value_num"], "value_text": r["value_text"], "unit": r["unit"],
                "reference_range": {"low": r["ref_low"], "high": r["ref_high"]},
                "reference_ranges": _reference_ranges(document),
@@ -1381,7 +1382,7 @@ def observation_series(vault, name_or_code, *, start=None, end=None, allow=None)
     votes = known_units or units
     unit = votes.most_common(1)[0][0] if votes else next((p["unit"] for p in points if p["unit"]), None)
     other_units = {u or "unknown": n for u, n in Counter(p["unit"] for p in points).items() if u != unit}
-    unplotted = [p for p in points if p["value"] is None]
+    unplotted = [p for p in points if p["value"] is None or (include_other_units and p["unit"] != unit)]
     points = [p for p in points if p["unit"] == unit]
     return {"name": name, "points": points, "unplotted_points": unplotted, "unit": unit, "other_units": other_units,
             "source_policy": "individual clinical observations; most common unit after known conversions",
