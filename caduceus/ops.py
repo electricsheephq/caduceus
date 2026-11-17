@@ -892,6 +892,53 @@ def _import(args: dict) -> dict:
     return {**base, "status": "running", "import_run_id": run_id, "note": note}
 
 
+_CLINICAL_REPLAY_PROGRESS = {"sources_done": 0, "sources_total": 0}
+# The result of a replay that finished after its call had already answered "running", per plugin data folder.
+# The next op=replay returns it once, so a slow replay's counts or blocked reasons are never lost.
+_CLINICAL_REPLAY_FINISHED: dict = {}
+
+
+def _replay() -> dict:
+    from .health import replay
+
+    key = str(data_dir())
+
+    def running():
+        return {"status": "running", "sources_read": _CLINICAL_REPLAY_PROGRESS["sources_done"],
+                "added": {"condition": 0, "observation": 0, "report": 0},
+                "progress": dict(_CLINICAL_REPLAY_PROGRESS)}
+
+    def progress(value):
+        global _CLINICAL_REPLAY_PROGRESS
+        _CLINICAL_REPLAY_PROGRESS = dict(value)
+
+    def run():
+        progress({"sources_done": 0, "sources_total": 0})
+        with closing(open_vault()) as vault:
+            result = replay.replay(vault, progress=progress)
+        _CLINICAL_REPLAY_FINISHED[key] = result
+        return result
+
+    with jobs.preparing():
+        if jobs.is_active("clinical-replay"):
+            return running()
+        if key in _CLINICAL_REPLAY_FINISHED:
+            return {**_CLINICAL_REPLAY_FINISHED.pop(key), "finished_in_background": True}
+        if jobs.any_active():
+            # A replay may have won admission since the first check.
+            if jobs.is_active("clinical-replay"):
+                return running()
+            return {"status": "blocked", "reason": "an import job is running", "sources_read": 0,
+                    "added": {"condition": 0, "observation": 0, "report": 0}}
+        outcome = jobs.submit("clinical-replay", run, wait_s=IMPORT_WAIT_S)
+    if outcome["state"] == "done":
+        _CLINICAL_REPLAY_FINISHED.pop(key, None)
+        return outcome["result"]
+    if outcome["state"] == "error":
+        raise ToolError("Clinical replay failed")
+    return running()
+
+
 def _hae_backfill_days(ctx) -> int:
     value = _cfg(ctx, "hae_backfill_days")
     return value if not isinstance(value, bool) and isinstance(value, int) and 1 <= value <= 3650 else 90
@@ -1203,6 +1250,7 @@ def _settings(ctx) -> dict:
     policy = policy_for(ctx)
     with _Store() as store:
         v = store.vault
+        clinical_replay = _need("health.replay", "settings")(v)
         counts = {
             "files": _count(v, "SELECT count(*) FROM source_artifact"),
             "dna_callsets": _count(v, "SELECT count(*) FROM callset"),
@@ -1216,13 +1264,13 @@ def _settings(ctx) -> dict:
         }
     return {**policy.describe(), "research_watch": _cfg(ctx, "research_watch", True),
             "research_topics": _cfg(ctx, "research_topics", []), "vault_hint": _cfg(ctx, "vault_hint", True),
-            "data_dir": str(data_dir()), "counts": counts,
+            "data_dir": str(data_dir()), "counts": counts, "clinical_replay": clinical_replay,
             "note": ("The vault stays on this machine; tools return only slices of it. Only the user can change "
                      "privacy settings, with /caduceus privacy, hide, show, unlock or lock.")}
 
 
 _CAPTURE_OPS = ("import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources")
-_CAPTURE_OPS += ("consent", "phenotype", "session_plan")
+_CAPTURE_OPS += ("consent", "phenotype", "session_plan", "replay")
 
 
 def capture_tool(ctx, args: dict) -> dict:
@@ -1231,6 +1279,8 @@ def capture_tool(ctx, args: dict) -> dict:
         raise ToolError("op must be one of " + ", ".join(_CAPTURE_OPS))
     if op == "session_plan":
         return _need("session_plan", "session_plan")(ctx, args)
+    if op == "replay":
+        return _replay()
     if op == "import":
         return _import(args)
     if op == "sync":
@@ -1453,6 +1503,7 @@ def _erase(ctx, confirm: bool) -> str:
                     "Wait until it finishes (/caduceus imports shows imports), then run /caduceus erase confirm again.")
         with _WATCH_LOCK:  # even an empty vault or a failed delete must discard the old watch result
             _WATCH_PENDING.clear()
+        _CLINICAL_REPLAY_FINISHED.clear()  # and a held replay result, which described the erased vault
         targets = _erase_targets(root)
         if not targets:
             return _NOTHING_TO_ERASE

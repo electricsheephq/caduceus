@@ -103,14 +103,14 @@ TOOLS = (
             "op=consent records only an answer the user gave in this conversation; never infer one. "
             "It never changes visibility; omit answer to read remembered answers. op=phenotype records the user's "
             "confirmation or correction about a marker or trait, in their own words. "
-            "op=watch_run runs the research watch now. op=settings shows the privacy settings. op=brief writes a "
+            "op=watch_run runs the research watch now. op=settings shows privacy settings and whether clinical replay is needed. op=replay re-reads stored clinical files locally to recover missing records; returns counts. op=brief writes a "
             "local HTML health brief with charts, an optional specialty and the user's questions. "
             "op=sources lists imported files. " + NEVER_READ
         ),
         "parameters": _obj({
             "op": {"type": "string", "enum": [
                 "import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources",
-                "consent", "phenotype", "session_plan"]},
+                "consent", "phenotype", "session_plan", "replay"]},
             "max_items": {"type": "integer", "minimum": 1, "maximum": 25, "default": 8},
             "path": {"type": "string", "description": "Absolute path of the file to import."},
             "run_id": {"type": "integer"},

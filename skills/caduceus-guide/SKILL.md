@@ -92,3 +92,5 @@ This is information, not medical advice. Talk to your prescriber before changing
 ```
 
 Never drop the last two lines to save space.
+
+After an update, if `op=settings` shows `clinical_replay.needed`, offer `caduceus_capture op=replay`: "Re-reads stored files locally; returns counts".

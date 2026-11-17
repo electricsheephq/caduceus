@@ -141,6 +141,52 @@ def trend_svg(points, *, unit, title, markers=()) -> str
 - **Lone XML:** warns that clinical records require the export zip.
 - **Clinical records:** `clinical-records/*.json` inside the zip go through the same FHIR code into `observation`, `condition`, `medication_event` and `clinical_report`.
 
+**Clinical history recovery (`health/replay.py`, #31):**
+
+```python
+REPLAY_VERSION = "1"
+def inventory(vault) -> list  # every source with any fhir/apple_health run, before opening files
+def settings(vault) -> dict  # needed and, when blocked, reason keys only
+def replay(vault, *, cancel=None, progress=None) -> dict
+```
+
+- Raise `REPLAY_VERSION` whenever a parser change must be applied to history; a FHIR `PARSER_VERSION` bump alone does not trigger recovery.
+- Readable Apple files with no safe `clinical-records/*.json` members (including standalone XML) are outside
+  clinical history and listed in `skipped_sources`, whatever their runs. An Apple export with clinical members
+  needs exactly one succeeded run; every additional run blocks as `ambiguous_runs`, regardless of status or
+  zero counts. Apple accumulates counts after each clinical document returns, so a failed document can leave
+  committed effects absent from the receipt, even after earlier documents returned zero clinical counts.
+- FHIR needs one succeeded effectful run, except that failed runs with returned zero-effect receipts
+  remain exempt. An exception inside ingest leaves `{}` and blocks, even if earlier resources committed.
+  A cancelled run blocks: it can delete a recorded-only Condition without counting it.
+  Base store counters must be present and zero, with no nonzero update/retraction/supersession counters.
+  Cancelled, running and interrupted runs and unknown receipts block. No-success zero-effect sources are listed as skipped.
+- Missing/unreadable sources (including Apple files without known clinical content), ambiguous receipts/runs,
+  and overlapping effectful runs block without writes. Equal finish/start seconds overlap. Order is by the
+  effectful run id. A read or parse failure during reconstruction returns `missing_sources` naming that
+  source's id and kind. Settings only check file accessibility and ZIP member names; they do not parse
+  clinical payloads, so reconstruction may discover a source error that settings cannot report in advance.
+- Replay copies original subject/source ids into a full-schema in-memory vault, then uses current `fhir.ingest`
+  on whole stored files. `fhir.read_document(path)` shares the FHIR JSON limit; Apple import and replay share
+  `apple.clinical_documents(archive, members, *, cancel=None)` after `_safe_members`. Replay never reads samples.
+- Publication adds only missing Conditions, uncoded Observations and reports, preserving every existing row.
+  Conditions match by dedupe key or identity plus normalized name and code/system; uncoded Observations use
+  only their key; reports match by key or identity within the same resource type. Columns, provenance and search
+  documents come from scratch ingest; added raw JSON gains `_caduceus.recovered_by="clinical_replay"`.
+- Additions, their search documents and the sole replay settings write (`clinical_replay` with version, covered
+  source ids and timestamp) commit in one transaction. Changes to the import-run fingerprint
+  `(count(*), max(id), max(started_at))`, checked at start and inside publication, cause `retry`, including
+  reuse of the newest id by a later-started run. Cancellation/errors publish nothing. A newer replay version
+  replaces the marker. On open, absent markers are initialized only when the
+  same inventory is empty. The tool runs one `clinical-replay` job under the existing preparation/erase gate,
+  refuses admission while jobs run, and exposes `sources_done`/`sources_total` progress without import receipts.
+  A replay that finishes after its call answered `running` keeps its result in memory, per plugin data folder;
+  the next `op=replay` returns it once with `finished_in_background: true`.
+- Replies contain status, sources_read, added counts and blocked/skipped ids only. Settings expose needed and
+  blocked reason keys. No record text is returned. Repeated current-version replay returns nothing_to_replay.
+- Known limits: recorded-only Conditions with the same code system, code and name merge even with different
+  recorded dates (the key uses onset, which is NULL). A pre-0.3.1 collision row remains as stored.
+
 **Health Auto Export (`caduceus/health/hae.py`):**
 
 ```python
