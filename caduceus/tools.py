@@ -110,7 +110,8 @@ TOOLS = (
         "parameters": _obj({
             "op": {"type": "string", "enum": [
                 "import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources",
-                "consent", "phenotype"]},
+                "consent", "phenotype", "session_plan"]},
+            "max_items": {"type": "integer", "minimum": 1, "maximum": 25, "default": 8},
             "path": {"type": "string", "description": "Absolute path of the file to import."},
             "run_id": {"type": "integer"},
             "drug": STR,

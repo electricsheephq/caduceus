@@ -795,14 +795,15 @@ def default_after_days(samples, metric: str, pivot: date, today: date | None = N
     return min(365, max(28, (last - pivot).days + 1))
 
 
-def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:
+def lab_series(vault, lab: str, policy, *, start=None, end=None, include_other_units=False) -> dict:
     """A lab result over time, with points the policy hides removed and counted (shared with the brief)."""
     series = _need("health.fhir", "observation_series")
 
     def allow(category):
         return visible(policy, category or Category.RECORDS, kind="observation")
 
-    result = _lane(series, vault, lab, start=start, end=end, allow=allow)
+    extra = {"include_other_units": True} if include_other_units else {}
+    result = _lane(series, vault, lab, start=start, end=end, allow=allow, **extra)
     if not result.get("points") and not result.get("withheld") and not _LOINC.match(lab) and "|" not in lab:
         # A word from the lab's own name ("A1c", "creatinine") finds its code; the most common match wins.
         like = "%" + lab.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
@@ -810,7 +811,7 @@ def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:
                             "GROUP BY code_system,code ORDER BY count(*) DESC LIMIT 1", (like,)).fetchone()
         if row:
             query = _need("health.fhir", "observation_query")(row["code_system"], row["code"], lab)
-            result = {**_lane(series, vault, query, start=start, end=end, allow=allow), "name": lab}
+            result = {**_lane(series, vault, query, start=start, end=end, allow=allow, **extra), "name": lab}
     withheld = int(result.pop("withheld", 0) or 0)
     points = list(result.get("points") or [])
     if withheld and not points and not result.get("unplotted_points"):
@@ -1196,13 +1197,15 @@ def _settings(ctx) -> dict:
 
 
 _CAPTURE_OPS = ("import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources")
-_CAPTURE_OPS += ("consent", "phenotype")
+_CAPTURE_OPS += ("consent", "phenotype", "session_plan")
 
 
 def capture_tool(ctx, args: dict) -> dict:
     op = args.get("op")
     if op not in _CAPTURE_OPS:
         raise ToolError("op must be one of " + ", ".join(_CAPTURE_OPS))
+    if op == "session_plan":
+        return _need("session_plan", "session_plan")(ctx, args)
     if op == "import":
         return _import(args)
     if op == "sync":
