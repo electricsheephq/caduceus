@@ -223,14 +223,16 @@ def categorize(*, genes: Iterable[str] = (), text: str = "", markers: Iterable[s
         if cat is not None:
             return cat
     if text:
-        readings = _readings(text)
-        for reading in readings:
+        # One reading at a time, the stored text first: a record keeps the single category earlier versions gave it,
+        # and the normalized readings only decide when the stored text names no topic. Letting them compete would
+        # move "Depression; breast<zero-width space>cancer" from mental health to cancer risk.
+        for reading in _readings(text):
             match = _GENE_WORD.search(reading)
             if match:
                 return _GENE_CATEGORY[match.group(1)]
-        for pattern, cat in _TEXT_CATEGORY:
-            if any(pattern.search(reading) for reading in readings):
-                return cat
+            for pattern, cat in _TEXT_CATEGORY:
+                if pattern.search(reading):
+                    return cat
     return default
 
 

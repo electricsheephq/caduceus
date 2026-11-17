@@ -118,3 +118,28 @@ def test_never_looser_than_matching_the_stored_text(text):
     for category in raw:
         assert not text_visible(Policy(hidden=frozenset({category})), text)
     assert raw <= set(SENSITIVE)
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Depression; breast\u200bcancer", Category.MENTAL_HEALTH),
+    ("Anxiety and BRCA1\u00b9", Category.CANCER_RISK),
+    ("Normal\u00a0result; breast\u00a0cancer", Category.CANCER_RISK),
+])
+def test_category_from_the_stored_text_wins(text, expected):
+    """A normalized reading decides only when the stored text names no topic, so a stored category never moves."""
+    assert categorize(text=text) == expected
+
+
+def test_condition_keeps_the_topic_the_stored_text_names(vault, tmp_path):
+    from caduceus.health.fhir import import_fhir
+    from caduceus.core import sources
+
+    condition = {"resourceType": "Condition", "id": "synthetic-condition",
+                 "code": {"text": "Depression; breast\u200bcancer"}, "onsetDateTime": "2024-01-02"}
+    path = tmp_path / "condition.json"
+    path.write_text(json.dumps({"resourceType": "Bundle", "entry": [{"resource": condition}]}))
+    assert import_fhir(vault, sources.store_source(vault, path, "fhir")[0]).status == "succeeded"
+    assert vault.execute("SELECT category FROM condition").fetchone()[0] == "mental_health"
+    hidden = Policy(hidden=frozenset({Category.MENTAL_HEALTH}))
+    found = search.search(vault, "Depression", policy=hidden, kinds=["condition"])
+    assert found["results"] == [] and found["withheld"] == 1

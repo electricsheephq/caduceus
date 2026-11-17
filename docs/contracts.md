@@ -397,7 +397,9 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   They test the text as stored, the whole text as one plain line (invisible characters dropped, and read as spaces)
   and each of its lines on its own; a topic counts when any reading names it. Reading the stored text keeps every
   earlier match (folding can remove a boundary: BRCA1 plus a superscript 1 is BRCA11), a wrapped phrase is found,
-  and a line's last word never switches off a match on the next line.
+  and a line's last word never switches off a match on the next line. `categorize` takes the readings one at a time,
+  the stored text first, and returns the first category found, so a stored text that names a topic keeps the
+  category earlier versions gave it.
 - **FHIR import receipts.** `report` counts newly stored report rows. `ignored` remains the total count of
   unsupported resources; `ignored_by_type` splits it by resourceType, retaining only 1-64 ASCII letters,
   otherwise `other`. `observation_by_category` counts newly stored observation rows once per distinct category
