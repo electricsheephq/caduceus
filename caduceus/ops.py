@@ -642,14 +642,23 @@ def trend_tool(ctx, args: dict) -> dict:
                 raise ToolError("give a lab name or LOINC code, e.g. HbA1c")
             return lab_series(store.vault, lab, policy, start=_date(args.get("start"), "start"),
                               end=_date(args.get("end"), "end"))
+        if op == "metrics":
+            result = _lane(_need("health.fhir", "clinical_series"), store.vault,
+                           allow=lambda category: visible(policy, category or Category.RECORDS, kind="observation"))
+            withheld = result.pop("withheld", 0)
+            note = None
+            if allowed(policy, Category.WELLNESS):
+                note = _refresh_rollups(store)
+                result["metrics"] = _lane(_need("health.trends", "metrics"), store.samples)
+            else:
+                result["metrics"] = []
+                withheld += 1
+            if note:
+                result["rebuilding"] = note
+            return {**result, **_withheld(withheld)}
         if not allowed(policy, Category.WELLNESS):
             return _withheld(1)
         note = _refresh_rollups(store)
-        if op == "metrics":
-            result = {"metrics": _lane(_need("health.trends", "metrics"), store.samples)}
-            if note:
-                result["rebuilding"] = note
-            return result
         if op == "check":
             return _lane(_need("health.trends", "daily_check"), store.samples)
         metric = str(args.get("metric") or "").strip()
@@ -721,13 +730,14 @@ def lab_series(vault, lab: str, policy, *, start=None, end=None) -> dict:
         return visible(policy, category or Category.RECORDS, kind="observation")
 
     result = _lane(series, vault, lab, start=start, end=end, allow=allow)
-    if not result.get("points") and not result.get("withheld") and not _LOINC.match(lab):
+    if not result.get("points") and not result.get("withheld") and not _LOINC.match(lab) and "|" not in lab:
         # A word from the lab's own name ("A1c", "creatinine") finds its code; the most common match wins.
         like = "%" + lab.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        row = vault.execute("SELECT code FROM observation WHERE code IS NOT NULL AND name LIKE ? ESCAPE '\\' "
-                            "GROUP BY code ORDER BY count(*) DESC LIMIT 1", (like,)).fetchone()
+        row = vault.execute("SELECT code_system,code FROM observation WHERE code IS NOT NULL AND name LIKE ? ESCAPE '\\' "
+                            "GROUP BY code_system,code ORDER BY count(*) DESC LIMIT 1", (like,)).fetchone()
         if row:
-            result = {**_lane(series, vault, row["code"], start=start, end=end, allow=allow), "name": lab}
+            query = _need("health.fhir", "observation_query")(row["code_system"], row["code"], lab)
+            result = {**_lane(series, vault, query, start=start, end=end, allow=allow), "name": lab}
     withheld = int(result.pop("withheld", 0) or 0)
     points = list(result.get("points") or [])
     if withheld and not points and not result.get("unplotted_points"):
@@ -1018,7 +1028,7 @@ def _settings(ctx) -> dict:
             "dna_callsets": _count(v, "SELECT count(*) FROM callset"),
             "variant_report_records": _count(
                 v, "SELECT count(*) FROM annotation_snapshot WHERE kind IN ('snp','genoset')"),
-            "lab_results": _count(v, "SELECT count(*) FROM observation"),
+            **_lane(_need("health.fhir", "observation_counts"), v),
             "conditions": _count(v, "SELECT count(*) FROM condition"),
             "medications": _count(v, "SELECT count(*) FROM medication_event"),
             "notes": _count(v, "SELECT count(*) FROM journal"),
@@ -1214,6 +1224,11 @@ def _erase_schedules(ctx) -> str:
             "the daily check finds nothing until data returns.")
 
 
+def _observation_counts_text(counts) -> str:
+    return (f"{counts['observations']} observations ({counts['lab_results']} lab results, "
+            f"{counts['vital_signs']} vital signs, {counts['other_observations']} other)")
+
+
 def _erase_preview(ctx, root: Path) -> str:
     targets = _erase_targets(root)
     if not targets:
@@ -1229,7 +1244,7 @@ def _erase_preview(ctx, root: Path) -> str:
         if c is not None:
             n = {key: value or 0 for key, value in c.items()}  # a missing table counts as none
             what = (f"{n['files']} imported files with their copies, {n['dna_callsets']} DNA callsets, "
-                    f"{n['variant_report_records']} variant report records, {n['lab_results']} lab results, "
+                    f"{n['variant_report_records']} variant report records, {_observation_counts_text(n)}, "
                     f"{n['medications']} medications, {n['notes']} notes, {n['research_items']} research items, "
                     "every health sample, the reports and the demo files")
     return (f"This deletes everything Caduceus stored on this machine: {what} ({size} in {root}). "
@@ -1312,5 +1327,5 @@ def command(ctx, raw: str) -> str:
     info = _settings(ctx)
     c = info["counts"]
     return (f"Caduceus: {c['files']} files, {c['dna_callsets'] or 0} DNA callsets, {c['variant_report_records'] or 0} "
-            f"variant report records, {c['lab_results']} lab results, {c['medications']} medications, "
+            f"variant report records, {_observation_counts_text(c)}, {c['medications']} medications, "
             f"{c['notes']} notes. Privacy level: {info['privacy_level']}. /caduceus help lists the commands.")

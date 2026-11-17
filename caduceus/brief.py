@@ -243,13 +243,23 @@ def _labs_section(vault, policy) -> tuple[str, int]:
             chart = f"<div class='chart'>{trends_mod.trend_svg(points, unit=unit, title=f'{label} over time')}</div>"
         rows = "".join(
             f"<tr><td>{_e(str(p.get('date'))[:10])}</td><td>{_value(p.get('value'))} {_e(p.get('unit') or '')}</td>"
-            f"<td>{_e(_range(p.get('reference_range')))}</td><td>{_e(p.get('interpretation') or '')}</td></tr>"
+            f"<td>{_e(_point_range(p))}</td><td>{_e(p.get('interpretation') or '')}</td></tr>"
             for p in points[-12:])
         blocks.append(f"<div class='panel'><h3>{_e(label)}</h3>{chart}<table><tr><th>Date</th><th>Result</th>"
                       f"<th>Reference range</th><th>Flag</th></tr>{rows}</table></div>")
     if not blocks:
         return "", withheld
     return "<h2>Lab results from your records</h2>" + "".join(blocks), withheld
+
+
+def _point_range(point) -> str:
+    ref = point.get("reference_range") or {}
+    text = next(iter(point.get("reference_ranges") or []), {}).get("text") or ""
+    if point.get("reference_range_mismatch"):
+        return f"{text} (different units)" if text else "not comparable: different units"
+    if ref.get("low") is None and ref.get("high") is None:
+        return f"{text} (in {point['converted_from']})" if text and point.get("converted_from") else text
+    return _range(ref)
 
 
 def _range(ref) -> str:
