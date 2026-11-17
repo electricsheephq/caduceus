@@ -30,8 +30,9 @@ def test_invisible_characters_and_full_width_letters_do_not_split_a_word(word):
 def test_each_field_is_checked_on_its_own():
     hidden = Policy(hidden=frozenset({Category.MENTAL_HEALTH}))
     assert not text_visible(hidden, "Bone marrow", "Depression screening")
-    # Two spaces no longer defeat the exclusion: bone marrow depression is a blood finding, not mental health.
-    assert text_visible(hidden, "Bone marrow  depression")
+    # The stored text is read too, so odd spacing never loosens a check: as in 0.4.1 this stays withheld.
+    assert not text_visible(hidden, "Bone marrow  depression")
+    assert text_visible(hidden, "Bone marrow depression")
     assert text_visible(hidden) and text_visible(hidden, "", "Scan\u00a0copy")
 
 
@@ -84,3 +85,36 @@ def test_neutral_report_with_normal_status_is_unchanged(vault, tmp_path):
     assert _import(vault, tmp_path, _bundle(report)).status == "succeeded"
     fetched = _fetch(vault, policy=Policy(level="standard"))
     assert fetched["status"] == "final" and fetched["attachments"][0]["title"] == "Scan\u00a0copy"
+
+
+@pytest.mark.parametrize("text", ["BRCA1\u00b9 sequencing", "BRCA1\u200bpositive", "BRCA1\u2075", "breast\u200bcancer",
+                                  "Lynch\u200dsyndrome", "APOE4\u00b2 carrier note"])
+def test_normalizing_never_removes_a_match(text):
+    """Folding can glue a boundary away (BRCA1 + superscript 1 = BRCA11); the stored text is always read as well."""
+    hidden = Policy(hidden=frozenset({Category.CANCER_RISK, Category.ALZHEIMERS}))
+    assert not text_visible(hidden, text)
+    assert categorize(text=text) in {Category.CANCER_RISK, Category.ALZHEIMERS}
+
+
+def test_superscript_after_a_gene_in_an_attachment_title_withholds_report(vault, tmp_path):
+    report = _report(code={"text": "APOE assessment"},
+                      presentedForm=[{"contentType": "application/pdf", "title": "BRCA1\u00b9 sequencing"}])
+    assert _import(vault, tmp_path, _bundle(report)).status == "succeeded"
+    fetched = _fetch(vault, policy=CANCER)
+    assert fetched["withheld"] is True and "BRCA1" not in json.dumps(fetched)
+
+
+CORPUS = ["Bone marrow  depression", "ST\u00a0depression on ECG", "BRCA1\u00b9", "breast\tcancer", "Scan copy",
+          "marrow\ndepression", "APC resistance", "\uff21\uff30\uff2f\uff25", "attention de\ufb01cit", "can\u00adcer screening",
+          "Respiratory\u2028Depression", "PALB2-related", "carrier\u200b status", "Normal\u3000result"]
+
+
+@pytest.mark.parametrize("text", CORPUS)
+def test_never_looser_than_matching_the_stored_text(text):
+    """Anything a pattern finds in the text as stored (all 0.4.1 checked) is still withheld."""
+    from caduceus.core.policy import SENSITIVE, _GENE_TEXT_CATEGORY, _TEXT_CATEGORY
+
+    raw = {cat for pattern, cat in (*_GENE_TEXT_CATEGORY, *_TEXT_CATEGORY) if pattern.search(text)}
+    for category in raw:
+        assert not text_visible(Policy(hidden=frozenset({category})), text)
+    assert raw <= set(SENSITIVE)

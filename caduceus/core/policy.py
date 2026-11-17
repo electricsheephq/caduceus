@@ -161,24 +161,33 @@ def visible(policy: Policy, category: object, *, kind: str | None = None) -> boo
     return allowed(policy, category) and (base is None or allowed(policy, base))
 
 
-# Invisible characters that sit inside a word: soft hyphen, zero-width space and joiners, word joiner, BOM.
-_INVISIBLE = dict.fromkeys(map(ord, "\u00ad\u200b\u200c\u200d\u2060\ufeff"))
+# Invisible characters: soft hyphen, zero-width space and joiners, word joiner, BOM. Inside a word they split it;
+# between words a zero-width space may be the only break. Each reading below takes one of the two views.
+_INVISIBLE = "\u00ad\u200b\u200c\u200d\u2060\ufeff"
+_DROP_INVISIBLE = dict.fromkeys(map(ord, _INVISIBLE))
+_SPACE_INVISIBLE = dict.fromkeys(map(ord, _INVISIBLE), " ")
 
 
-def plain_text(text: object) -> str:
+def plain_text(text: object, *, invisible_as_space: bool = False) -> str:
     """Text as the topic patterns expect it: compatibility forms folded (NFKC: full-width letters, ligatures),
-    invisible in-word characters dropped, and every run of whitespace (non-breaking spaces, tabs, line breaks,
-    repeated spaces) made one plain space. The patterns put exactly one space between the words of a phrase."""
-    return " ".join(unicodedata.normalize("NFKC", str(text)).translate(_INVISIBLE).split())
+    invisible characters dropped (or read as spaces), and every run of whitespace (non-breaking spaces, tabs, line
+    breaks, repeated spaces) made one plain space. The patterns put exactly one space between the words of a phrase."""
+    table = _SPACE_INVISIBLE if invisible_as_space else _DROP_INVISIBLE
+    return " ".join(unicodedata.normalize("NFKC", str(text)).translate(table).split())
 
 
 def _readings(text: object) -> tuple[str, ...]:
-    """The whole text as one plain line, then each of its lines on its own. A phrase may wrap onto the next line
-    ("breast" / "cancer"), and a line's last word must not switch off a match at the start of the next line
-    ("bone marrow" / "Depression ..."): a topic counts when any reading names it."""
-    whole = plain_text(text)
-    lines = {plain_text(line) for line in str(text).splitlines()} - {"", whole}
-    return (whole, *sorted(lines))
+    """Every way the topic checks read a text; a topic counts when any reading names it.
+
+    The text as stored comes first, so whatever an earlier version matched still matches: normalizing can fold a
+    boundary away ("BRCA1" plus a superscript "1" becomes "BRCA11"), so it may only add matches. Then the whole text
+    as one plain line, with invisible characters dropped and with them read as spaces, so a phrase wrapped onto the
+    next line is found. Then each line on its own, so one line's last word ("bone marrow") never switches off a
+    topic at the start of the next ("Depression ...").
+    """
+    raw = str(text)
+    forms = (raw, plain_text(raw), plain_text(raw, invisible_as_space=True), *map(plain_text, raw.splitlines()))
+    return tuple(dict.fromkeys(form for form in forms if form))
 
 
 def sensitive_categories(text: str, *, among: Iterable[Category] = SENSITIVE) -> frozenset[Category]:

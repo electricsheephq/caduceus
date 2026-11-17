@@ -394,8 +394,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   `text_visible` separately, so one field's last word never hides the next field's topic from a lookbehind exclusion.
   `text_visible(policy, *texts)` and `categorize(text=...)` read text through `plain_text`: NFKC, invisible in-word
   characters (soft hyphen, zero-width space and joiners, word joiner, BOM) removed, every whitespace run one space.
-  They test the whole text as one plain line and each of its lines on its own; a topic counts when any reading names it,
-  so a wrapped phrase is found and a line's last word never switches off a match on the next line.
+  They test the text as stored, the whole text as one plain line (invisible characters dropped, and read as spaces)
+  and each of its lines on its own; a topic counts when any reading names it. Reading the stored text keeps every
+  earlier match (folding can remove a boundary: BRCA1 plus a superscript 1 is BRCA11), a wrapped phrase is found,
+  and a line's last word never switches off a match on the next line.
 - **FHIR import receipts.** `report` counts newly stored report rows. `ignored` remains the total count of
   unsupported resources; `ignored_by_type` splits it by resourceType, retaining only 1-64 ASCII letters,
   otherwise `other`. `observation_by_category` counts newly stored observation rows once per distinct category
