@@ -393,7 +393,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   narrative, status, stored modalities, body sites or series/instance counts name a hidden topic. Each field is passed to
   `text_visible` separately, so one field's last word never hides the next field's topic from a lookbehind exclusion.
   `text_visible(policy, *texts)` (through `sensitive_categories`) tests several readings of each text: the text as
-  stored, `plain_text` of it (NFKC, invisible in-word characters dropped and, separately, read as spaces, every
+  stored, `plain_text` of it (NFKC, soft hyphen, zero-width space and joiners, word joiner and BOM dropped and, separately, read as spaces; other Cf characters are not handled yet (#50), every
   whitespace run one space) and `plain_text` of each line on its own. A topic counts when any reading names it, so the
   check is never looser than matching the stored text (0.4.1). `categorize` (import-time) still reads the stored text
   alone (issue #50).
