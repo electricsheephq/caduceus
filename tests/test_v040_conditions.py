@@ -159,11 +159,18 @@ def test_system_only_condition_retracts_by_identity_after_its_text_changed(vault
     assert vault.execute("SELECT count(*) FROM search_doc WHERE kind='condition'").fetchone()[0] == 0
 
 
-@pytest.mark.parametrize("coding", [["x"], "x"], ids=["non-dict-entry", "string"])
-def test_malformed_retraction_concept_keeps_uncoded_rows(vault, coding):
-    _ingest(vault, _condition("Synthetic finding epsilon", onset="2025-01-01"))
+@pytest.mark.parametrize("concept", [{"coding": ["x"]}, {"coding": "x"}, {"coding": None}, "bad", [], ["x"]],
+                         ids=["non-dict-entry", "string-coding", "null-coding", "string-code", "empty-list-code",
+                              "list-code"])
+@pytest.mark.parametrize("stored", ["Synthetic finding epsilon", None], ids=["named", "unknown"])
+def test_malformed_retraction_concept_keeps_uncoded_rows(vault, concept, stored):
+    _ingest(vault, _condition(stored, onset="2025-01-01"))
     retraction = _condition(None, onset="2025-01-01", verification="entered-in-error")
-    retraction["code"] = {"coding": coding}
-    counts = fhir.ingest(vault, retraction, None)
-    assert counts.get("condition_retracted", 0) == 0
-    assert vault.execute("SELECT count(*) FROM condition").fetchone()[0] == 1
+    retraction["code"] = concept
+    later = _condition("Synthetic finding zeta", onset="2025-02-01")
+    later["id"] = "synthetic-c2"
+    # The malformed retraction neither raises nor stops the rest of the Bundle.
+    counts = fhir.ingest(vault, {"resourceType": "Bundle", "entry": [{"resource": retraction}, {"resource": later}]},
+                         None)
+    assert counts.get("condition_retracted", 0) == 0 and counts["condition"] == 1
+    assert vault.execute("SELECT count(*) FROM condition").fetchone()[0] == 2

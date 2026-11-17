@@ -468,15 +468,18 @@ def _retract(vault, resource, kind, counts, full_url=None):
     else:
         table, column = "condition", "onset"
         when = resource.get("onsetDateTime") or (resource.get("onsetPeriod") or {}).get("start")
-        codes = {str(c["code"]).strip().upper() for c in (resource.get("code") or {}).get("coding", [])
+        concept = resource.get("code")
+        coding = concept.get("coding") if isinstance(concept, dict) else None
+        codes = {str(c["code"]).strip().upper() for c in (coding if isinstance(coding, list) else [])
                  if isinstance(c, dict) and c.get("code")}
     when = _instant(when)
     retracted_name = None
-    if kind == "Condition":
+    # A malformed concept (not an object) matches no uncoded row: a missed match is preferred to a wrong withdrawal.
+    if kind == "Condition" and (resource.get("code") is None or isinstance(resource.get("code"), dict)):
         try:
             retracted_name = _normalized_name(_concept(resource.get("code"))[2])
         except (AttributeError, TypeError, IndexError):
-            pass  # a malformed concept matches no uncoded row: a missed match is preferred to a wrong withdrawal
+            pass
     rows = vault.execute(
         f"SELECT id, code_system, code, name, {column} AS at, raw_json FROM {table} WHERE source='fhir' AND EXISTS "
         "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)", (identity,)).fetchall()
