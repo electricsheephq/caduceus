@@ -133,7 +133,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
 ```
 
 - **`ingest_payload`:** batches at most 10,000 rows in `write_txn`; HAE natural keys upsert and each metric-day is
-  cleared once per run. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
+  cleared once per run. `counts.samples` counts distinct sample dedupe keys written across the whole run,
+  including upserts, so repeated buckets count once; `samples_replaced` still counts deleted rows and `workouts`
+  still counts newly inserted workouts. Heart rate uses `avg` when present, otherwise `Avg`, otherwise `qty`;
+  missing all three skips the entry. Its `min` and `max` are ignored. Sleep keys include their category, and sleep `local_day` is the start's noon-to-noon
   morning in the end's offset (which still supplies `tz_offset_min`). Sleep nights in `run_state["sleep_keep"]`
   (a set of ISO dates) preserve stored rows except for each source whose summary the file uses on that night:
   its HAE sleep rows are cleared before insertion, once per run per night/source using
@@ -180,7 +183,12 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   A first sync starts at `today - (backfill_days - 1)`. Until a run of this source succeeds, the most recent
   earlier `hae_sync` run with a stored `since` preserves that start: takes the earlier of its `since` and the
   backfill start, never before `today - 3650 days`. After a succeeded run, starts two days before that run's
-  `through`, with the same 3,650-day floor. Stores ISO `since` and `through` in the running import's `counts_json`
+  `through`, with the same 3,650-day floor. If that latest succeeded run's `parser_version` differs from
+  `PARSER_VERSION` (now `"3"`), re-reads from the earlier of that overlap start and the earliest recorded `since`
+  among all this source's `hae_sync` runs, including failed or interrupted runs, with the same 3,650-day floor.
+  Records `counts.reread=true` only when this version rule fires. A failed re-read does not advance the succeeded
+  run, so the next sync re-reads again; after a successful re-read the same parser returns to the two-day overlap.
+  Stores ISO `since` and `through` in the running import's `counts_json`
   inside `write_txn` before its first MCP request, so an interrupted first sync also preserves its start;
   `finish_import` replaces these with the full counts.
   Sync-only `counts.entries_by_kind` holds run-wide `parsed` and `skipped` entry totals for `metrics`, `sleep`
