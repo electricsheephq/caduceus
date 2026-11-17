@@ -25,7 +25,7 @@ except ImportError:  # Windows: the process-local lock still serializes runs.
 _RUN_LOCKS = {}
 _RUN_LOCKS_GUARD = threading.Lock()
 
-PARSER_VERSION = "2"
+PARSER_VERSION = "3"
 BATCH = 10_000
 MAX_JSON = 512 << 20
 MAX_TOTAL = 16 << 30
@@ -229,7 +229,10 @@ def _metric_rows(name, metric, entry, source_id):
     if name == "blood_pressure":
         return [_sample("BloodPressure" + side.title(), entry, source_id, unit, _number(entry[side]))
                 for side in ("systolic", "diastolic")]
-    value = _number(entry["Avg"] if name == "heart_rate" and "Avg" in entry else entry["qty"])
+    value_key = "qty"
+    if name == "heart_rate":
+        value_key = "avg" if "avg" in entry else "Avg" if "Avg" in entry else "qty"
+    value = _number(entry[value_key])
     if name == "body_fat_percentage":
         value = value / 100 if value > 1 else value
         unit = "%"
@@ -271,6 +274,7 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
     if not isinstance(data, dict):
         raise ValueError("payload must be an object")
     cleared = run_state.setdefault("cleared", set())
+    sample_keys = run_state.setdefault("sample_keys", set())
     sleep_sources_cleared = run_state.setdefault("sleep_sources_cleared", set())
     sleep_clear_from = run_state.get("sleep_clear_from")
     sleep_keep = run_state.get("sleep_keep", set())
@@ -305,14 +309,12 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
                 replaced += samples.execute(
                     "DELETE FROM sample WHERE provider='hae' AND type='HKCategoryTypeIdentifierSleepAnalysis' "
                     "AND local_day=? AND source_name=?", (day, source)).rowcount
-            before = samples.total_changes
             samples.executemany(
                 "INSERT INTO sample(source_id,type,source_name,unit,start_utc,end_utc,tz_offset_min,local_day,"
                 "value,value_text,dedupe_key,category,provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'hae') "
                 "ON CONFLICT(dedupe_key) DO UPDATE SET value=excluded.value,value_text=excluded.value_text,"
                 "unit=excluded.unit,source_id=excluded.source_id,tz_offset_min=excluded.tz_offset_min,"
                 "local_day=excluded.local_day,category=excluded.category", pending)
-            written = samples.total_changes - before
             before = samples.total_changes
             samples.executemany(
                 "INSERT OR IGNORE INTO workout(source_id,type,source_name,start_utc,end_utc,duration,"
@@ -321,7 +323,8 @@ def ingest_payload(samples, data: dict, source_id, *, run_state, counts, warning
         cleared.update(pairs)
         sleep_sources_cleared.update(sleep_sources)
         counts["samples_replaced"] += replaced
-        counts["samples"] += written
+        sample_keys.update(row[10] for row in pending)
+        counts["samples"] = len(sample_keys)
         counts["workouts"] += added_workouts
         pending.clear()
         workouts.clear()
@@ -532,13 +535,20 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
     try:
         with _run_lock(samples, vault, run.id, cancel):
             previous = vault.execute(
-                "SELECT counts_json FROM import_run WHERE source_id=? AND parser='hae_sync' AND status='succeeded' "
+                "SELECT counts_json,parser_version FROM import_run WHERE source_id=? AND parser='hae_sync' AND status='succeeded' "
                 "ORDER BY id DESC LIMIT 1", (src.id,)).fetchone()
             through = today
             since = through - timedelta(days=backfill_days - 1)
             if previous:
-                since = max(date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2),
-                            through - timedelta(days=3650))
+                since = date.fromisoformat(json.loads(previous[0])["through"]) - timedelta(days=2)
+                if previous[1] != PARSER_VERSION:
+                    earliest = vault.execute(
+                        "SELECT min(json_extract(counts_json,'$.since')) FROM import_run "
+                        "WHERE source_id=? AND parser='hae_sync'", (src.id,)).fetchone()[0]
+                    if earliest is not None:
+                        since = min(since, date.fromisoformat(earliest))
+                    counts["reread"] = True
+                since = max(since, through - timedelta(days=3650))
             else:
                 earlier = vault.execute(
                     "SELECT counts_json FROM import_run WHERE source_id=? AND parser='hae_sync' AND id<? "

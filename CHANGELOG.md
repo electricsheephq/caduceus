@@ -2,6 +2,13 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.3 — 2026-11-17
+
+### Fixed
+- Heart rate day summaries from the Health Auto Export app, with a minimum, average and maximum but no quantity, were skipped. They are now read using the average.
+- After this update, the next sync re-reads earlier days once so the skipped history is filled in. If the app's reply for some of those days cannot be read in that sync, the sync still succeeds and reports it in its warnings, but those days are not re-read again (#37).
+- The sync's sample count no longer counts a day twice when two requests both return it.
+
 ## 0.3.2 — 2026-11-16
 
 ### Fixed
