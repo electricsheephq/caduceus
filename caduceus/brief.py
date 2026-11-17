@@ -14,7 +14,8 @@ import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-from .core.policy import Category, allowed, categorize, visible
+from .core.policy import Category, allowed, categorize, text_visible, visible
+from .core.search import medication_text
 
 BRIEF_VERSION = "brief/1"
 TREND_METRICS = (
@@ -80,7 +81,7 @@ def _value(value) -> str:
 
 def _medications(vault) -> list[dict]:
     return [dict(r) for r in vault.execute(
-        "SELECT drug, brand, event, dose, occurred_on, source, note, category FROM medication_event "
+        "SELECT id, drug, brand, event, dose, occurred_on, source, note, category FROM medication_event "
         "ORDER BY occurred_on, id")]
 
 
@@ -376,7 +377,7 @@ def write_brief(vault, samples, out_dir, *, policy, today=None, specialty="gener
     recorded = _medications(vault)
     # Each medication passes the policy on its own category (a contraceptive is reproductive), once, here: every
     # section below sees only the medications the policy shows.
-    meds = [m for m in recorded if medication_visible(policy, m["category"])]
+    meds = [m for m in recorded if medication_visible(policy, m["category"], text=medication_text(vault, m))]
     hidden_meds = len(recorded) - len(meds)
     sections, withheld = [], 0
     for build in (lambda: _meds_section(meds, hidden_meds), lambda: _trend_section(samples, meds, policy, today),
@@ -389,7 +390,8 @@ def write_brief(vault, samples, out_dir, *, policy, today=None, specialty="gener
     if not recorded and len(sections) <= 1:  # only the "no medications" placeholder, or nothing at all
         sections = ["<p>Nothing to show yet. Import an Apple Health export, your records or your DNA raw "
                     "data first, or ask your agent to record a medication.</p>"]
-    shown_questions = [q for q in questions if allowed(policy, categorize(text=q))]
+    shown_questions = [q for q in questions if text_visible(policy, q)
+                       and (allowed(policy, Category.GENERAL) or categorize(text=q) != Category.GENERAL)]
     withheld += len(questions) - len(shown_questions)
     if shown_questions:
         sections.append("<h2>Your questions</h2><ol>" + "".join(f"<li>{_e(q)}</li>" for q in shown_questions) + "</ol>")

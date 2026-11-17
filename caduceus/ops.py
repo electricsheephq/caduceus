@@ -24,7 +24,7 @@ from .core.contracts import SourceKind
 from .core.db import open_samples, open_vault, write_txn
 from .core.paths import check_user_path, data_dir, reports_dir
 from .core.policy import (DEFAULTS, MARKER_CATEGORY, SENSITIVE, Category, Policy, allowed, categorize,
-                          medication_category, visible)
+                          medication_category, text_visible, visible)
 from .tools import LIMITS, ToolError
 
 _CONFIG_DEFAULTS = {**DEFAULTS, "hae_mcp_server": "health-auto-export", "hae_backfill_days": 90}
@@ -177,9 +177,10 @@ def _strings(args: dict, key: str) -> list[str]:
         raise ToolError(f"{key} must be a list of strings")
     return list(value)
 
-def medication_visible(policy, category) -> bool:
-    """A medication shows only when medications show and its own category does (a contraceptive is reproductive)."""
-    return visible(policy, category or Category.MEDICATION, kind="medication")
+def medication_visible(policy, category, *, text="") -> bool:
+    """A medication needs its base/stored categories and every sensitive topic in its words to be visible."""
+    return (visible(policy, category or Category.MEDICATION, kind="medication")
+            and text_visible(policy, text))
 
 
 def _file_url(path) -> dict:
@@ -214,10 +215,16 @@ def search_tool(ctx, args: dict) -> dict:
     kinds = _strings(args, "kinds")
     with _Store() as store:
         def allow_record(row):
-            if row["kind"] != "phenotype":
-                return True
-            note = store.vault.execute("SELECT * FROM phenotype_note WHERE id=?", (row["ref"],)).fetchone()
-            return note is not None and _phenotype_visible(store.vault, policy, note)
+            if row["kind"] == "phenotype":
+                note = store.vault.execute("SELECT * FROM phenotype_note WHERE id=?", (row["ref"],)).fetchone()
+                return note is not None and _phenotype_visible(store.vault, policy, note)
+            if row["kind"] == "medication":
+                # User search documents omit notes; check the stored words without changing the index format.
+                key = str(row["ref"]).removeprefix("user:")
+                med = store.vault.execute("SELECT * FROM medication_event WHERE id=?", (key,)).fetchone()
+                if med is not None:
+                    return medication_visible(policy, med["category"], text=search_index.medication_text(store.vault, med))
+            return True
 
         if args.get("ref"):
             record = search_index.fetch(store.vault, str(args["ref"]), policy=policy, allow=allow_record)
@@ -331,11 +338,10 @@ def _phenotype_gene_names():
 
 
 def _phenotype_visible(vault, policy, row, *, categories=None):
-    # The stored category is the marker's when it is sensitive, so a second sensitive category named in the
-    # note's own words is checked here too; the marker itself must be visible as well.
-    text_category = categorize(text=f"{row['trait'] or ''} {row['text'] or ''}")
+    # The stored category is the marker's when it is sensitive; every topic named in the note's own words
+    # is checked here too, and the marker itself must still be visible.
     return (visible(policy, row["category"], kind="phenotype")
-            and (text_category not in SENSITIVE or visible(policy, text_category, kind="phenotype"))
+            and text_visible(policy, f"{row['trait'] or ''} {row['text'] or ''}")
             and all(_marker_visible(vault, policy, marker, categories=categories)
                     for marker in _phenotype_markers(vault, row["marker"])))
 
@@ -659,14 +665,15 @@ def _drug_start(vault, drug: str, policy) -> tuple[date | None, int]:
     """The latest recorded start of *drug* (the current course when it was stopped and restarted), and how many
     matching starts the policy hid. A start the records give only to the month or year is no pivot."""
     rows = [r for r in vault.execute(
-        "SELECT drug, brand, occurred_on, category FROM medication_event WHERE event='start' ORDER BY occurred_on")
+        "SELECT * FROM medication_event WHERE event='start' ORDER BY occurred_on")
         if same_drug(drug, r["drug"]) or same_drug(drug, r["brand"] or "")]
-    shown = [r for r in rows if medication_visible(policy, r["category"])]
+    shown = [r for r in rows if medication_visible(policy, r["category"], text=search_index.medication_text(vault, r))]
     starts = [r["occurred_on"] for r in shown if r["occurred_on"] and _ISO_DAY.match(r["occurred_on"])]
+    hidden = len(rows) - len(shown)
     if starts:
-        return date.fromisoformat(starts[-1][:10]), 0
-    if len(shown) < len(rows):
-        return None, len(rows) - len(shown)
+        return date.fromisoformat(starts[-1][:10]), hidden
+    if hidden:
+        return None, hidden
     if shown:
         raise ToolError(f"the recorded start of {drug} has no day (only {shown[-1]['occurred_on']}): give a pivot date")
     raise ToolError(f"no start date recorded for {drug}: record it with caduceus_capture op=medication")
@@ -769,6 +776,8 @@ def trend_tool(ctx, args: dict) -> dict:
             result = _lane(_need("health.trends", "compare_windows"), store.samples, metric, pivot=pivot,
                            before_days=before_days, after_days=after_days)
             result = {**result, "pivot": pivot.isoformat()}
+            if drug_pivot:
+                result.update(_withheld(hidden))  # a matching start the policy hides: counted, never described
             end = pivot + timedelta(days=after_days - 1)
             if drug_pivot:
                 result["next_step"] = (f"For gene–drug evidence about {drug}, "
@@ -1018,21 +1027,25 @@ def _medication(ctx, args: dict) -> dict:
                               (*changed.values(), ref))
             if category.value != row["category"]:
                 vault.execute("UPDATE medication_event SET category=? WHERE id=?", (category.value, ref))
-        stored = vault.execute("SELECT brand, dose FROM medication_event WHERE id=?", (ref,)).fetchone()
+        stored = vault.execute("SELECT * FROM medication_event WHERE id=?", (ref,)).fetchone()
         words = _EVENT_WORDS[event]
         search_index.index_doc(
             vault, kind="medication", ref=f"user:{ref}",
             title=f"{words} {generic}" + (f" ({stored['brand']})" if stored["brand"] else ""),
             body=f"{words} {generic} on {when.isoformat()}. Dose: {stored['dose'] or 'not given'}.",
             category=category, ts=when.isoformat())
+        stored_text = search_index.medication_text(vault, stored)
         if outcome != "already_recorded":
             vault.execute("INSERT INTO audit_event(ts, actor, action, detail_json) VALUES (?,?,?,?)",
                           (now, "agent", f"medication_{outcome}", json.dumps(preview)))
     if not medication_visible(policy_for(ctx), category):
-        return {"saved": True, **preview,
+        return {"saved": True,
                 "note": (f"Recorded. Your privacy settings hide {category.value} items, so this medication and "
                          "anything already stored about it stay out of searches, the brief and this reply until the "
                          "user unlocks it with /caduceus.")}
+    if not medication_visible(policy_for(ctx), category, text=f"{stored_text} {previous_dose or ''}"):
+        return {"saved": True, "note": "Recorded. Your privacy settings hide this medication; only the user can "
+                "change visibility with /caduceus."}
     out = {"recorded": outcome == "recorded", "already_recorded": outcome == "already_recorded",
            "updated": outcome == "updated", **preview, "brand": stored["brand"], "dose": stored["dose"]}
     if previous_dose is not None:
@@ -1040,7 +1053,7 @@ def _medication(ctx, args: dict) -> dict:
     return out
 
 
-def _journal(args: dict) -> dict:
+def _journal(ctx, args: dict) -> dict:
     text = str(args.get("text") or "").strip()
     if not text:
         raise ToolError("give the note text")
@@ -1052,6 +1065,11 @@ def _journal(args: dict) -> dict:
                                   (when.isoformat(), text, category.value, now))
         search_index.index_doc(store.vault, kind="journal", ref=str(cur.lastrowid), title=f"Note {when.isoformat()}",
                                body=text, category=category, ts=when.isoformat())
+    policy = policy_for(ctx)
+    if not (visible(policy, category, kind="journal")
+            and text_visible(policy, text)):
+        return {"saved": True, "note": "Recorded. Your privacy settings hide this note; only the user can change "
+                "visibility with /caduceus."}
     return {"saved": True, "date": when.isoformat(), "category": category.value}
 
 
@@ -1260,7 +1278,7 @@ def capture_tool(ctx, args: dict) -> dict:
     if op == "medication":
         return _medication(ctx, args)
     if op == "journal":
-        return _journal(args)
+        return _journal(ctx, args)
     if op == "consent":
         return _consent(args)
     if op == "phenotype":
