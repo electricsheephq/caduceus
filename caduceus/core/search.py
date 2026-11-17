@@ -133,7 +133,7 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
     linked = resolver.resolve(references, source_ids=source_ids, full_url=full_url, resource_type=resource_type)
     table = {"Observation": "observation", "ImagingStudy": "clinical_report"}[resource_type]
     rows = [conn.execute(f"SELECT * FROM {table} WHERE id=?", (row["id"],)).fetchone() for row in linked]
-    for row in sorted(rows, key=lambda row: (row["effective_at"] or "", row["id"])):
+    for row in sorted((row for row in rows if row is not None), key=lambda row: (row["effective_at"] or "", row["id"])):
         document = json.loads(row["raw_json"] or "{}")
         kind = "observation" if resource_type == "Observation" else "report"
         if not visible(policy, row["category"], kind="observation"):
@@ -174,20 +174,27 @@ def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy, allow=None) -> 
     """One indexed record in full, by the ``kind:ref`` a search returned. None when absent or withheld."""
     from ..health.fhir import ReportResolver
 
-    resolver = ReportResolver(conn)
-    kind, _, key = str(ref or "").partition(":")
-    row = conn.execute(
-        "SELECT kind, ref, title, body, category, ts FROM search_doc WHERE kind=? AND ref=?", (kind, key)
-    ).fetchone()
-    if row is None:
-        return None
-    if not _visible(conn, policy, row, resolver) or (allow is not None and not allow(row)):
-        return {"ref": ref, "withheld": True, "reason": "hidden by your privacy settings"}
-    result = {"ref": ref, "kind": row["kind"], "title": row["title"], "body": row["body"],
-              "category": row["category"], "date": row["ts"]}
-    if kind == "report":
-        report = _fetch_report(conn, key, policy=policy, resolver=resolver)
-        if report is None:
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute("BEGIN")
+    try:
+        resolver = ReportResolver(conn)
+        kind, _, key = str(ref or "").partition(":")
+        row = conn.execute(
+            "SELECT kind, ref, title, body, category, ts FROM search_doc WHERE kind=? AND ref=?", (kind, key)
+        ).fetchone()
+        if row is None:
             return None
-        result.update(report)
-    return result
+        if not _visible(conn, policy, row, resolver) or (allow is not None and not allow(row)):
+            return {"ref": ref, "withheld": True, "reason": "hidden by your privacy settings"}
+        result = {"ref": ref, "kind": row["kind"], "title": row["title"], "body": row["body"],
+                  "category": row["category"], "date": row["ts"]}
+        if kind == "report":
+            report = _fetch_report(conn, key, policy=policy, resolver=resolver)
+            if report is None:
+                return None
+            result.update(report)
+        return result
+    finally:
+        if owns_transaction:
+            conn.rollback()  # end our read snapshot, leaving caller-owned transactions alone
