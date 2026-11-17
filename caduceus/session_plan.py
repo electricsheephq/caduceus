@@ -112,7 +112,7 @@ def session_plan(ctx, args):
 
         medications = []
         for row in vault.execute("SELECT * FROM medication_event ORDER BY occurred_on DESC,id DESC"):
-            if ops.medication_visible(policy, row["category"]):
+            if ops.medication_visible(policy, row["category"], text=ops.search_index.medication_text(vault, row)):
                 medications.append({"drug": row["drug"], "brand": row["brand"], "event": row["event"],
                                     "dose": row["dose"], "date": row["occurred_on"]})
             else:
