@@ -1,12 +1,17 @@
 """Local FHIR R4 ingestion; raw resources and date precision stay in the vault."""
 from __future__ import annotations
 
+import base64
+import binascii
+import copy
 import hashlib
 import json
 import math
 import re
 from collections import Counter
 from datetime import date, datetime, timezone
+from html.parser import HTMLParser
+from urllib.parse import urlsplit, urlunsplit
 
 from ..core import search, sources
 from ..core.contracts import ImportResult
@@ -16,6 +21,9 @@ from ..core.policy import Category, SENSITIVE, categorize, medication_category
 PARSER = "fhir"
 PARSER_VERSION = "1"
 MAX_JSON = 64 << 20
+REPORT_TYPES = ("DiagnosticReport", "DocumentReference", "Composition", "ImagingStudy")
+MAX_ATTACHMENT = 2 << 20
+MAX_NARRATIVE = 200_000
 LOINC = "http://loinc.org"
 ALIASES = {"hba1c": ("4548-4", "17856-6", "59261-8"),
            "glucose": ("2345-7", "2339-0", "1558-6"),
@@ -324,12 +332,13 @@ def _medications(vault, resource, source_id, name, counts=None, full_url=None):
 
 def warning_messages(counts):
     reasons = {"date": "missing or invalid date", "status": "excluded resource status",
-               "name": "missing medication display name"}
+               "name": "missing medication display name",
+               "attachment_unreadable": "unreadable inline text attachment"}
     return [f"{key.split(':')[1]}: skipped {n} resource(s) ({reasons[key.split(':')[2]]})"
             for key, n in sorted(counts.items()) if key.startswith("skipped:")]
 
 
-def _observations(vault, resource, source_id, when, precision, counts, full_url=None):
+def _observations(vault, resource, source_id, when, precision, counts, full_url=None, resolver=None):
     components = resource.get("component") or []
     # A panel's narrative describes all its parts, so no row of a panel keeps it; a component row keeps none of the
     # panel's own value either.
@@ -360,6 +369,8 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
         legacy_key = _key(["Observation", system, code, when, [num, text], unit, None]) if (
             system is None and code is None) else None
         identities = {identity} if identity else set()
+        typed_ids = {f"Observation/{rid}"} if (rid := _identity(resource)) else set()
+        source_ids = {source_id} - {None}
         superseded = {}  # resource -> content key of its identical copy that a correction replaced
         if identity:
             previous = [row for row in vault.execute(
@@ -392,13 +403,25 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
                     # value: the others are remembered as superseded, so a retraction of the correction removes it.
                     superseded.update(meta.get("superseded") or {})
                     superseded.update({rid: row["dedupe_key"] for rid in _resource_ids(document)})
+                    # The replaced copy's typed ids stay privacy aliases on the correcting row: a report may name any
+                    # of them and must still be withheld when this result is hidden.
+                    typed_ids.update(t for t in meta.get("typed_ids", []) if isinstance(t, str))
+                    if replaced_id := _identity(document):
+                        typed_ids.add(f"Observation/{replaced_id}")
                     search.remove_doc(vault, kind="observation", ref=str(row["id"]))
                     vault.execute("DELETE FROM observation WHERE id=?", (row["id"],))
+                    if resolver is not None:
+                        resolver.refresh("Observation", row["id"])
                     counts["observation_superseded"] = counts.get("observation_superseded", 0) + 1
-        existing = vault.execute("SELECT id,raw_json,name,category FROM observation WHERE dedupe_key=?", (key,)).fetchone()
+        existing = vault.execute("SELECT id,raw_json,name,category,source_id FROM observation WHERE dedupe_key=?", (key,)).fetchone()
         if existing:
             stored = json.loads(existing["raw_json"])
             identities.update(_resource_ids(stored))
+            meta = stored.get("_caduceus") or {}
+            typed_ids.update(meta.get("typed_ids", []))
+            if stored_id := _identity(stored):
+                typed_ids.add(f"Observation/{stored_id}")
+            source_ids.update(report_source_ids(meta, existing["source_id"]))
             superseded = {**((stored.get("_caduceus") or {}).get("superseded") or {}), **superseded}
         superseded = {rid: copy for rid, copy in superseded.items() if rid not in identities}
         if corrected or existing is None:
@@ -407,6 +430,7 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
             document = json.loads(existing["raw_json"])
             scope = (document.get("_caduceus") or {}).get("full_url")
         raw = _raw(document, precision, resource_ids=sorted(identities),
+                   typed_ids=sorted(typed_ids), source_ids=sorted(source_ids),
                    **({"superseded": dict(sorted(superseded.items()))} if superseded else {}),
                    **({"full_url": scope} if scope else {}))
         cur = vault.execute(
@@ -418,6 +442,9 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
             search.index_doc(vault, kind="observation", ref=str(cur.lastrowid), title=name,
                              body=raw, category=category, ts=when)
             inserted += 1
+            categories = counts.setdefault("observation_by_category", {})
+            for category_code in observation_categories(own):
+                categories[category_code] = categories.get(category_code, 0) + 1
         elif existing:
             # Natural-key dedupe must retain all resource ids for later corrections.
             if corrected:
@@ -429,6 +456,8 @@ def _observations(vault, resource, source_id, when, precision, counts, full_url=
             search.index_doc(vault, kind="observation", ref=str(existing["id"]),
                              title=name if corrected else existing["name"], body=raw,
                              category=category if corrected else existing["category"], ts=when)
+        if resolver is not None:
+            resolver.refresh("Observation", cur.lastrowid if cur.rowcount else existing["id"])
     return inserted
 
 
@@ -611,10 +640,438 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
         vault.execute("UPDATE search_doc SET body=? WHERE kind='condition' AND ref=?", (raw, str(previous["id"])))
 
 
+class _ReportHTML(HTMLParser):
+    """Extract inert prose, excluding script/style contents and separating block text."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts, self.hidden = [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self.hidden.append(tag)
+        if not self.hidden:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if self.hidden and tag == self.hidden[-1]:
+            self.hidden.pop()
+        if not self.hidden:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def _report_text(value, *, html=False):
+    if not isinstance(value, str):
+        return ""
+    if html:
+        parser = _ReportHTML()
+        parser.feed(value)
+        parser.close()
+        value = "".join(parser.parts)
+    return " ".join(value.split())
+
+
+def _report_label(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+    return None
+
+
+def _report_object(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _report_concept(value):
+    """Normalize only readable labels before shared concept/category readers see them."""
+    concept = next(iter(_read_objects(value)), {})
+    coding = []
+    for item in _read_objects(concept.get("coding")):
+        normalized = {k: label for k in ("code", "display") if (label := _report_label(item.get(k))) is not None}
+        if isinstance(item.get("system"), str):
+            normalized["system"] = item["system"]
+        if normalized:
+            coding.append(normalized)
+    text = _report_label(concept.get("text"))
+    return {"coding": coding, **({"text": text} if text is not None else {})}
+
+
+def _report_dates(resource):
+    kind = resource["resourceType"]
+    if kind == "DiagnosticReport":
+        return [resource.get("effectiveDateTime"), _report_object(resource.get("effectivePeriod")).get("start"),
+                resource.get("issued")]
+    if kind == "DocumentReference":
+        context = next(iter(_read_objects(resource.get("context"))), {})
+        return [resource.get("date"), _report_object(context.get("period")).get("start")]
+    return [resource.get("date" if kind == "Composition" else "started")]
+
+
+def _report_identity(resource, full_url=None):
+    # Export-local UUIDs may change each time the same resource is exported.
+    if isinstance(full_url, str) and full_url.strip().startswith("urn:uuid:") and _identity(resource):
+        return _identity(resource)
+    return _identity(resource, full_url)
+
+
+def _report_rank(resource):
+    status = resource.get("docStatus") if resource.get("resourceType") == "DocumentReference" else None
+    status = status or resource.get("status")
+    return 0 if status in ("registered", "partial", "preliminary") else (
+        2 if status in ("amended", "corrected", "appended") else 1)
+
+
+class ReportResolver:
+    """Call-local identity index: broad privacy, narrowly attributable display.
+
+    Only identity/category metadata crosses the table scan. Later ingest writes
+    refresh individual entries; no resolver survives into another public call.
+    """
+    _projection = ("id,source_id,category,json_extract(raw_json,'$.id') AS resource_id,"
+                   "json_extract(raw_json,'$._caduceus.resource_ids') AS resource_ids,"
+                   "json_extract(raw_json,'$._caduceus.typed_ids') AS typed_ids,"
+                   "json_extract(raw_json,'$._caduceus.source_ids') AS source_ids")
+    _tables = {"Observation": "observation", "ImagingStudy": "clinical_report"}
+
+    def __init__(self, vault):
+        self.vault = vault
+        self.indexes = {}
+
+    def _keys(self, row, kind):
+        identities = json.loads(row["resource_ids"] or "[]")
+        identities = {x for x in identities if isinstance(x, str)} if isinstance(identities, list) else set()
+        relative = {identity[i + 1:] for identity in identities
+                    for i, char in enumerate(identity) if char == "/"}
+        relative.update(json.loads(row["typed_ids"] or "[]"))
+        if isinstance(row["resource_id"], str):
+            relative.add(f"{kind}/{row['resource_id']}")
+        return identities, relative
+
+    def _put(self, kind, row, ref):
+        rows, exact, relative = self.indexes[kind]
+        old = rows.pop(ref, None)
+        if old:
+            for index, keys in zip((exact, relative), self._keys(old, kind)):
+                for key in keys:
+                    index[key].discard(ref)
+                    if not index[key]:
+                        del index[key]
+        if row is not None:
+            row = dict(row)
+            row["source_ids"] = report_source_ids({"source_ids": json.loads(row["source_ids"] or "null")}, row["source_id"])
+            rows[ref] = row
+            for index, keys in zip((exact, relative), self._keys(row, kind)):
+                for key in keys:
+                    index.setdefault(key, set()).add(ref)
+
+    def _load(self, kind):
+        if kind not in self.indexes:
+            self.indexes[kind] = ({}, {}, {})
+            where = " WHERE resource_type='ImagingStudy'" if kind == "ImagingStudy" else ""
+            for row in self.vault.execute(f"SELECT {self._projection} FROM {self._tables[kind]}" + where):
+                self._put(kind, row, row["id"])
+        return self.indexes[kind]
+
+    def refresh(self, kind, ref):
+        if kind in self.indexes:
+            row = self.vault.execute(f"SELECT {self._projection} FROM {self._tables[kind]} WHERE id=?",
+                                     (ref,)).fetchone()
+            self._put(kind, row, ref)
+
+    def resolve(self, references, *, resource_type="Observation", broad=False, source_ids=(), full_url=None):
+        refs = {r["reference"] for r in _read_objects(references) if isinstance(r.get("reference"), str)}
+        if not refs:
+            return []
+        rows, exact, relative = self._load(resource_type)
+        sources = set(source_ids) - {None}
+        base = None
+        if isinstance(full_url, str):
+            url = urlsplit(full_url)
+            if url.scheme in ("http", "https") and url.netloc:
+                base = urlunsplit((url.scheme, url.netloc, url.path.rsplit("/", 2)[0] + "/", "", ""))
+        matches = set()
+        for ref in refs:
+            matches.update(exact.get(ref, ()))
+            candidates = relative.get(ref, ())
+            if broad:
+                matches.update(candidates)
+                trailing = _trailing_reference(ref, resource_type)
+                if trailing:
+                    matches.update(relative.get(trailing, ()))
+            else:
+                matches.update(key for key in candidates if rows[key]["source_ids"] & sources)
+                if base and not urlsplit(ref).scheme and not ref.startswith("/"):
+                    matches.update(exact.get(base + ref, ()))
+        return [rows[key] for key in sorted(matches)]
+
+
+def _trailing_reference(ref, resource_type):
+    """`Type/id` at the end of a reference, without a version suffix, base URL, query or fragment.
+
+    Only for broad (privacy) matching: however an exporter writes the reference, a hidden row it may name is found.
+    """
+    path = urlsplit(ref).path if urlsplit(ref).scheme in ("http", "https") else ref.split("?", 1)[0].split("#", 1)[0]
+    parts = [part for part in path.split("/") if part]
+    if len(parts) >= 4 and parts[-2] == "_history":
+        parts = parts[:-2]
+    if len(parts) >= 2 and parts[-2] == resource_type and parts[-1]:
+        return f"{resource_type}/{parts[-1]}"
+    return None
+
+
+def report_source_ids(metadata, source_id):
+    """Report and Observation rows without source history use their original source."""
+    values = metadata.get("source_ids")
+    return set(values if isinstance(values, list) else [source_id]) - {None}
+
+
+def _report_attachments(document, counts):
+    """Decode bounded inline text only. Strip all inline bytes from the stored resource copy."""
+    attachments = _read_objects(document.get("presentedForm"))
+    attachments += [a for content in _read_objects(document.get("content"))
+                    for a in _read_objects(content.get("attachment"))]
+    metadata, texts = [], []
+    for attachment in attachments:
+        data = attachment.pop("data", None)
+        content_type = attachment.get("contentType")
+        media_type = str(content_type or "").split(";", 1)[0].strip().lower()
+        metadata.append({"content_type": content_type, "size": attachment.get("size"),
+                         "title": attachment.get("title"), "has_inline_data": data is not None,
+                         "has_url": bool(attachment.get("url"))})
+        if data is None or media_type not in ("text/plain", "text/html", "application/xhtml+xml", "text/markdown"):
+            continue
+        # Reject oversize text before decoding, even if the declared size is missing or misleading.
+        if isinstance(data, str):
+            data = data.translate(str.maketrans("", "", " \t\n\r\v\f"))
+            decoded_size = (len(data) // 4) * 3 - (len(data) - len(data.rstrip("=")))
+            if len(data) > 4 * ((MAX_ATTACHMENT + 2) // 3) or decoded_size > MAX_ATTACHMENT:
+                continue
+        try:
+            decoded = base64.b64decode(data, validate=True)
+            if len(decoded) > MAX_ATTACHMENT:
+                continue
+            text = _report_text(decoded.decode("utf-8-sig"), html=media_type in ("text/html", "application/xhtml+xml"))
+        except (ValueError, TypeError, binascii.Error, UnicodeError):
+            _skip(counts, document["resourceType"], "attachment_unreadable")
+            continue
+        if text:
+            texts.append(text)
+    return metadata, texts
+
+
+def _strip_report_data(document):
+    """Remove nested attachment/Binary bytes without decoding or following references."""
+    pending = [document]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            if node.get("resourceType") == "Binary" or node.keys() & {"contentType", "url", "title", "size"}:
+                node.pop("data", None)
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+
+
+def _section_text(sections):
+    # Iterative traversal keeps nested sections in source order without a recursion limit of our own.
+    pending, texts = list(reversed(_read_objects(sections))), []
+    while pending:
+        section = pending.pop()
+        texts.extend([_report_text(section.get("title")),
+                      _report_text(_report_object(section.get("text")).get("div"), html=True)])
+        pending.extend(reversed(_read_objects(section.get("section"))))
+    return texts
+
+
+def _report(vault, resource, source_id, counts, full_url=None, resolver=None):
+    kind = resource["resourceType"]
+    when, precision = next((parsed for value in _report_dates(resource)
+                            if (parsed := _date_value(value))[0] is not None), (None, None))
+    if when is None:
+        _skip(counts, kind, "date")
+        return
+    concept = _report_concept(resource.get("code") if kind == "DiagnosticReport" else resource.get("type"))
+    system, code, name = _concept(concept)
+    if kind == "Composition" and name == "Unknown":
+        name = _report_text(resource.get("title")) or name
+    if kind == "ImagingStudy":
+        name = _report_text(resource.get("description")) or ", ".join(
+            str(m.get("display") or m.get("code")) for m in _read_objects(resource.get("modality"))
+            if m.get("display") or m.get("code")) or "Imaging study"
+    document = copy.deepcopy(resource)
+    attachments, texts = _report_attachments(document, counts)
+    conclusion_codes = [_report_concept(c) for c in _read_objects(resource.get("conclusionCode"))]
+    conclusion = _report_text(resource.get("description") if kind == "DocumentReference" else resource.get("conclusion"))
+    if kind == "DiagnosticReport":
+        if not texts:
+            texts.append(_report_text(_report_object(resource.get("text")).get("div"), html=True))
+        texts.extend(_concept(c)[2] for c in conclusion_codes)
+    elif kind == "Composition":
+        texts.extend([_report_text(resource.get("title")), *_section_text(resource.get("section"))])
+    narrative = " ".join(t for t in texts if t)
+    category = _category([concept, *conclusion_codes,
+                          *[_report_concept(c) for c in _read_objects(resource.get("category"))]], Category.RECORDS)
+    privacy_text = " ".join([name, conclusion, narrative, _report_text(resource.get("description")),
+                             *[_concept(c)[2] for c in conclusion_codes],
+                             *[_report_text(a.get("title")) for a in attachments]])
+    sensitive = categorize(text=privacy_text, default=Category.RECORDS)
+    if sensitive in SENSITIVE:
+        category = sensitive
+    linked_rows = [*resolver.resolve(resource.get("result"), broad=True),
+                   *resolver.resolve(resource.get("imagingStudy"), broad=True, resource_type="ImagingStudy")]
+    for linked in linked_rows:
+        if category not in SENSITIVE and linked["category"] in {c.value for c in SENSITIVE}:
+            category = Category(linked["category"])
+    # Results and studies contained in the report itself (referenced as "#id") are never stored on their own, so
+    # their categories are recorded with the report and checked on every read.
+    contained = {f"#{c['id']}": c for c in _read_objects(resource.get("contained")) if isinstance(c.get("id"), str)}
+    contained_categories = set()
+    for field in ("result", "imagingStudy"):
+        for link in _read_objects(resource.get(field)):
+            target = contained.get(link.get("reference")) if isinstance(link.get("reference"), str) else None
+            if not isinstance(target, dict):
+                continue
+            parts = [target, *_read_objects(target.get("component"))]  # a contained panel's components count too
+            for part in parts:
+                coded = _category([_report_concept(part.get("code")), _report_concept(part.get("valueCodeableConcept"))],
+                                  Category.RECORDS)
+                if coded in SENSITIVE:
+                    contained_categories.add(coded)
+            worded = categorize(text=_report_text(target.get("description")), default=Category.RECORDS)
+            if worded in SENSITIVE:
+                contained_categories.add(worded)
+    if category not in SENSITIVE and contained_categories:
+        category = sorted(contained_categories, key=lambda c: c.value)[0]
+    identity = _report_identity(resource, full_url)
+    seen_identity = _identity(resource, full_url)
+    parts = ["Report", kind, identity, system, code, when] if identity else [
+        "Report", kind, system, code, when, _normalized_name(name)]
+    key = _key(parts)
+    aliases = {seen_identity} if seen_identity else set()
+    metadata = {"resource_ids": sorted(aliases), "identity_aliases": sorted(aliases), "attachments": attachments,
+                "source_ids": sorted({source_id} - {None})}
+    if contained_categories:
+        metadata["contained_categories"] = sorted(c.value for c in contained_categories)
+    if full_url:
+        metadata["full_url"] = full_url
+    if kind == "DiagnosticReport":
+        metadata.update({key: resource[key] for key in ("result", "imagingStudy") if key in resource})
+    if kind == "ImagingStudy":
+        metadata.update(modalities=resource.get("modality", []),
+                        body_sites=[s["bodySite"] for s in _read_objects(resource.get("series")) if "bodySite" in s],
+                        **{key: resource[key] for key in ("numberOfSeries", "numberOfInstances") if key in resource})
+        document["series"] = [{k: v for k, v in series.items() if k != "instance"}
+                              for series in _read_objects(document.get("series"))]
+    if len(narrative) > MAX_NARRATIVE:
+        narrative = narrative[:MAX_NARRATIVE]
+        metadata["narrative_truncated"] = True
+    issued = _date_value(resource.get("issued"))[0]
+    status = resource.get("status") or resource.get("docStatus")
+    previous = vault.execute("SELECT * FROM clinical_report WHERE dedupe_key=?", (key,)).fetchone()
+    if previous:
+        old = json.loads(previous["raw_json"])
+        old_meta = old.get("_caduceus", {})
+        metadata["source_ids"] = sorted(report_source_ids(old_meta, previous["source_id"]) | set(metadata["source_ids"]))
+        metadata["resource_ids"] = sorted(_resource_ids(old) | aliases)
+        metadata["identity_aliases"] = sorted(set(old_meta.get("identity_aliases", [_identity(old, old_meta.get("full_url"))]))
+                                              - {None} | aliases)
+        if _report_rank(resource) < _report_rank(old) or (
+                _report_rank(resource) == _report_rank(old) and previous["issued"] and not issued) or (
+                issued and previous["issued"] and _instant(issued) < _instant(previous["issued"])):
+            old.setdefault("_caduceus", {}).update({key: metadata[key] for key in ("resource_ids", "identity_aliases", "source_ids")})
+            _strip_report_data(old)
+            vault.execute("UPDATE clinical_report SET raw_json=? WHERE id=?",
+                          (json.dumps(old, sort_keys=True, separators=(",", ":")), previous["id"]))
+            if kind == "ImagingStudy":
+                resolver.refresh(kind, previous["id"])
+            return
+        category, conflict = _stricter(category, previous["category"])
+        if conflict:
+            # Preserve the existing sensitive document; only the status may move across categories.
+            document = old
+            document["status"] = status
+            if "docStatus" in resource:
+                document["docStatus"] = resource["docStatus"]
+            metadata = {**old_meta, **{key: metadata[key] for key in ("resource_ids", "identity_aliases", "source_ids")}}
+            source_id = previous["source_id"]  # retained text/references keep their source-resolution boundary
+            name, conclusion, narrative, issued = (previous[k] for k in ("name", "conclusion", "narrative", "issued"))
+    # Metadata may reference objects from the original input; sanitize only copies.
+    metadata = copy.deepcopy(metadata)
+    _strip_report_data(document)
+    _strip_report_data(metadata)
+    raw = _raw(document, precision, **{k: v for k, v in metadata.items() if k != "date_precision"})
+    values = (name, status, issued, conclusion, narrative, category.value, source_id, raw)
+    if previous is None:
+        cur = vault.execute("INSERT INTO clinical_report(resource_type,code_system,code,effective_at,dedupe_key,"
+                            "name,status,issued,conclusion,narrative,category,source_id,raw_json,source) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'fhir')", (kind, system, code, when, key, *values))
+        ref = cur.lastrowid
+        counts["report"] += 1
+    else:
+        ref = previous["id"]
+        if raw == previous["raw_json"] and category.value == previous["category"]:
+            return
+        vault.execute("UPDATE clinical_report SET name=?,status=?,issued=?,conclusion=?,narrative=?,category=?,"
+                      "source_id=?,raw_json=? WHERE id=?", (*values, ref))
+        counts["report_updated"] = counts.get("report_updated", 0) + 1
+    if kind == "ImagingStudy":
+        resolver.refresh(kind, ref)
+    search.index_doc(vault, kind="report", ref=str(ref), title=name,
+                     body=" ".join(t for t in (name, conclusion, narrative) if t), category=category, ts=when)
+
+
+def _retract_report(vault, resource, counts, full_url=None, resolver=None):
+    identity = _report_identity(resource, full_url)
+    if identity is None:
+        return
+    concept = _report_concept(resource.get("code") if resource["resourceType"] == "DiagnosticReport" else resource.get("type"))
+    codes = [(c.get("system"), c["code"]) for c in concept["coding"] if c.get("code")]
+    dates = _report_dates(resource)
+    when = next((at for value in dates if (at := _instant(value)) is not None), None)
+    if when is None and any(value is not None for value in dates):
+        return  # an invalid supplied date must not turn a narrow withdrawal into a broad one
+    rows = vault.execute("SELECT * FROM clinical_report WHERE source='fhir' AND resource_type=?",
+                         (resource["resourceType"],)).fetchall()
+    for row in rows:
+        document = json.loads(row["raw_json"])
+        metadata = document.get("_caduceus", {})
+        identities = _resource_ids(document)
+        own_identity = _report_identity(document, metadata.get("full_url"))
+        if identity not in identities and identity != own_identity:
+            continue
+        if codes and not any(row["code"] == code and (not system or row["code_system"] == system)
+                             for system, code in codes):
+            continue
+        if when is not None and _instant(row["effective_at"]) != when:
+            continue
+        withdrawing = {identity}
+        if identity == own_identity:
+            withdrawing.update(metadata.get("identity_aliases", [_identity(document, metadata.get("full_url"))]))
+        others = identities - withdrawing
+        if others:
+            metadata["resource_ids"] = sorted(others)
+            metadata["identity_aliases"] = sorted(set(metadata.get("identity_aliases", [])) - withdrawing)
+            document["_caduceus"] = metadata
+            vault.execute("UPDATE clinical_report SET raw_json=? WHERE id=?", (json.dumps(document, sort_keys=True,
+                          separators=(",", ":")), row["id"]))
+        else:
+            search.remove_doc(vault, kind="report", ref=str(row["id"]))
+            vault.execute("DELETE FROM clinical_report WHERE id=?", (row["id"],))
+            counts["report_retracted"] = counts.get("report_retracted", 0) + 1
+        if resource["resourceType"] == "ImagingStudy":
+            resolver.refresh("ImagingStudy", row["id"])
+
+
 def ingest(vault, document, source_id, *, cancel=None, run_id=None):
     """Shared local ingestion; each resource and its index rows commit together."""
-    counts = {"observation": 0, "condition": 0, "medication": 0, "ignored": 0}
+    counts = {"observation": 0, "condition": 0, "medication": 0, "report": 0, "ignored": 0,
+              "ignored_by_type": {}, "observation_by_category": {}}
     resources, processed = [(document, None)], 0
+    resolver = None
     while resources:
         if cancel is not None and cancel.is_set():
             break
@@ -627,15 +1084,33 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
                                        if isinstance(e, dict) and "resource" in e]))
             continue
         processed += 1
+        if kind in REPORT_TYPES:
+            if resolver is None:
+                resolver = ReportResolver(vault)
+            with write_txn(vault):
+                if resource.get("status") == "entered-in-error" or (
+                        kind == "DocumentReference" and resource.get("docStatus") == "entered-in-error") or (
+                        kind in ("DiagnosticReport", "ImagingStudy") and resource.get("status") == "cancelled"):
+                    _skip(counts, kind, "status")
+                    _retract_report(vault, resource, counts, full_url, resolver)
+                else:
+                    _report(vault, resource, source_id, counts, full_url, resolver)
+            continue
         if kind not in ("Observation", "Condition", "MedicationRequest", "MedicationStatement"):
             counts["ignored"] += 1
+            label = kind if isinstance(kind, str) and re.fullmatch(r"[A-Za-z]{1,64}", kind) else "other"
+            counts["ignored_by_type"][label] = counts["ignored_by_type"].get(label, 0) + 1
             continue
         if (kind == "Observation" and resource.get("status") in ("entered-in-error", "cancelled")) or (
                 kind == "Condition" and _status(resource.get("verificationStatus")) in ("entered-in-error", "refuted")) or (
                 kind.startswith("Medication") and resource.get("status") in ("entered-in-error", "cancelled")):
             _skip(counts, kind, "status")
             with write_txn(vault):
+                linked = resolver.resolve([{"reference": _identity(resource, full_url)}], broad=True) if (
+                    resolver is not None and kind == "Observation" and "Observation" in resolver.indexes) else []
                 _retract(vault, resource, kind, counts, full_url)
+                for row in linked:
+                    resolver.refresh("Observation", row["id"])
             continue
         if kind.startswith("Medication"):
             status = resource.get("status")
@@ -660,7 +1135,7 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
             continue
         with write_txn(vault):
             if kind == "Observation":
-                counts["observation"] += _observations(vault, resource, source_id, when, precision, counts, full_url)
+                counts["observation"] += _observations(vault, resource, source_id, when, precision, counts, full_url, resolver)
             elif kind == "Condition":
                 _condition(vault, resource, source_id, when, precision, counts, full_url)
             else:

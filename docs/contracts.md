@@ -122,7 +122,7 @@ def trend_svg(points, *, unit, title, markers=()) -> str
   precedence; otherwise exactly one non-`export_cda.xml` XML must contain `<!DOCTYPE HealthData` or `<HealthData`
   in its first 4096 bytes. Localized names are supported; size limits and entity guards apply to both paths.
 - **Lone XML:** warns that clinical records require the export zip.
-- **Clinical records:** `clinical-records/*.json` inside the zip go through the same FHIR code into `observation`, `condition` and `medication_event`.
+- **Clinical records:** `clinical-records/*.json` inside the zip go through the same FHIR code into `observation`, `condition`, `medication_event` and `clinical_report`.
 
 **Health Auto Export (`caduceus/health/hae.py`):**
 
@@ -240,6 +240,96 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   - With `allow` (a category predicate), hidden results are removed **before** anything else is computed, so `unit`, `other_units`, `coverage` and `unplotted_points` describe visible results only, and `withheld` counts the rest. Callers that show results always pass it.
 
 **Records semantics:**
+- **Clinical reports.** DiagnosticReport, DocumentReference, Composition and ImagingStudy are ingested into
+  `clinical_report`, one row per resource, and indexed as search kind `report`. The idempotent vault schema
+  creates this table on opening existing vaults. `name`, status, ordering date (`effective_at`), issued date,
+  conclusion, narrative, category, source provenance and sanitized raw JSON are retained. DiagnosticReport uses
+  its code and effective date/period start, falling back to issued; conclusionCode displays join the narrative.
+  DocumentReference uses its type, status (or docStatus), date (or context period start), and description.
+  Composition uses its type (or title), date, title and recursively ordered section titles/text; section entry
+  references are not followed. ImagingStudy stores description (or modalities) and started date with modalities,
+  series body sites and series/instance counts in metadata; instance data is omitted. Missing/invalid dates skip
+  the resource with reason `date`; a valid fallback date is accepted. Partial date precision is preserved.
+  Reports' categories accept one concept or a list, ignoring non-object entries. Code, conclusion codes and
+  category concepts use `_category`; sensitive title, conclusion, conclusionCode displays, narrative,
+  description and attachment-title text takes precedence. Linked Observations and ImagingStudy rows resolved at write time promote
+  an ordinary report to a sensitive category; the existing first-sensitive tie rule remains. The row and index
+  share that category, and hiding `records` hides all reports, including sensitive ones. Malformed optional
+  fields are skipped: concept text/coding display/code accept strings or numbers (converted to strings),
+  ignoring other shapes; non-object text/effectivePeriod/context.period are ignored. A DocumentReference
+  context list uses its first object.
+- **Report attachments.** URLs are never fetched. Only inline base64 text/plain, text/html,
+  application/xhtml+xml and text/markdown up to 2 MiB decoded are read as UTF-8. ASCII whitespace is stripped
+  from base64 before size estimation and strict decoding, accepting line-wrapped exports. HTML uses `html.parser`,
+  omits script/style contents, decodes entities and collapses whitespace. Invalid base64 or unreadable UTF-8
+  counts as `skipped:<resourceType>:attachment_unreadable`, with a plain-language warning; other attachments
+  and oversized text are metadata only (no PDF extraction). `_caduceus.attachments` lists `content_type`,
+  declared `size`, `title`, `has_inline_data`, and `has_url`. The entire copied resource tree is stripped of
+  `data` on every Binary and every attachment-shaped object (`contentType`, `url`, `title` or `size` beside
+  `data`), including nested and contained resources. Only the report's own supported attachments are decoded;
+  nested bytes do not enter its narrative. The original input and private source file remain intact.
+  DiagnosticReport uses its own text.div when
+  no usable text attachment exists. Narrative is capped at 200,000 characters and marked
+  `_caduceus.narrative_truncated: true` when cut; privacy classification sees the text before truncation.
+- **Report identity and updates.** Reports use fullUrl/id identity, except an export-local `urn:uuid:` fullUrl
+  with a resource id uses that id for dedupe and retraction. With no id, the urn remains the identity; absolute
+  provider URLs remain distinct. Every observed fullUrl/id is retained in `_caduceus.resource_ids`; the
+  `identity_aliases` list tracks aliases of the report's own identity for retraction. The dedupe key is
+  `_key(["Report", resource_type, identity, code_system, code, date])`, or
+  `_key(["Report", resource_type, code_system, code, date, normalized_name])` without identity. Re-reading
+  adds no rows. Changed statuses/content update the same row and index (`report_updated`) only when the
+  incoming status rank is at least the stored one: registered/partial/preliminary < final/unknown <
+  amended/corrected/appended, using docStatus when supplied for DocumentReference. When both give issued,
+  an earlier incoming issued date also prevents replacement. A same-rank copy missing issued cannot replace
+  a stored copy with issued. Skipped older copies still add their identities and imported source ids;
+  stored content, status, issued date, source and index remain. A previously sensitive row keeps its category;
+  conflicting sensitive-category text is not substituted under it, and retained references keep their source.
+  `entered-in-error` for any report type (including DocumentReference docStatus), and `cancelled` for
+  DiagnosticReport/ImagingStudy, withdraw only that type's identity assertions and aliases, including their
+  `report` search documents, counting deleted rows as `report_retracted`. Supplied codes narrow by code and
+  system when given; supplied dates narrow by the same instant. An invalid supplied date cannot broaden a
+  withdrawal. A row still asserted by another identity remains. Retractions without codes/dates match identity.
+  **Known limits:** two providers' reports sharing a bare id, code and date under `urn:uuid:` fullUrls merge
+  into one row. A retraction by that bare id withdraws the merged row. Provider-scoped UUID dedupe is deferred.
+- **Report search and fetch.** Search body contains title, conclusion and narrative only, never raw JSON or
+  attachment bytes. `search.fetch("report:<id>")` retains the usual ref/kind/title/body/category/date fields,
+  adding status, conclusion, narrative, attachments, results, imaging and `withheld`. DiagnosticReport's
+  original `result` and `imagingStudy` references remain in `_caduceus` without following URLs. Linked rows
+  use two resolutions. Privacy (write-time categorization and read-time withholding) matches every row of the
+  target type by exact resource_ids, identity suffix `/` + reference, or bare id matching `Observation/<id>` /
+  `ImagingStudy/<id>`, across all sources. However the reference is written (an absolute URL with any base, a
+  `/_history/<version>` suffix, a query or fragment), its trailing `Type/id` is also matched for privacy.
+  Over-withholding on shared short ids is the accepted safe side. Results or studies contained in the report and
+  referenced as `#id` are not stored on their own: their sensitive categories are recorded with the report
+  (`_caduceus.contained_categories`), lift its category at import, and are checked on every read. Search, browse and
+  fetch each read their rows and visibility checks in one read snapshot.
+  Displayed results/imaging require an exact resource_ids match, an exact identity after resolving the relative
+  reference against the report's absolute fullUrl FHIR base, or a relative match in any of the report's imported
+  sources. `_caduceus.source_ids` retains all imported source ids on both reports and deduplicated Observations,
+  including skipped older report copies; narrow resolution uses membership in both histories. Legacy rows
+  without that list use row.source_id. Observations also retain every contributing `Observation/<id>` in
+  `_caduceus.typed_ids`, so deduplication under UUID fullUrls does not lose privacy matches. These aliases remain
+  after partial retraction; they are not resource assertions and cannot keep a withdrawn row alive.
+  An absent source id does not establish a shared artifact. Each search,
+  browse, fetch or ingest call shares one ephemeral resolver, lazily projecting only row id, source id, category,
+  raw resource id, resource_ids, typed_ids and source_ids once per linked table. Dictionary lookups resolve references; ingest refreshes
+  affected entries after later writes. No resolver or policy decision is cached between calls.
+  Fetch reads visibility and payload in one read transaction, reusing an existing transaction without closing it.
+  Transactions opened by fetch end in `finally`, including on errors; vanished linked rows are skipped.
+  Search, kind browse and fetch withhold the whole report whenever any resolved linked Observation or ImagingStudy is hidden
+  under the current policy, including after late imports or category changes. A withheld report contributes
+  one count and returns no title, text, date or attachments. Results expose visible observations' ref/title/name/date/category,
+  status, code/system, value_num/value_text and unit; imaging exposes visible ImagingStudy ref/title/date,
+  category/status and modality/body-site/count metadata. Each matched row appears once. A hidden linked
+  Observation or ImagingStudy withholds the entire report, and a sensitive linked row's category is the report's
+  category at import when its own is not sensitive. Hidden reports return the usual withheld response without content. No hidden
+  linked name or value is returned. The public search tool's kinds enum includes `report`.
+- **FHIR import receipts.** `report` counts newly stored report rows. `ignored` remains the total count of
+  unsupported resources; `ignored_by_type` splits it by resourceType, retaining only 1-64 ASCII letters,
+  otherwise `other`. `observation_by_category` counts newly stored observation rows once per distinct category
+  using the shared `observation_categories` helper, including component rows. Standard observation-category
+  codes alone are literal, other codes become `other`, and missing readable categories become `unspecified`.
+  These aggregate receipts are independent of visibility. Re-reading a deduplicated row adds no count.
 - **Repeated corrections.** A file that re-sends an already stored corrected/amended observation with the same
   content key upserts it without deleting it or counting another insertion or supersession; its superseded-copy
   references remain intact. Its reference-range low/high bounds and interpretation refresh from its incoming

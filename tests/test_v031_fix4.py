@@ -147,7 +147,12 @@ def test_repeated_correction_refreshes_range_and_interpretation(vault, tmp_path,
     row = rows[0]
     assert row["id"] == before["id"] and row["dedupe_key"] == before["dedupe_key"]
     assert (row["ref_low"], row["ref_high"], row["interpretation"]) == (2, 4, "High")
-    assert json.loads(row["raw_json"])["_caduceus"] == metadata
+    stored = json.loads(row["raw_json"])["_caduceus"]
+    # 0.4.0: a row also records every source file and typed id that asserted it; everything else is unchanged.
+    alias_keys = ("source_ids", "typed_ids")
+    assert ({k: v for k, v in stored.items() if k not in alias_keys}
+            == {k: v for k, v in metadata.items() if k not in alias_keys})
+    assert result.source_id in stored["source_ids"]
     point = fhir.observation_series(vault, "glucose")["points"][0]
     assert point["reference_range"] == {"low": 36.032, "high": 72.064}
     assert point["unit"] == "mg/dL" and point["interpretation"] == "High"

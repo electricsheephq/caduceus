@@ -35,7 +35,7 @@ TOOLS = (
             "query": {"type": "string", "description": "Words to find, e.g. 'simvastatin' or 'GLP1R weight'; omit to list kinds."},
             "kinds": {"type": "array", "items": {"type": "string", "enum": [
                 "annotation", "assertion", "research", "observation", "condition", "medication", "journal",
-                "finding", "pgx", "phenotype"]}, "description": "Only these record kinds; omit query to list them newest first."},
+                "finding", "pgx", "report", "phenotype"]}, "description": "Only these record kinds; omit query to list them newest first."},
             "ref": {"type": "string", "description": "Fetch one record in full by the ref a search returned."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 25},
         }),
