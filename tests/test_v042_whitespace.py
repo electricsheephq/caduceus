@@ -18,7 +18,6 @@ CANCER = Policy(hidden=frozenset({Category.CANCER_RISK}))
 def test_phrases_match_across_any_whitespace(sep):
     for phrase in (f"Hereditary breast{sep}cancer letter", f"Lynch{sep}syndrome"):
         assert not text_visible(CANCER, phrase)
-        assert categorize(text=phrase) == Category.CANCER_RISK
 
 
 @pytest.mark.parametrize("word", ["can\u00adcer", "can\u200bcer", "can\u200dcer", "\ufeffcancer", "\uff43\uff41\uff4e\uff43\uff45\uff52"])
@@ -43,7 +42,7 @@ def test_a_line_break_never_loosens_a_check(sep):
     for prefix in ("Biopsy of bone marrow", "ECG showed ST", "Respiratory"):
         note = f"{prefix}{sep}Depression is worse this week"
         assert not text_visible(hidden, note)
-        assert categorize(text=note) == Category.MENTAL_HEALTH
+        assert categorize(text=note) == Category.MENTAL_HEALTH  # the stored text names it, as in 0.4.1
     assert text_visible(hidden, "Bone marrow depression after chemotherapy")
 
 
@@ -93,7 +92,6 @@ def test_normalizing_never_removes_a_match(text):
     """Folding can glue a boundary away (BRCA1 + superscript 1 = BRCA11); the stored text is always read as well."""
     hidden = Policy(hidden=frozenset({Category.CANCER_RISK, Category.ALZHEIMERS}))
     assert not text_visible(hidden, text)
-    assert categorize(text=text) in {Category.CANCER_RISK, Category.ALZHEIMERS}
 
 
 def test_superscript_after_a_gene_in_an_attachment_title_withholds_report(vault, tmp_path):
@@ -125,15 +123,28 @@ def test_never_looser_than_matching_the_stored_text(text):
         assert categorize(text=text) in raw
 
 
-@pytest.mark.parametrize("text,expected", [
-    ("Depression; breast\u200bcancer", Category.MENTAL_HEALTH),
-    ("Anxiety and BRCA1\u00b9", Category.CANCER_RISK),
-    ("Normal\u00a0result; breast\u00a0cancer", Category.CANCER_RISK),
-    ("breast cancer and \uff21\uff30\uff2f\uff25 assessment", Category.CANCER_RISK),
-])
-def test_category_from_the_stored_text_wins(text, expected):
-    """A normalized reading decides only when the stored text names no topic, so a stored category never moves."""
-    assert categorize(text=text) == expected
+def test_import_categories_are_unchanged_from_0_4_1():
+    """0.4.2 changes only read-time checks. Import-time categories still read the stored text alone (issue #50):
+    a normalized match would pre-empt the clinical-code and medication-name fallbacks that follow categorize."""
+    assert categorize(text="Depression; breast\u200bcancer") == Category.MENTAL_HEALTH
+    assert categorize(text="breast cancer and \uff21\uff30\uff2f\uff25 assessment") == Category.CANCER_RISK
+    assert categorize(text="\uff21\uff30\uff2f\uff25 assessment") == Category.GENERAL
+    assert categorize(text="Normal\u00a0result; breast\u00a0cancer") == Category.GENERAL
+
+
+def test_clinical_code_still_decides_when_the_stored_text_names_no_topic(vault, tmp_path):
+    from caduceus.health.fhir import import_fhir
+    from caduceus.core import sources
+
+    condition = {"resourceType": "Condition", "id": "coded", "onsetDateTime": "2024-01-02",
+                 "code": {"text": "\uff21\uff30\uff2f\uff25 assessment",
+                          "coding": [{"system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "F32.9"}]}}
+    path = tmp_path / "coded.json"
+    path.write_text(json.dumps({"resourceType": "Bundle", "entry": [{"resource": condition}]}))
+    assert import_fhir(vault, sources.store_source(vault, path, "fhir")[0]).status == "succeeded"
+    assert vault.execute("SELECT category FROM condition").fetchone()[0] == "mental_health"
+    hidden = Policy(hidden=frozenset({Category.MENTAL_HEALTH}))
+    assert search.browse(vault, policy=hidden, kinds=["condition"])["results"] == []
 
 
 def test_condition_keeps_the_topic_the_stored_text_names(vault, tmp_path):

@@ -5,9 +5,13 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 ## 0.4.2 — 2026-11-17
 
 ### Fixed
-- **Topic checks see one plain space between words, whatever the text used.** The phrases that mark a sensitive topic ("breast cancer", "Lynch syndrome") expect one space between their words. A title or record written with a non-breaking space, a tab, a line break or repeated spaces could name a hidden topic and still be shown. Every check now reads text the same way: full-width letters and other compatibility forms folded, invisible characters inside words (soft hyphens, zero-width spaces) removed, and each run of whitespace made one space. A line break is read both ways: a phrase that wraps onto the next line is still found, and a line's last word never switches off a topic at the start of the next line. The text as stored is always read too, so normalizing only adds matches: nothing is shown that 0.4.1 withheld. This covers every read path that checks words, and the category given to new records at import. That category still comes from the text as stored first; the normalized readings decide only when the stored text names no topic, so a category earlier versions gave never moves.
-- **Fields are checked one at a time.** Report attachment metadata and linked imaging words are passed to the check as separate fields, so one field's last word never hides the next field's topic.
-- **A report's own status is checked.** Fetch returns a report's status, so a status that names a hidden topic (only possible in FHIR that breaks the format) now withholds the report.
+- **Word checks see one plain space between words, whatever the text used.** The phrases that mark a sensitive topic ("breast cancer", "Lynch syndrome") expect one space between their words. Text written with a non-breaking space, a tab, a line break or repeated spaces could name a hidden topic and still be shown. Every read-time word check now reads text in several ways and counts a topic when any of them names it:
+  - the text as stored, so nothing is shown that 0.4.1 withheld;
+  - the text with full-width letters and ligatures folded, invisible characters inside words removed (or read as spaces) and each run of whitespace made one space;
+  - each line on its own, so one line's last word never switches off a topic at the start of the next.
+- **Fields are checked one at a time.** Report attachment metadata and linked imaging words are checked as separate fields.
+- **A report's own status is checked**, because fetch returns it.
+- Categories given at import are unchanged from 0.4.1. Normalizing them is tracked in #50, because a normalized match would pre-empt the clinical-code and medication-name rules that follow.
 
 ## 0.4.1 — 2026-11-17
 
