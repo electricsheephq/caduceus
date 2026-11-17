@@ -200,3 +200,28 @@ def test_fhir_cancelled_run_blocks_even_with_complete_zero_receipt(
     assert replayed['status'] == 'blocked' and result.run_id in replayed['ambiguous_runs']
     assert list(vault.iterdump()) == before
 
+
+
+def test_bot_background_result_is_returned_once(vault, tmp_path, monkeypatch, fake_ctx):
+    # A replay that outlives the wait answers "running"; the next call must get its result, not start over.
+    from caduceus.core import jobs
+    from caduceus.health import replay as replay_module
+    from tests.test_v040_replay import _condition, _import
+
+    _import(vault, tmp_path, monkeypatch, _condition())
+    resume, real = threading.Event(), replay_module.replay
+    def slow(*a, **kw):
+        assert resume.wait(5)
+        return real(*a, **kw)
+    monkeypatch.setattr(replay_module, 'replay', slow)
+    monkeypatch.setattr(ops, 'IMPORT_WAIT_S', 0)
+    try:
+        assert ops.capture_tool(fake_ctx, {'op': 'replay'})['status'] == 'running'
+    finally:
+        resume.set()
+        assert jobs.join('clinical-replay', 5)
+    done = ops.capture_tool(fake_ctx, {'op': 'replay'})
+    assert done['status'] == 'done' and done['finished_in_background'] is True
+    assert done['added']['condition'] == 1
+    monkeypatch.setattr(ops, 'IMPORT_WAIT_S', 5)
+    assert ops.capture_tool(fake_ctx, {'op': 'replay'})['status'] == 'nothing_to_replay'

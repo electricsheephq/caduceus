@@ -180,6 +180,8 @@ def replay(vault, *, cancel=None, progress=None) -> dict
   replaces the marker. On open, absent markers are initialized only when the
   same inventory is empty. The tool runs one `clinical-replay` job under the existing preparation/erase gate,
   refuses admission while jobs run, and exposes `sources_done`/`sources_total` progress without import receipts.
+  A replay that finishes after its call answered `running` keeps its result in memory, per plugin data folder;
+  the next `op=replay` returns it once with `finished_in_background: true`.
 - Replies contain status, sources_read, added counts and blocked/skipped ids only. Settings expose needed and
   blocked reason keys. No record text is returned. Repeated current-version replay returns nothing_to_replay.
 - Known limits: recorded-only Conditions with the same code system, code and name merge even with different

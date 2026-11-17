@@ -893,10 +893,15 @@ def _import(args: dict) -> dict:
 
 
 _CLINICAL_REPLAY_PROGRESS = {"sources_done": 0, "sources_total": 0}
+# The result of a replay that finished after its call had already answered "running", per plugin data folder.
+# The next op=replay returns it once, so a slow replay's counts or blocked reasons are never lost.
+_CLINICAL_REPLAY_FINISHED: dict = {}
 
 
 def _replay() -> dict:
     from .health import replay
+
+    key = str(data_dir())
 
     def running():
         return {"status": "running", "sources_read": _CLINICAL_REPLAY_PROGRESS["sources_done"],
@@ -910,11 +915,15 @@ def _replay() -> dict:
     def run():
         progress({"sources_done": 0, "sources_total": 0})
         with closing(open_vault()) as vault:
-            return replay.replay(vault, progress=progress)
+            result = replay.replay(vault, progress=progress)
+        _CLINICAL_REPLAY_FINISHED[key] = result
+        return result
 
     with jobs.preparing():
         if jobs.is_active("clinical-replay"):
             return running()
+        if key in _CLINICAL_REPLAY_FINISHED:
+            return {**_CLINICAL_REPLAY_FINISHED.pop(key), "finished_in_background": True}
         if jobs.any_active():
             # A replay may have won admission since the first check.
             if jobs.is_active("clinical-replay"):
@@ -923,6 +932,7 @@ def _replay() -> dict:
                     "added": {"condition": 0, "observation": 0, "report": 0}}
         outcome = jobs.submit("clinical-replay", run, wait_s=IMPORT_WAIT_S)
     if outcome["state"] == "done":
+        _CLINICAL_REPLAY_FINISHED.pop(key, None)
         return outcome["result"]
     if outcome["state"] == "error":
         raise ToolError("Clinical replay failed")
