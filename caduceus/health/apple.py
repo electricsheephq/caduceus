@@ -182,6 +182,25 @@ def _safe_members(archive):
     return members
 
 
+def clinical_documents(archive, members, *, cancel=None):
+    """Yield only clinical JSON, in archive order, with the importer's existing bounds.
+
+    ``members`` must come from ``_safe_members``. No sample XML is opened here.
+    """
+    for member in members:
+        if cancel is not None and cancel.is_set():
+            break
+        path = PurePosixPath(member.filename)
+        if "clinical-records" in path.parts and path.suffix.lower() == ".json":
+            if member.file_size > fhir.MAX_JSON:
+                raise ValueError("FHIR JSON exceeds size limit")
+            with archive.open(member) as stream:
+                raw = stream.read(fhir.MAX_JSON + 1)
+            if len(raw) > fhir.MAX_JSON:
+                raise ValueError("FHIR JSON exceeds inflate limit")
+            yield json.loads(raw)
+
+
 def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
     run = sources.begin_import(vault, src, PARSER, PARSER_VERSION)
     if run is None:
@@ -211,25 +230,15 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
                         raise ValueError(EXPORT_XML_ERROR)
                     with archive.open(exports[0]) as stream:
                         _xml(samples, vault, stream, src.id, run.id, counts, cancel, warnings)
-                    for member in members:
-                        if cancel is not None and cancel.is_set():
-                            break
-                        path = PurePosixPath(member.filename)
-                        if "clinical-records" in path.parts and path.suffix.lower() == ".json":
-                            if member.file_size > fhir.MAX_JSON:
-                                raise ValueError("FHIR JSON exceeds size limit")
-                            with archive.open(member) as stream:
-                                raw = stream.read(fhir.MAX_JSON + 1)
-                            if len(raw) > fhir.MAX_JSON:
-                                raise ValueError("FHIR JSON exceeds inflate limit")
-                            clinical = fhir.ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
-                            for key, value in clinical.items():
-                                if isinstance(value, dict):
-                                    totals = counts.setdefault(key, {})
-                                    for subkey, count in value.items():
-                                        totals[subkey] = totals.get(subkey, 0) + count
-                                else:
-                                    counts[key] = counts.get(key, 0) + value
+                    for document in clinical_documents(archive, members, cancel=cancel):
+                        clinical = fhir.ingest(vault, document, src.id, cancel=cancel, run_id=run.id)
+                        for key, value in clinical.items():
+                            if isinstance(value, dict):
+                                totals = counts.setdefault(key, {})
+                                for subkey, count in value.items():
+                                    totals[subkey] = totals.get(subkey, 0) + count
+                            else:
+                                counts[key] = counts.get(key, 0) + value
             else:
                 if stored.stat().st_size > MAX_MEMBER:
                     raise ValueError("XML exceeds size limit")

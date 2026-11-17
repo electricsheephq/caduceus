@@ -82,6 +82,12 @@ def _migrate_vault(conn: sqlite3.Connection) -> None:
             conn.execute("INSERT INTO settings(key,value_json,updated_at) "
                          "VALUES ('migration:fhir_uncoded_names_v1','true',strftime('%Y-%m-%dT%H:%M:%SZ','now'))")
 
+        # New vaults have no historical clinical sources. Existing ones must explicitly replay.
+        from ..health.replay import inventory, mark
+
+        if not conn.execute("SELECT 1 FROM settings WHERE key='clinical_replay'").fetchone() and not inventory(conn):
+            mark(conn, [])
+
     def has_column():
         return "category" in {row[1] for row in conn.execute("PRAGMA table_info(medication_event)")}
 
