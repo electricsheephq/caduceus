@@ -324,3 +324,37 @@ def test_fix1_alias_privacy_without_dna_and_trait_only_duplicate(fake_ctx, vault
     found = ops.search_tool(fake_ctx, {"kinds": ["phenotype"]})
     assert len(found["results"]) == found["withheld"] == 1
     assert found["results"][0]["category"] == "trait"
+
+
+# Fix round 2 (PR review): a note's own sensitive text, alias notes on the canonical marker, stance in search.
+
+def test_fix2_text_category_hidden_even_when_marker_sensitive(fake_ctx, dna):
+    fake_ctx.config.update(privacy_level="open", hidden_categories=["mental_health"])
+    saved = capture(fake_ctx, op="phenotype", marker="rs429358", stance="confirms", text="Synthetic anxiety note")
+    assert set(saved) == {"saved", "note"}
+    row = dna.execute("SELECT id FROM phenotype_note").fetchone()
+    found = ops.search_tool(fake_ctx, {"kinds": ["phenotype"]})
+    assert found["results"] == [] and found["withheld"] == 1
+    assert "anxiety note" not in json.dumps(ops.search_tool(fake_ctx, {"query": "anxiety"}))
+    assert ops.search_tool(fake_ctx, {"ref": f"phenotype:{row['id']}"})["withheld"] is True
+    for args in ({"op": "lookup", "rsids": ["rs429358"]}, {"op": "gene", "gene": "APOE"}):
+        assert "anxiety note" not in json.dumps(ops.genome_tool(fake_ctx, args))
+
+
+def test_fix2_alias_note_attaches_to_canonical_marker(fake_ctx, dna):
+    with write_txn(dna):
+        dna.execute("INSERT INTO marker_alias VALUES ('rs900001','rs4149056','synthetic')")
+    capture(fake_ctx, op="phenotype", marker="rs900001", stance="confirms", text="Synthetic alias words")
+    for args in ({"op": "lookup", "rsids": ["rs4149056"]}, {"op": "gene", "gene": "SLCO1B1"}):
+        result = ops.genome_tool(fake_ctx, args)
+        marker = next(r for r in result["results"] if r["marker"] == "rs4149056")
+        assert [n["text"] for n in marker.get("phenotype_notes", [])] == ["Synthetic alias words"]
+
+
+def test_fix2_stance_in_search_and_fetch(fake_ctx, vault):
+    for stance in ("confirms", "refutes"):
+        capture(fake_ctx, op="phenotype", trait="Synthetic taste", stance=stance, text="Same words")
+    found = ops.search_tool(fake_ctx, {"kinds": ["phenotype"]})
+    assert [r["title"] for r in found["results"]] == ["Refutes: Synthetic taste", "Confirms: Synthetic taste"]
+    fetched = ops.search_tool(fake_ctx, {"ref": found["results"][0]["ref"]})
+    assert fetched["title"].startswith("Refutes:")

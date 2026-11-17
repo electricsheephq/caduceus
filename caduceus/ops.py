@@ -328,9 +328,21 @@ def _phenotype_gene_names():
 
 
 def _phenotype_visible(vault, policy, row):
+    # The stored category is the marker's when it is sensitive, so a second sensitive category named in the
+    # note's own words is checked here too; the marker itself must be visible as well.
+    text_category = categorize(text=f"{row['trait'] or ''} {row['text'] or ''}")
     return (visible(policy, row["category"], kind="phenotype")
+            and (text_category not in SENSITIVE or visible(policy, text_category, kind="phenotype"))
             and all(_marker_visible(vault, policy, marker)
                     for marker in _phenotype_markers(vault, row["marker"])))
+
+
+def _phenotype_names(vault, *markers):
+    """The markers plus every alias recorded for them, so a note saved under an alias attaches to its marker."""
+    names = [m.strip().lower() for m in markers if m]
+    names += [r[0].strip().lower() for m in list(names) for r in vault.execute(
+        "SELECT alias FROM marker_alias WHERE marker=? COLLATE NOCASE", (m,))]
+    return tuple(dict.fromkeys(names))
 
 
 def _phenotype_rows(vault, markers):
@@ -374,7 +386,7 @@ def _lookup(store, policy, markers) -> dict:
     for name in wanted:
         call = calls.get(name)
         key = call.resolved_marker if call is not None and call.resolved_marker else name
-        phenotype_rows = _phenotype_rows(store.vault, (key, name))
+        phenotype_rows = _phenotype_rows(store.vault, _phenotype_names(store.vault, key, name))
         if not (_marker_visible(store.vault, policy, key) and _marker_visible(store.vault, policy, name)):
             withheld += 1 + len(phenotype_rows)
             continue
@@ -1064,7 +1076,8 @@ def _phenotype(ctx, args: dict) -> dict:
                 "INSERT INTO phenotype_note(marker,trait,stance,text,category,created_at) VALUES (?,?,?,?,?,?)",
                 (marker or None, trait or None, stance, text, category.value, now))
             ref = cur.lastrowid
-            search_index.index_doc(store.vault, kind="phenotype", ref=str(ref), title=trait or marker,
+            search_index.index_doc(store.vault, kind="phenotype", ref=str(ref),
+                                   title=f"{stance.capitalize()}: {trait or marker}",
                                    body=text, category=category, ts=now)
             row = store.vault.execute("SELECT * FROM phenotype_note WHERE id=?", (ref,)).fetchone()
         ref, category, now = row["id"], Category(row["category"]), row["created_at"]
