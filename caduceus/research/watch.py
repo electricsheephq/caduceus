@@ -50,7 +50,7 @@ def _drug_keys(*names) -> set:
         if drug:
             keys.add(drug)
         elif name:
-            keys.update(w for w in re.findall(r"[a-z][a-z-]{2,}", str(name).lower()) if w not in _KEY_SKIP)
+            keys.update(w for w in re.findall(r"[^\W\d_][\w-]{2,}", str(name).lower()) if w not in _KEY_SKIP)
     return keys
 
 

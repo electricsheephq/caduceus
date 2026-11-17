@@ -396,7 +396,7 @@ def test_bot_hidden_later_start_is_counted_with_visible_pivot(fake_ctx, vault, s
 
 
 @pytest.mark.parametrize("stored, term", [("Extended-release synthdrugol 500 mg", "synthdrugol"),
-                                          ("synthdrugol", "Brandol")])
+                                          ("synthdrugol", "Brandol"), ("Синтезол 5 мг", "синтезол")])
 def test_bot_hidden_unknown_drug_matches_any_word_or_brand(fake_ctx, vault, stored, term):
     from caduceus.research.watch import _drug_keys, _medications
 
