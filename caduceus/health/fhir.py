@@ -675,12 +675,133 @@ def import_fhir(vault, src, *, cancel=None) -> ImportResult:
     return ImportResult(status, run.id, src.id, counts, errors)
 
 
+def _read_objects(value):
+    """Read a single object or an array of objects, ignoring unreadable entries."""
+    if isinstance(value, dict):
+        return [value]
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _read_label(value):
+    for concept in _read_objects(value):
+        coding = _read_objects(concept.get("coding"))
+        labels = [concept.get("text"), *[c.get("display") for c in coding], *[c.get("code") for c in coding]]
+        label = next((s for s in labels if isinstance(s, str) and s), None)
+        if label is not None:
+            return label
+    return None
+
+
+def _read_quantity(value):
+    for quantity in _read_objects(value):
+        result = {key: quantity[key] for key in ("unit", "code", "system") if isinstance(quantity.get(key), str)}
+        number = quantity.get("value")
+        if isinstance(number, (int, float, str)) and not isinstance(number, bool):
+            result["value"] = number
+        if result:
+            return result
+    return {}
+
+
+def _read_bounds(value):
+    for bounds in _read_objects(value):
+        result = {key: quantity for key in ("low", "high") if (quantity := _read_quantity(bounds.get(key)))}
+        if result:
+            return result
+    return {}
+
+
+def _stored_part(document):
+    """The row's own part, rather than a panel or sibling's clinical content."""
+    parts = _read_objects(document.get("component"))
+    if len(parts) == 1:
+        return parts[0]
+    return document
+
+
 def _stored_quantity(document):
     """The quantity a stored row was read from: its own component's, for a row cut from a panel."""
-    parts = document.get("component") or []
-    if len(parts) == 1 and isinstance(parts[0], dict):
-        return parts[0].get("valueQuantity") or {}
-    return document.get("valueQuantity") or {}
+    return _read_quantity(_stored_part(document).get("valueQuantity"))
+
+
+def observation_categories(document):
+    """Coarse FHIR categories only; local codes must not leak through aggregate counts."""
+    standard = {"social-history", "vital-signs", "imaging", "laboratory", "procedure",
+                "survey", "exam", "therapy", "activity"}
+    categories = set()
+    for concept in _read_objects(document.get("category")):
+        coding = [c for c in _read_objects(concept.get("coding")) if isinstance(c.get("code"), str) and c["code"]]
+        preferred = [c for c in coding if c.get("system") ==
+                     "http://terminology.hl7.org/CodeSystem/observation-category" and c.get("code")]
+        categories.update(c["code"] if c["code"] in standard else "other" for c in (preferred or coding))
+    return sorted(categories or {"unspecified"})
+
+
+def observation_query(system, code, name):
+    """The same series address for discovery and a lab-name fallback."""
+    return f"{system}|{code}" if system not in (None, "", LOINC) and code else code or name
+
+
+def clinical_series(vault, *, allow):
+    """Discover visible observations before aggregation; no hidden metadata enters a group."""
+    groups, withheld = {}, 0
+    for row in vault.execute("SELECT * FROM observation ORDER BY effective_at,id"):
+        if not allow(row["category"]):
+            withheld += 1
+            continue
+        code, system = row["code"], row["code_system"]
+        key = (None if system in (None, "", LOINC) else system, code) if code else (_normalized_name(row["name"]),)
+        if key not in groups:
+            groups[key] = {"name": row["name"], "code": code, "code_system": system,
+                           "units": set(), "count": 0, "numeric": 0, "first": row["effective_at"],
+                           "last": row["effective_at"], "sources": set(), "fhir_categories": set()}
+        group = groups[key]
+        if code and system == LOINC:
+            group["code_system"] = LOINC  # a visible explicit LOINC row labels the merged bare-code series
+        group.update(name=row["name"], last=row["effective_at"])
+        group["count"] += 1
+        group["numeric"] += row["value_num"] is not None
+        if row["unit"] is not None:
+            group["units"].add(row["unit"])
+        group["sources"].add(row["source"])
+        group["fhir_categories"].update(observation_categories(json.loads(row["raw_json"] or "{}")))
+    entries = sorted(groups.values(), key=lambda g: g["name"])
+    for group in entries:
+        for field in ("units", "sources", "fhir_categories"):
+            group[field] = sorted(group[field])
+        group["query"] = observation_query(group["code_system"], group["code"], group["name"])
+    return {"clinical_series": entries[:300], "withheld": withheld,
+            **({"clinical_series_truncated": len(entries) - 300} if len(entries) > 300 else {})}
+
+
+def observation_counts(vault):
+    """Row totals, counting each category once per row and each observation only once overall."""
+    categories, total, other = Counter(), 0, 0
+    for row in vault.execute("SELECT raw_json FROM observation"):
+        codes = observation_categories(json.loads(row["raw_json"] or "{}"))
+        total += 1
+        categories.update(codes)
+        other += not ({"laboratory", "vital-signs"} & set(codes))
+    return {"observations": total, "lab_results": categories["laboratory"],
+            "vital_signs": categories["vital-signs"], "observations_by_category": dict(sorted(categories.items())),
+            "other_observations": other}
+
+
+def _reference_ranges(document):
+    result = []
+    for ref in _read_objects(_stored_part(document).get("referenceRange")):
+        entry = _read_bounds(ref)
+        if isinstance(ref.get("text"), str):
+            entry["text"] = ref["text"]
+        if (label := _read_label(ref.get("type"))) is not None:
+            entry["type"] = label
+        applies = [label for c in _read_objects(ref.get("appliesTo")) if (label := _read_label(c)) is not None]
+        if applies or ref.get("appliesTo") == []:
+            entry["applies_to"] = applies
+        if age := _read_bounds(ref.get("age")):
+            entry["age"] = age
+        result.append(entry)
+    return result
 
 
 def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict:
@@ -691,15 +812,32 @@ def observation_series(vault, name_or_code, *, start=None, end=None, allow=None)
     from .trends import _bound, coverage
 
     name = str(name_or_code).strip()
-    codes = ALIASES.get(name.casefold(), (name,))
-    where = "((code IN (" + ",".join("?" for _ in codes) + ") AND (code_system IS NULL OR code_system='' OR code_system=?)) OR (lower(name)=? AND (code IS NULL OR code='')))"
-    rows = vault.execute("SELECT * FROM observation WHERE " + where + " ORDER BY effective_at,id", [*codes, LOINC, name.lower()])
-    points = [{"date": r["effective_at"], "date_precision": _date_value(r["effective_at"])[1],
+    if "|" in name:
+        system, code = name.split("|", 1)
+        rows = vault.execute("SELECT * FROM observation WHERE code_system=? AND code=? ORDER BY effective_at,id",
+                             (system, code)).fetchall()
+        if not rows:
+            rows = [r for r in vault.execute("SELECT * FROM observation WHERE code IS NULL OR code='' "
+                                            "ORDER BY effective_at,id") if _normalized_name(r["name"]) == _normalized_name(name)]
+    else:
+        codes = tuple(dict.fromkeys((*ALIASES.get(name.casefold(), ()), name)))
+        where = "((code IN (" + ",".join("?" for _ in codes) + ") AND (code_system IS NULL OR code_system='' OR code_system=?)) OR (code IS NULL OR code=''))"
+        rows = [r for r in vault.execute("SELECT * FROM observation WHERE " + where + " ORDER BY effective_at,id",
+                                        [*codes, LOINC]) if r["code"] or _normalized_name(r["name"]) == _normalized_name(name)]
+    points = []
+    for r in rows:
+        if allow is not None and not allow(r["category"]):
+            # Retain only what is needed to count hidden rows within the requested date window.
+            points.append({"date": r["effective_at"], "category": r["category"], "_hidden": True})
+            continue
+        document = json.loads(r["raw_json"] or "{}")
+        points.append({"date": r["effective_at"], "date_precision": _date_value(r["effective_at"])[1],
                "code": r["code"], "value": r["value_num"], "value_text": r["value_text"], "unit": r["unit"],
                "reference_range": {"low": r["ref_low"], "high": r["ref_high"]},
+               "reference_ranges": _reference_ranges(document),
                "interpretation": r["interpretation"], "source": r["source"], "source_id": r["source_id"],
-               "category": r["category"], "status": json.loads(r["raw_json"] or "{}").get("status"),
-               "_quantity": _stored_quantity(json.loads(r["raw_json"] or "{}"))} for r in rows]
+               "category": r["category"], "status": document.get("status"),
+               "_quantity": _stored_quantity(document), "_system": r["code_system"]})
     low, high = _bound(start) if start else None, _bound(end, end=True) if end else None
     if (start and low is None) or (end and high is None):
         raise ValueError("invalid series date bound")
@@ -708,12 +846,21 @@ def observation_series(vault, name_or_code, *, start=None, end=None, allow=None)
               (high is None or _bound(p["date"]) <= high)]
     withheld = 0
     if allow is not None:
-        shown = [p for p in points if allow(p["category"])]
+        shown = [p for p in points if not p.get("_hidden")]
         withheld, points = len(points) - len(shown), shown
     for point in points:
         scale, offset = None, 0
         quantity = point.pop("_quantity")
-        if point["code"] in ALIASES["hba1c"] or name.casefold() == "hba1c":
+        system = point.pop("_system")
+        original_units = {quantity.get("unit"), quantity.get("code"), point["unit"]} - {None, ""}
+        first_range = next(iter(point["reference_ranges"]), {})
+        if any(bound.get(key) and bound[key] not in original_units
+               for bound in (first_range.get("low", {}), first_range.get("high", {})) for key in ("unit", "code")):
+            point["reference_range_mismatch"] = True
+            point["reference_range"] = {"low": None, "high": None}
+        hba1c = system in (None, "", LOINC) and (point["code"] in ALIASES["hba1c"] or name.casefold() == "hba1c")
+        glucose = system in (None, "", LOINC) and (point["code"] in ALIASES["glucose"] or name.casefold() == "glucose")
+        if hba1c:
             original_unit = point["unit"]
             unit = (quantity.get("code") if quantity.get("system") == "http://unitsofmeasure.org" else None) or original_unit or ""
             unit = re.sub(r"\{[^}]*\}", "", unit)
@@ -723,9 +870,9 @@ def observation_series(vault, name_or_code, *, start=None, end=None, allow=None)
                 point["unit"] = "mmol/mol"
             if point["unit"] != original_unit:
                 point["unit_normalized_from"] = original_unit
-        if (point["code"] in ALIASES["hba1c"] or name.casefold() == "hba1c") and point["unit"] == "mmol/mol":
+        if hba1c and point["unit"] == "mmol/mol":
             scale, offset, target = 1/10.929, 2.15, "%"
-        elif (point["code"] in ALIASES["glucose"] or name.casefold() == "glucose") and (
+        elif glucose and (
                 point["unit"] == "mmol/L" or re.fullmatch(r"mmol<[^>]+>/L", point["unit"] or "")):
             scale, target = 18.016, "mg/dL"
         if scale is not None:
