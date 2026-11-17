@@ -112,7 +112,7 @@ def trend(samples, metric, *, start=None, end=None, bucket="week") -> dict
 def compare_windows(samples, metric, *, pivot, before_days=28, after_days=28) -> dict
 def daily_check(samples, *, thresholds=None, today=None) -> dict
 def sleep_morning(moment: datetime) -> date
-def observation_series(vault, name_or_code, *, start=None, end=None, allow=None) -> dict   # in health/fhir.py
+def observation_series(vault, name_or_code, *, start=None, end=None, allow=None, include_other_units=False) -> dict   # in health/fhir.py
 def trend_svg(points, *, unit, title, markers=()) -> str
 ```
 
@@ -500,3 +500,72 @@ Trend `compare`/`series` add the metric's full stored `data_range` when present,
 - Clinical entries group coded rows by `(code_system, code)`, merging LOINC and systemless (null/empty system) rows with the same code into one bare-code series, and uncoded rows by lowercased, whitespace-collapsed name. A merged entry reports LOINC as `code_system` when any visible row explicitly uses it; its name still comes from the newest visible row. Fields: newest `name`, `code`, `code_system`, sorted distinct non-null `units`, row `count`, numeric row `numeric`, stored dates `first`/`last`, distinct `sources`, `fhir_categories`, and `query`. Entries sort by name, capped at 300 with `clinical_series_truncated` counting omitted series.
 - Use `query` with `op=labs lab=<query>`: a LOINC or systemless code, the uncoded name, or `system|code` for another code system. `observation_series` accepts `system|code` as an exact system/code match. If there are no such stored rows, it tries the whole string as an uncoded name (including names containing `|`); a hidden or out-of-window coded match does not trigger this fallback. It normalizes whitespace when matching uncoded names and includes the literal query alongside any alias codes. Lab-name fallback uses the same bare-code versus system-qualified query rule as discovery. Clinical vital signs never enter sample rollups.
 - `op=settings counts` includes `observations` (all rows), `lab_results` (FHIR `laboratory`), `vital_signs` (FHIR `vital-signs`), `observations_by_category`, and `other_observations` (neither laboratory nor vital signs). Each row counts once overall and once per distinct FHIR category. Categories come from stored `category[].coding[].code`, preferring the standard observation-category system per concept. Only `social-history`, `vital-signs`, `imaging`, `laboratory`, `procedure`, `survey`, `exam`, `therapy` and `activity` are returned literally; every other code becomes `other`, and absent readable codes count as `unspecified`. This applies both to settings counts and clinical-series category lists, so aggregate counts never expose a hidden row's local category code. These are totals, independent of visibility. Status and erase preview say "N observations (L lab results, V vital signs, O other)"; overlapping categories do not double-subtract from other.
+
+
+## First guided session agenda (U4b)
+
+`caduceus_capture op=session_plan max_items=8` reads only; `max_items` is a whole number from 1 to 25.
+It returns `{warning?, areas, limits, withheld?}`. Limits are `[CHIP_LIMITS, LIMITS, "Information with limits, not medical advice."]`.
+When the active complete callset has a `same_person: false` comparison, `warning` comes first and carries
+the same different-person warning as `genome_tool`, including the newest source filename. Both use `_callset_warning`.
+Each area has `key`, `title`, `items` (at most `max_items`), and `more` (visible items omitted).
+The six areas always exist, including in an empty vault, in this order:
+
+1. `own_numbers`: `clinical_series` entries, newest visible `last` first, with their latest visible `lab_series`
+   point flattened into the entry (`date`, `value`, `value_text`, `unit`, `interpretation`, `reference_range`,
+   `reference_range_mismatch`, `range_flag`). The newest point across plotted and unplotted points wins,
+   including numeric points in a different unit and text-only results; equal dates use the largest observation id.
+   Session-plan reads opt into
+   `lab_series(..., include_other_units=True)`, passed to `observation_series`, so its unplotted list retains
+   numeric points outside the dominant unit and visible points carry `observation_id` for tie-breaking (not exposed
+   in the agenda). Other callers keep the existing default behavior. A comparable finite numeric
+   value is `below`, `within`, or `above` its recorded bounds; missing/inverted/mismatched bounds or text give
+   `unknown`. Then wellness `metrics`, each with a `daily_check` list of matching descriptive signals.
+   Stored rollups are read without rebuilding. The normal `_Store` opens the databases and applies schema
+   initialization/migrations, including the phenotype table for old vaults. The agenda itself writes no data rows
+   or settings; database creation and normal WAL sidecars are permitted.
+2. `actionable`: nonsensitive non-PGX non-trait findings, ordered by evidence then descending magnitude.
+   Finding fields: `marker`, `genes`, `summary`, `magnitude`, `repute`, `evidence`, `chip_reliability`, `your_data`,
+   `phenotype_notes`. Evidence is `guideline` only for the finding's own marker (or resolved alias) in a non-retired CPIC entry;
+   `research` for a retired CPIC or GLP-1 pack marker (or resolved alias) or variant-report magnitude at least 3; otherwise
+   `weak`. A matching gene alone does not promote the tier. Ambiguous aliases do not establish a target.
+3. `sensitive`: one category item for present `alzheimers`, `mental_health`, and `reproductive` findings.
+   Fields: `category`, `findings` (visible count), `consent` (remembered answer or null), `ask_first` (only an
+   unanswered visible category). Only a recorded `yes` plus current visibility adds nested finding `items`
+   and `more`, also capped at `max_items`. Hidden findings contribute only `withheld`, never a finding description.
+4. `gene_drug`: pack entries after a complete DNA import (or entries matching a report-only pack marker), flags first, with `gene`, `drugs`, `status`
+   (`flag`, `no_flag`, `not_assessed`), `evidence` (`CPIC guideline`, `CPIC retired`, or `research`), `on_record` (visible matching
+   medication events by `same_drug`), and visible `phenotype_notes`; derived genes also carry `chip_reliability`.
+   The area always has `ask_current_medications: true`; historical events do not establish current use.
+   Report-only entries are `not_assessed` without chip calls. Sensitive pack entries move behind consent and
+   use the pack's assessed finding text, including its no-flag/not-assessed limits, never the raw effect assertion.
+   Entries with `evidence: "CPIC retired"` or `guideline.status: "retired"` carry `CPIC retired` and their `limits` text.
+5. `carrier_and_screening`: `carrier`, then `cancer_risk`, using the same category/consent shape as sensitive.
+6. `traits`: trait findings by descending magnitude, with `invite: "Ask the user to confirm or refute each one."`.
+
+Sensitive/carrier/cancer categories take precedence, then pack markers belong to gene–drug profiles, then traits,
+then actionable. Non-PGX derived calls use the finding shape with null magnitude and neutral repute. PGX derived
+calls supply the profile's reliability rather than repeat the finding. Derived confidence maps to `called from the
+chip`, `ambiguous on a chip`, or `not assessed`. Otherwise an i-id says `an internal probe: confirm before acting`;
+a bad-repute magnitude at least 4 says `a high-impact result on a consumer chip: rare variants are often miscalled,
+so a clinical test should confirm it`; other markers say `chips usually call common variants reliably`.
+
+`knowledge/data/phenotype_links.json` holds the curated gene → LOINC/metric links specified by U4b.
+`your_data` contains present visible linked clinical entries with the same latest-point fields as own_numbers,
+and linked wellness metrics. Only LOINC/systemless codes match LOINC links. Measurements are placed side by
+side, with no agreement judgment. The normal store resolves the active Hermes profile. Notes attach to the finding's markers, aliases, and gene names, newest first,
+as `{id, stance, trait, text, date}`.
+
+**Privacy (including U4b Amendment 1):** every note passes `_phenotype_visible`, including its marker and resolved
+alias via `_marker_visible`, regardless of its stored category. Every displayed marker of an actionable, trait,
+or gene–drug finding must pass `_marker_visible`; derived calls also pass `_derived_visible`. Each finding's
+OWN stored category must be allowed in addition to its placement category, even after consent; moving a PGX
+finding into a sensitive area never removes its PGX visibility gate. Hidden findings,
+observation rows, metrics, notes and medication events each add once to the top-level `withheld`, regardless of
+how often a visible record is linked. No hidden item contributes a name, value, unit, or date. Consent never
+changes policy visibility; a hidden category can report its count only. The clinical discovery cap of 300 applies
+before agenda limiting; beyond-cap series are reflected in own_numbers `more`.
+The agenda batches report categories into a per-call lowercase marker map, preserving sensitive-first then
+newest-id precedence. The internal `_marker_category`, `_marker_visible`, `_derived_visible`, `_phenotype_visible`,
+and `_pgx_entry_visible` helpers accept optional `categories=` to reuse this complete map; omitted maps retain
+their existing queries. Fixed sensitive markers and pack-gene policy checks still apply.
