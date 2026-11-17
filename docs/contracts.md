@@ -299,7 +299,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   target type by exact resource_ids, identity suffix `/` + reference, or bare id matching `Observation/<id>` /
   `ImagingStudy/<id>`, across all sources. However the reference is written (an absolute URL with any base, a
   `/_history/<version>` suffix, a query or fragment), its trailing `Type/id` is also matched for privacy.
-  Over-withholding on shared short ids is the accepted safe side.
+  Over-withholding on shared short ids is the accepted safe side. Results or studies contained in the report and
+  referenced as `#id` are not stored on their own: their sensitive categories are recorded with the report
+  (`_caduceus.contained_categories`), lift its category at import, and are checked on every read. Search, browse and
+  fetch each read their rows and visibility checks in one read snapshot.
   Displayed results/imaging require an exact resource_ids match, an exact identity after resolving the relative
   reference against the report's absolute fullUrl FHIR base, or a relative match in any of the report's imported
   sources. `_caduceus.source_ids` retains all imported source ids on both reports and deduplicated Observations,

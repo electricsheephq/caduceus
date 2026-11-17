@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from contextlib import contextmanager
 
 from .policy import Category, Policy, visible
 
@@ -29,7 +30,9 @@ def _visible(conn, policy, row, resolver):
     metadata = json.loads(report["metadata"] or "{}")
     linked = [*resolver.resolve(metadata.get("result"), broad=True),
               *resolver.resolve(metadata.get("imagingStudy"), broad=True, resource_type="ImagingStudy")]
-    return all(visible(policy, row["category"], kind="observation") for row in linked)
+    return (all(visible(policy, row["category"], kind="observation") for row in linked)
+            and all(visible(policy, category, kind="observation")
+                    for category in metadata.get("contained_categories") or ()))
 
 
 def sanitize(query: object, *, max_terms: int = 16) -> str:
@@ -71,7 +74,26 @@ def _query(conn, match: str, kinds, limit: int):
     return conn.execute(sql, params).fetchall()
 
 
+@contextmanager
+def _snapshot(conn):
+    """One read snapshot for a check and the rows it guards; a caller's open transaction is reused, never ended."""
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute("BEGIN")
+    try:
+        yield
+    finally:
+        if owns_transaction:
+            conn.rollback()
+
+
 def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8, allow=None) -> dict:
+    """Ranked hits allowed by *policy*; snippets and visibility checks read one snapshot."""
+    with _snapshot(conn):
+        return _search(conn, query, policy=policy, kinds=kinds, limit=limit, allow=allow)
+
+
+def _search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8, allow=None) -> dict:
     """Ranked hits allowed by *policy*: all terms first, any term when that finds nothing."""
     from ..health.fhir import ReportResolver
 
@@ -102,6 +124,12 @@ def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=Non
 
 
 def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8, allow=None) -> dict:
+    """List recorded kinds newest first; rows and visibility checks read one snapshot."""
+    with _snapshot(conn):
+        return _browse(conn, policy=policy, kinds=kinds, limit=limit, allow=allow)
+
+
+def _browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8, allow=None) -> dict:
     """List recorded kinds newest first, filtering and counting hidden rows before limiting visible hits."""
     from ..health.fhir import ReportResolver
 

@@ -926,6 +926,20 @@ def _report(vault, resource, source_id, counts, full_url=None, resolver=None):
     for linked in linked_rows:
         if category not in SENSITIVE and linked["category"] in {c.value for c in SENSITIVE}:
             category = Category(linked["category"])
+    # Results and studies contained in the report itself (referenced as "#id") are never stored on their own, so
+    # their categories are recorded with the report and checked on every read.
+    contained = {f"#{c['id']}": c for c in _read_objects(resource.get("contained")) if isinstance(c.get("id"), str)}
+    contained_categories = set()
+    for field in ("result", "imagingStudy"):
+        for link in _read_objects(resource.get(field)):
+            target = contained.get(link.get("reference")) if isinstance(link.get("reference"), str) else None
+            if not isinstance(target, dict):
+                continue
+            coded = _category([target.get("code") or {}, target.get("valueCodeableConcept") or {}], Category.RECORDS)
+            worded = categorize(text=_report_text(target.get("description")), default=Category.RECORDS)
+            contained_categories.update(c for c in (coded, worded) if c in SENSITIVE)
+    if category not in SENSITIVE and contained_categories:
+        category = sorted(contained_categories, key=lambda c: c.value)[0]
     identity = _report_identity(resource, full_url)
     seen_identity = _identity(resource, full_url)
     parts = ["Report", kind, identity, system, code, when] if identity else [
@@ -934,6 +948,8 @@ def _report(vault, resource, source_id, counts, full_url=None, resolver=None):
     aliases = {seen_identity} if seen_identity else set()
     metadata = {"resource_ids": sorted(aliases), "identity_aliases": sorted(aliases), "attachments": attachments,
                 "source_ids": sorted({source_id} - {None})}
+    if contained_categories:
+        metadata["contained_categories"] = sorted(c.value for c in contained_categories)
     if full_url:
         metadata["full_url"] = full_url
     if kind == "DiagnosticReport":
