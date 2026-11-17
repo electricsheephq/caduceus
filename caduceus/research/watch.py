@@ -10,8 +10,8 @@ from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 
 from ..core.db import write_txn
-from ..core.policy import Category, categorize
-from ..core.search import index_doc
+from ..core.policy import SENSITIVE, Category, categorize, sensitive_categories
+from ..core.search import index_doc, medication_text
 from ..knowledge.pack import load_pack, normalize_drug
 from .http import BudgetExceeded, UrllibHttp
 
@@ -39,21 +39,24 @@ def _timestamp(now):
 
 def _medications(conn, allow=None):
     """Current medications the knowledge pack knows. *allow* (a category predicate) leaves out the ones the user's
-    privacy settings hide, so they never become search terms sent to the research services."""
-    rows = conn.execute(
-        "SELECT drug, event, occurred_on, category FROM medication_event ORDER BY occurred_on DESC, id DESC"
-    )
+    privacy settings hide. Return visible current drugs and hidden-only names to exclude from stored watch terms."""
+    rows = conn.execute("SELECT * FROM medication_event ORDER BY occurred_on DESC, id DESC")
+    hidden_categories = frozenset(cat for cat in SENSITIVE if allow is not None and not allow(cat))
     latest, starts = {}, {}
+    hidden_drugs = set()
     for row in rows:
-        if allow is not None and not allow(row["category"]):
-            continue
         drug = normalize_drug(row["drug"])
+        if ((allow is not None and not allow(row["category"])) or
+                (hidden_categories and sensitive_categories(medication_text(conn, row), among=hidden_categories))):
+            if drug:
+                hidden_drugs.add(drug)
+            continue
         if drug and drug not in latest:
             latest[drug] = row["event"]
         if drug and row["event"] == "start" and drug not in starts:
             starts[drug] = row["occurred_on"]
     current = sorted(drug for drug, event in latest.items() if event != "stop")
-    return sorted(current, key=lambda drug: starts.get(drug, ""), reverse=True)
+    return sorted(current, key=lambda drug: starts.get(drug, ""), reverse=True), hidden_drugs - set(current)
 
 
 def default_watch(conn, *, topics=(), allow=None) -> dict:
@@ -61,7 +64,7 @@ def default_watch(conn, *, topics=(), allow=None) -> dict:
     if isinstance(topics, str):
         topics = [topics]
     terms = {**pack.watch, "topics": sorted(set(pack.watch.get("topics", [])) | {str(t).strip() for t in topics if str(t).strip()}),
-             "drugs": _medications(conn, allow)}
+             "drugs": _medications(conn, allow)[0]}
     now = _timestamp(datetime.now(timezone.utc))
     with write_txn(conn):
         conn.execute(
@@ -217,9 +220,10 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
     watch = dict(stored)
     terms = _terms(watch["terms_json"])
     # Medication changes affect terms, never genotype selection.
-    medications = _medications(conn, allow)
+    medications, hidden_drugs = _medications(conn, allow)
     terms["drugs"] = (medications if watch["name"] == "default" else
-                      medications + sorted(set(terms.get("drugs", [])) - set(medications)))
+                      medications + sorted(drug for drug in set(terms.get("drugs", [])) - set(medications)
+                                           if normalize_drug(drug) not in hidden_drugs))
     sources = _terms(watch["sources_json"])
     stamp = _timestamp(now)
     until = stamp[:10]
@@ -315,6 +319,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
                 watermark = completed_until
 
     pack = load_pack()
+    # The same visible medication terms drive network queries and _why; hidden notes cannot name a drug in either.
     pairs = _pairs(pack, terms.get("drugs", []))
     pair_rsids = sorted({r for pair in pairs.values() for r in pair["rsids"]})
     terms["genes"] = list(dict.fromkeys(terms.get("genes", []) +

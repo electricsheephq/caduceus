@@ -9,7 +9,7 @@ import json
 import re
 import sqlite3
 
-from .policy import Category, Policy, visible
+from .policy import Category, Policy, text_visible, visible
 
 _TOKEN = re.compile(r"[\w][\w.'*-]*", re.UNICODE)
 KINDS = ("annotation", "assertion", "research", "observation", "condition", "medication", "report", "journal", "finding", "pgx", "phenotype")
@@ -19,6 +19,9 @@ def _visible(conn, policy, row, resolver):
     # Reports share the records base category, and cannot repeat any currently hidden linked result or study.
     kind = row["kind"]
     if not visible(policy, row["category"], kind="observation" if kind == "report" else kind):
+        return False
+    if kind in {"journal", "phenotype", "medication", "report"} and not text_visible(
+            policy, f"{row['title']} {row['body']}"):
         return False
     if kind != "report":
         return True
@@ -56,9 +59,16 @@ def remove_doc(conn: sqlite3.Connection, *, kind: str, ref: str) -> None:
     conn.execute("DELETE FROM search_doc WHERE kind=? AND ref=?", (kind, ref))
 
 
+def medication_text(conn, row) -> str:
+    """All stored medication words, including FHIR note/reason text kept only in the index."""
+    ref = f"user:{row['id']}" if row["source"] == "user" else str(row["id"])
+    doc = conn.execute("SELECT body FROM search_doc WHERE kind='medication' AND ref=?", (ref,)).fetchone()
+    return " ".join([*(row[key] or "" for key in ("drug", "brand", "note")), doc["body"] if doc else ""])
+
+
 def _query(conn, match: str, kinds, limit: int):
     sql = (
-        "SELECT d.id, d.kind, d.ref, d.title, d.category, d.ts, "
+        "SELECT d.id, d.kind, d.ref, d.title, d.body, d.category, d.ts, "
         "snippet(search_fts, 1, '[', ']', '…', 16) AS snip, bm25(search_fts, 4.0, 1.0) AS score "
         "FROM search_fts JOIN search_doc d ON d.id = search_fts.rowid WHERE search_fts MATCH ?"
     )
@@ -137,6 +147,10 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
         document = json.loads(row["raw_json"] or "{}")
         kind = "observation" if resource_type == "Observation" else "report"
         if not visible(policy, row["category"], kind="observation"):
+            withheld += 1
+            continue
+        if kind == "report" and not text_visible(
+                policy, " ".join(row[key] or "" for key in ("name", "conclusion", "narrative"))):
             withheld += 1
             continue
         result = {"ref": f"{kind}:{row['id']}", "title": row["name"], "date": row["effective_at"],
