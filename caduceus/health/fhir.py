@@ -1143,6 +1143,15 @@ def ingest(vault, document, source_id, *, cancel=None, run_id=None):
     return counts
 
 
+def read_document(path):
+    """Read a stored FHIR JSON file with the same bound for import and recovery."""
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_JSON + 1)
+    if len(raw) > MAX_JSON:
+        raise ValueError("FHIR JSON exceeds size limit")
+    return json.loads(raw)
+
+
 def import_fhir(vault, src, *, cancel=None) -> ImportResult:
     run = sources.begin_import(vault, src, PARSER, PARSER_VERSION)
     if run is None:
@@ -1152,11 +1161,7 @@ def import_fhir(vault, src, *, cancel=None) -> ImportResult:
         if cancel is not None and cancel.is_set():
             status = "cancelled"
         else:
-            with sources.source_file(vault, src).open("rb") as stream:
-                raw = stream.read(MAX_JSON + 1)
-            if len(raw) > MAX_JSON:
-                raise ValueError("FHIR JSON exceeds size limit")
-            counts = ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
+            counts = ingest(vault, read_document(sources.source_file(vault, src)), src.id, cancel=cancel, run_id=run.id)
             if cancel is not None and cancel.is_set():
                 status = "cancelled"
     except Exception as exc:
