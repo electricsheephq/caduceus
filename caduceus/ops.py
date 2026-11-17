@@ -1503,6 +1503,7 @@ def _erase(ctx, confirm: bool) -> str:
                     "Wait until it finishes (/caduceus imports shows imports), then run /caduceus erase confirm again.")
         with _WATCH_LOCK:  # even an empty vault or a failed delete must discard the old watch result
             _WATCH_PENDING.clear()
+        _CLINICAL_REPLAY_FINISHED.clear()  # and a held replay result, which described the erased vault
         targets = _erase_targets(root)
         if not targets:
             return _NOTHING_TO_ERASE
