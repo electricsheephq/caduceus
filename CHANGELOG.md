@@ -7,7 +7,7 @@ All notable changes to Caduceus are recorded here. Versions follow [Semantic Ver
 ### Fixed
 - **Word checks see one plain space between words, whatever the text used.** The phrases that mark a sensitive topic ("breast cancer", "Lynch syndrome") expect one space between their words. Text written with a non-breaking space, a tab, a line break or repeated spaces could name a hidden topic and still be shown. Every read-time word check now reads text in several ways and counts a topic when any of them names it:
   - the text as stored, so nothing is shown that 0.4.1 withheld;
-  - the text with full-width letters and ligatures folded, invisible characters inside words removed (or read as spaces) and each run of whitespace made one space;
+  - the text with full-width letters and ligatures folded, soft hyphens, zero-width spaces and joiners, the word joiner and the BOM inside words removed (or read as spaces; other invisible characters, such as text-direction marks and the combining grapheme joiner, are tracked in #50) and each run of whitespace made one space;
   - each line on its own, so one line's last word never switches off a topic at the start of the next.
 - **Fields are checked one at a time.** Report attachment metadata and linked imaging words are checked as separate fields.
 - **A report's own status is checked**, because fetch returns it.
