@@ -281,8 +281,10 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   omits script/style contents, decodes entities and collapses whitespace. Invalid base64 or unreadable UTF-8
   counts as `skipped:<resourceType>:attachment_unreadable`, with a plain-language warning; other attachments
   and oversized text are metadata only (no PDF extraction). `_caduceus.attachments` lists `content_type`,
-  declared `size`, `title`, `has_inline_data`, and `has_url`. All attachment inline data and contained Binary
-  resources' data are removed from stored raw JSON; the original source file remains in the private sources store.
+  declared `size`, `title`, `has_inline_data`, and `has_url`. The entire copied resource tree is stripped of
+  `data` on every Binary and every attachment-shaped object (`contentType`, `url`, `title` or `size` beside
+  `data`), including nested and contained resources. Only the report's own supported attachments are decoded;
+  nested bytes do not enter its narrative. The original input and private source file remain intact.
   DiagnosticReport uses its own text.div when
   no usable text attachment exists. Narrative is capped at 200,000 characters and marked
   `_caduceus.narrative_truncated: true` when cut; privacy classification sees the text before truncation.
@@ -314,14 +316,23 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   target type by exact resource_ids, identity suffix `/` + reference, or bare id matching `Observation/<id>` /
   `ImagingStudy/<id>`, across all sources. However the reference is written (an absolute URL with any base, a
   `/_history/<version>` suffix, a query or fragment), its trailing `Type/id` is also matched for privacy.
-  Over-withholding on shared short ids is the accepted safe side.
+  Over-withholding on shared short ids is the accepted safe side. Results or studies contained in the report and
+  referenced as `#id` are not stored on their own: their sensitive categories are recorded with the report
+  (`_caduceus.contained_categories`), lift its category at import, and are checked on every read. Search, browse and
+  fetch each read their rows and visibility checks in one read snapshot.
   Displayed results/imaging require an exact resource_ids match, an exact identity after resolving the relative
   reference against the report's absolute fullUrl FHIR base, or a relative match in any of the report's imported
-  sources. `_caduceus.source_ids` retains all imported source ids, including skipped older copies; legacy rows
-  without that list use row.source_id. An absent source id does not establish a shared artifact. Each search,
+  sources. `_caduceus.source_ids` retains all imported source ids on both reports and deduplicated Observations,
+  including skipped older report copies; narrow resolution uses membership in both histories. Legacy rows
+  without that list use row.source_id. Observations also retain every contributing `Observation/<id>` in
+  `_caduceus.typed_ids`, so deduplication under UUID fullUrls does not lose privacy matches. These aliases remain
+  after partial retraction; they are not resource assertions and cannot keep a withdrawn row alive.
+  An absent source id does not establish a shared artifact. Each search,
   browse, fetch or ingest call shares one ephemeral resolver, lazily projecting only row id, source id, category,
-  raw resource id and resource_ids once per linked table. Dictionary lookups resolve references; ingest refreshes
+  raw resource id, resource_ids, typed_ids and source_ids once per linked table. Dictionary lookups resolve references; ingest refreshes
   affected entries after later writes. No resolver or policy decision is cached between calls.
+  Fetch reads visibility and payload in one read transaction, reusing an existing transaction without closing it.
+  Transactions opened by fetch end in `finally`, including on errors; vanished linked rows are skipped.
   Search, kind browse and fetch withhold the whole report whenever any resolved linked Observation or ImagingStudy is hidden
   under the current policy, including after late imports or category changes. A withheld report contributes
   one count and returns no title, text, date or attachments. Results expose visible observations' ref/title/name/date/category,

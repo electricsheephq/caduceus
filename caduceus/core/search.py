@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from contextlib import contextmanager
 
 from .policy import Category, Policy, text_visible, visible
 
@@ -32,7 +33,9 @@ def _visible(conn, policy, row, resolver):
     metadata = json.loads(report["metadata"] or "{}")
     linked = [*resolver.resolve(metadata.get("result"), broad=True),
               *resolver.resolve(metadata.get("imagingStudy"), broad=True, resource_type="ImagingStudy")]
-    return all(visible(policy, row["category"], kind="observation") for row in linked)
+    return (all(visible(policy, row["category"], kind="observation") for row in linked)
+            and all(visible(policy, category, kind="observation")
+                    for category in metadata.get("contained_categories") or ()))
 
 
 def sanitize(query: object, *, max_terms: int = 16) -> str:
@@ -81,7 +84,26 @@ def _query(conn, match: str, kinds, limit: int):
     return conn.execute(sql, params).fetchall()
 
 
+@contextmanager
+def _snapshot(conn):
+    """One read snapshot for a check and the rows it guards; a caller's open transaction is reused, never ended."""
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute("BEGIN")
+    try:
+        yield
+    finally:
+        if owns_transaction:
+            conn.rollback()
+
+
 def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8, allow=None) -> dict:
+    """Ranked hits allowed by *policy*; snippets and visibility checks read one snapshot."""
+    with _snapshot(conn):
+        return _search(conn, query, policy=policy, kinds=kinds, limit=limit, allow=allow)
+
+
+def _search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=None, limit: int = 8, allow=None) -> dict:
     """Ranked hits allowed by *policy*: all terms first, any term when that finds nothing."""
     from ..health.fhir import ReportResolver
 
@@ -112,6 +134,12 @@ def search(conn: sqlite3.Connection, query: object, *, policy: Policy, kinds=Non
 
 
 def browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8, allow=None) -> dict:
+    """List recorded kinds newest first; rows and visibility checks read one snapshot."""
+    with _snapshot(conn):
+        return _browse(conn, policy=policy, kinds=kinds, limit=limit, allow=allow)
+
+
+def _browse(conn: sqlite3.Connection, *, policy: Policy, kinds, limit: int = 8, allow=None) -> dict:
     """List recorded kinds newest first, filtering and counting hidden rows before limiting visible hits."""
     from ..health.fhir import ReportResolver
 
@@ -143,7 +171,7 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
     linked = resolver.resolve(references, source_ids=source_ids, full_url=full_url, resource_type=resource_type)
     table = {"Observation": "observation", "ImagingStudy": "clinical_report"}[resource_type]
     rows = [conn.execute(f"SELECT * FROM {table} WHERE id=?", (row["id"],)).fetchone() for row in linked]
-    for row in sorted(rows, key=lambda row: (row["effective_at"] or "", row["id"])):
+    for row in sorted((row for row in rows if row is not None), key=lambda row: (row["effective_at"] or "", row["id"])):
         document = json.loads(row["raw_json"] or "{}")
         kind = "observation" if resource_type == "Observation" else "report"
         if not visible(policy, row["category"], kind="observation"):
@@ -188,20 +216,27 @@ def fetch(conn: sqlite3.Connection, ref: str, *, policy: Policy, allow=None) -> 
     """One indexed record in full, by the ``kind:ref`` a search returned. None when absent or withheld."""
     from ..health.fhir import ReportResolver
 
-    resolver = ReportResolver(conn)
-    kind, _, key = str(ref or "").partition(":")
-    row = conn.execute(
-        "SELECT kind, ref, title, body, category, ts FROM search_doc WHERE kind=? AND ref=?", (kind, key)
-    ).fetchone()
-    if row is None:
-        return None
-    if not _visible(conn, policy, row, resolver) or (allow is not None and not allow(row)):
-        return {"ref": ref, "withheld": True, "reason": "hidden by your privacy settings"}
-    result = {"ref": ref, "kind": row["kind"], "title": row["title"], "body": row["body"],
-              "category": row["category"], "date": row["ts"]}
-    if kind == "report":
-        report = _fetch_report(conn, key, policy=policy, resolver=resolver)
-        if report is None:
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute("BEGIN")
+    try:
+        resolver = ReportResolver(conn)
+        kind, _, key = str(ref or "").partition(":")
+        row = conn.execute(
+            "SELECT kind, ref, title, body, category, ts FROM search_doc WHERE kind=? AND ref=?", (kind, key)
+        ).fetchone()
+        if row is None:
             return None
-        result.update(report)
-    return result
+        if not _visible(conn, policy, row, resolver) or (allow is not None and not allow(row)):
+            return {"ref": ref, "withheld": True, "reason": "hidden by your privacy settings"}
+        result = {"ref": ref, "kind": row["kind"], "title": row["title"], "body": row["body"],
+                  "category": row["category"], "date": row["ts"]}
+        if kind == "report":
+            report = _fetch_report(conn, key, policy=policy, resolver=resolver)
+            if report is None:
+                return None
+            result.update(report)
+        return result
+    finally:
+        if owns_transaction:
+            conn.rollback()  # end our read snapshot, leaving caller-owned transactions alone
