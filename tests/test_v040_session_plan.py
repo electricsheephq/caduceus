@@ -119,7 +119,7 @@ def test_consent_and_policy_are_separate(populated, fake_ctx):
         fake_ctx.config["hidden_categories"] = [category]
         reply = plan(fake_ctx)
         item = next(i for i in areas(reply)[key]["items"] if i["category"] == category)
-        assert item["withheld"] > 0 and "items" not in item
+        assert item["hidden"] is True and not item["ask_first"] and not {"items", "findings", "withheld"} & set(item)
         assert ("Synthetic sealed orchard" if category == "alzheimers" else "Synthetic carrier finding") not in json.dumps(reply)
         fake_ctx.config["hidden_categories"] = []
 
@@ -477,3 +477,22 @@ def test_u6_medication_words_naming_hidden_topic_stay_off_record(populated, fake
     assert [m["date"] for m in statin(hidden)["on_record"]] == ["2026-01-01"]
     assert hidden.get("withheld", 0) == shown.get("withheld", 0) + 1
     assert "2026-02-07" not in json.dumps(hidden) and "anxiety" not in json.dumps(hidden).lower()
+
+
+def test_session_plan_lists_hidden_areas_without_counts(populated, fake_ctx):
+    """A hidden area looks the same whether or not the vault holds findings in it; the total still counts them."""
+    sensitive = {i["category"]: i for i in areas(plan(fake_ctx))["sensitive"]["items"]}
+    assert "alzheimers" in sensitive and "mental_health" not in sensitive
+    fake_ctx.config["hidden_categories"] = ["alzheimers", "mental_health"]
+    reply = plan(fake_ctx)
+    hidden = {i["category"]: i for i in areas(reply)["sensitive"]["items"]}
+    expected = {"consent": None, "ask_first": False, "hidden": True}
+    assert hidden["alzheimers"] == {"category": "alzheimers", **expected}
+    assert hidden["mental_health"] == {"category": "mental_health", **expected}
+    assert reply["withheld"] >= sensitive["alzheimers"]["findings"]
+
+
+def test_session_plan_lists_no_hidden_areas_without_dna(vault, samples, fake_ctx):
+    fake_ctx.config["privacy_level"] = "standard"
+    reply = areas(plan(fake_ctx))
+    assert reply["sensitive"]["items"] == [] and reply["carrier_and_screening"]["items"] == []
