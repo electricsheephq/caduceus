@@ -31,6 +31,10 @@ def _visible(conn, policy, row, resolver):
     if report is None:
         return False
     metadata = json.loads(report["metadata"] or "{}")
+    # Attachment titles are returned by fetch but are not in the search body: check every topic they name too.
+    titles = " ".join(str(a.get("title") or "") for a in metadata.get("attachments") or () if isinstance(a, dict))
+    if titles.strip() and not text_visible(policy, titles):
+        return False
     linked = [*resolver.resolve(metadata.get("result"), broad=True),
               *resolver.resolve(metadata.get("imagingStudy"), broad=True, resource_type="ImagingStudy")]
     return (all(visible(policy, row["category"], kind="observation") for row in linked)

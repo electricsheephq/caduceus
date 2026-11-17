@@ -2,6 +2,11 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.1 — 2026-11-17
+
+### Fixed
+- **A clinical report's attachment titles get the every-topic check (#43).** A report whose attachment title named two sensitive topics could be fetched, title included, when only the second topic was hidden. Search, browse and fetch now withhold the whole report, counted and never described, when an attachment title names any hidden topic.
+
 ## 0.4.0 — 2026-11-17
 
 ### Added
