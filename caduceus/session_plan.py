@@ -47,6 +47,10 @@ def _point(point):
     return {**result, "range_flag": flag}
 
 
+def _retired(entry):
+    return entry.get("evidence") == "CPIC retired" or entry.get("guideline", {}).get("status") == "retired"
+
+
 def session_plan(ctx, args):
     limit = ops._int(args, "max_items", 8, 1, 25)
     policy = ops.policy_for(ctx)
@@ -57,6 +61,13 @@ def session_plan(ctx, args):
     result = {"areas": areas, "limits": [ops.CHIP_LIMITS, ops.LIMITS, "Information with limits, not medical advice."]}
     with ops._Store() as store:
         vault, samples = store.vault, store.samples
+        result = {**ops._callset_warning(vault), **result}
+        report_rows = ops._snapshot_rows(vault, "1=1", limit=ops._count(vault, "SELECT count(*) FROM annotation_snapshot"))
+        # Match _marker_category's sensitive-first, newest-id precedence in one per-call snapshot.
+        marker_categories = {}
+        for row in sorted(report_rows, key=lambda r: (r["category"] in SENSITIVE, r["id"])):
+            if row["marker"]:
+                marker_categories[row["marker"].lower()] = row["category"]
         withheld = 0
         discovery = ops._need("health.fhir", "clinical_series")(
             vault, allow=lambda cat: visible(policy, cat or Category.RECORDS, kind="observation"))
@@ -67,7 +78,7 @@ def session_plan(ctx, args):
             # Unplotted points include other numeric units on this path, plus text results.
             points = values.get("points", []) + values.get("unplotted_points", [])
             if points:
-                latest = max(enumerate(points), key=lambda p: (p[1]["date"], p[0]))[1]
+                latest = max(points, key=lambda p: (p["date"], p["observation_id"]))
                 clinical.append({**series, **_point(latest)})
         metrics = ops._need("health.trends", "metrics")(samples) if samples is not None else []
         if allowed(policy, Category.WELLNESS):
@@ -89,7 +100,7 @@ def session_plan(ctx, args):
         # Check each note once, independently of its stored category and of its eventual parent.
         notes = []
         for row in vault.execute("SELECT * FROM phenotype_note ORDER BY created_at DESC,id DESC"):
-            if ops._phenotype_visible(vault, policy, row):
+            if ops._phenotype_visible(vault, policy, row, categories=marker_categories):
                 notes.append(row)
             else:
                 withheld += 1
@@ -110,20 +121,21 @@ def session_plan(ctx, args):
         pack = ops._pack()
         pack_markers = {m["rsid"].lower() for e in pack.entries for m in e["markers"]}
         cpic_genes = {e["gene"] for e in pack.cpic}
-        cpic_markers = {m["rsid"].lower() for e in pack.cpic for m in e["markers"]}
-        research_markers = {m["rsid"].lower() for e in pack.glp1 for m in e["markers"]}
+        cpic_markers = {m["rsid"].lower() for e in pack.cpic if not _retired(e) for m in e["markers"]}
+        research_markers = {m["rsid"].lower() for e in pack.entries if e in pack.glp1 or _retired(e)
+                            for m in e["markers"]}
         consent = {r["key"].partition(":")[2]: json.loads(r["value_json"]).get("answer")
                    for r in vault.execute("SELECT key,value_json FROM settings WHERE key LIKE 'consent:%'")}
         groups = {cat: [] for cat in SENSITIVE}
         hidden_groups = {cat: 0 for cat in SENSITIVE}
 
         def markers_visible(markers):
-            return all(ops._marker_visible(vault, policy, m) for marker in markers
+            return all(ops._marker_visible(vault, policy, m, categories=marker_categories) for marker in markers
                        for m in ops._phenotype_markers(vault, marker))
 
         def sensitive_category(category, genes, markers):
             categories = [category, categorize(genes=genes),
-                          *(ops._marker_category(vault, m) for marker in markers
+                          *(ops._marker_category(vault, m, categories=marker_categories) for marker in markers
                             for m in ops._phenotype_markers(vault, marker))]
             return next((c for c in categories if c in SENSITIVE), category)
 
@@ -139,7 +151,7 @@ def session_plan(ctx, args):
             markers = [item["marker"], *(derived.get("basis", {}) if derived else ())]
             category = sensitive_category(item["category"], item["genes"], markers)
             if (not allowed(policy, item["category"]) or not allowed(policy, category) or not markers_visible(markers)
-                    or (derived is not None and not ops._derived_visible(vault, policy, derived))):
+                    or (derived is not None and not ops._derived_visible(vault, policy, derived, categories=marker_categories))):
                 withheld += 1
                 if category in SENSITIVE:
                     hidden_groups[category] += 1
@@ -156,7 +168,6 @@ def session_plan(ctx, args):
             else:
                 by_key["traits" if category == Category.TRAIT else "actionable"]["items"].append(item)
 
-        report_rows = ops._snapshot_rows(vault, "1=1", limit=ops._count(vault, "SELECT count(*) FROM annotation_snapshot"))
         report_markers = {row["marker"].lower() for row in report_rows if row["marker"]}
         for row in report_rows:
             add_finding(ops._snapshot_dict(row))
@@ -184,17 +195,19 @@ def session_plan(ctx, args):
                                                      "confidence": row["confidence"] if row else "not_assessed",
                                                      "category": assessed["category"]})
                 continue
-            if (not ops._pgx_entry_visible(vault, policy, entry) or not markers_visible(markers)
-                    or row is not None and not ops._derived_visible(vault, policy, row)):
+            if (not ops._pgx_entry_visible(vault, policy, entry, categories=marker_categories) or not markers_visible(markers)
+                    or row is not None and not ops._derived_visible(vault, policy, row, categories=marker_categories)):
                 withheld += 1
                 continue
             # Use the same status calculation as pgx_check, once per entry (not once per drug).
             status = assessed["status"]
             item = {"gene": entry["gene"], "drugs": entry["drugs"], "status": status,
-                    "evidence": "CPIC guideline" if entry in pack.cpic else "research",
+                    "evidence": "CPIC retired" if _retired(entry) else "CPIC guideline" if entry in pack.cpic else "research",
                     "on_record": [m for m in medications if any(ops.same_drug(d, m["drug"]) or
                                   m["brand"] and ops.same_drug(d, m["brand"]) for d in entry["drugs"])],
                     "phenotype_notes": phenotype([entry["gene"], *markers])}
+            if _retired(entry):
+                item["limits"] = entry["limits"]
             if row is not None:
                 item["chip_reliability"] = _reliability({}, row)
             by_key["gene_drug"]["items"].append(item)

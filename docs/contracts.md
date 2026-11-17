@@ -415,16 +415,20 @@ Trend `compare`/`series` add the metric's full stored `data_range` when present,
 ## First guided session agenda (U4b)
 
 `caduceus_capture op=session_plan max_items=8` reads only; `max_items` is a whole number from 1 to 25.
-It returns `{areas, limits, withheld?}`. Limits are `[CHIP_LIMITS, LIMITS, "Information with limits, not medical advice."]`.
+It returns `{warning?, areas, limits, withheld?}`. Limits are `[CHIP_LIMITS, LIMITS, "Information with limits, not medical advice."]`.
+When the active complete callset has a `same_person: false` comparison, `warning` comes first and carries
+the same different-person warning as `genome_tool`, including the newest source filename. Both use `_callset_warning`.
 Each area has `key`, `title`, `items` (at most `max_items`), and `more` (visible items omitted).
 The six areas always exist, including in an empty vault, in this order:
 
 1. `own_numbers`: `clinical_series` entries, newest visible `last` first, with their latest visible `lab_series`
    point flattened into the entry (`date`, `value`, `value_text`, `unit`, `interpretation`, `reference_range`,
    `reference_range_mismatch`, `range_flag`). The newest point across plotted and unplotted points wins,
-   including numeric points in a different unit and text-only results. Session-plan reads opt into
+   including numeric points in a different unit and text-only results; equal dates use the largest observation id.
+   Session-plan reads opt into
    `lab_series(..., include_other_units=True)`, passed to `observation_series`, so its unplotted list retains
-   numeric points outside the dominant unit. Other callers keep the existing default behavior. A comparable finite numeric
+   numeric points outside the dominant unit and visible points carry `observation_id` for tie-breaking (not exposed
+   in the agenda). Other callers keep the existing default behavior. A comparable finite numeric
    value is `below`, `within`, or `above` its recorded bounds; missing/inverted/mismatched bounds or text give
    `unknown`. Then wellness `metrics`, each with a `daily_check` list of matching descriptive signals.
    Stored rollups are read without rebuilding. The normal `_Store` opens the databases and applies schema
@@ -432,19 +436,20 @@ The six areas always exist, including in an empty vault, in this order:
    or settings; database creation and normal WAL sidecars are permitted.
 2. `actionable`: nonsensitive non-PGX non-trait findings, ordered by evidence then descending magnitude.
    Finding fields: `marker`, `genes`, `summary`, `magnitude`, `repute`, `evidence`, `chip_reliability`, `your_data`,
-   `phenotype_notes`. Evidence is `guideline` only for the finding's own marker (or resolved alias) in a CPIC entry;
-   `research` for a GLP-1 pack marker (or resolved alias) or variant-report magnitude at least 3; otherwise
+   `phenotype_notes`. Evidence is `guideline` only for the finding's own marker (or resolved alias) in a non-retired CPIC entry;
+   `research` for a retired CPIC or GLP-1 pack marker (or resolved alias) or variant-report magnitude at least 3; otherwise
    `weak`. A matching gene alone does not promote the tier. Ambiguous aliases do not establish a target.
 3. `sensitive`: one category item for present `alzheimers`, `mental_health`, and `reproductive` findings.
    Fields: `category`, `findings` (visible count), `consent` (remembered answer or null), `ask_first` (only an
    unanswered visible category). Only a recorded `yes` plus current visibility adds nested finding `items`
    and `more`, also capped at `max_items`. Hidden findings contribute only `withheld`, never a finding description.
 4. `gene_drug`: pack entries after a complete DNA import (or entries matching a report-only pack marker), flags first, with `gene`, `drugs`, `status`
-   (`flag`, `no_flag`, `not_assessed`), `evidence` (`CPIC guideline` or `research`), `on_record` (visible matching
+   (`flag`, `no_flag`, `not_assessed`), `evidence` (`CPIC guideline`, `CPIC retired`, or `research`), `on_record` (visible matching
    medication events by `same_drug`), and visible `phenotype_notes`; derived genes also carry `chip_reliability`.
    The area always has `ask_current_medications: true`; historical events do not establish current use.
    Report-only entries are `not_assessed` without chip calls. Sensitive pack entries move behind consent and
    use the pack's assessed finding text, including its no-flag/not-assessed limits, never the raw effect assertion.
+   Entries with `evidence: "CPIC retired"` or `guideline.status: "retired"` carry `CPIC retired` and their `limits` text.
 5. `carrier_and_screening`: `carrier`, then `cancer_risk`, using the same category/consent shape as sensitive.
 6. `traits`: trait findings by descending magnitude, with `invite: "Ask the user to confirm or refute each one."`.
 
@@ -470,3 +475,7 @@ observation rows, metrics, notes and medication events each add once to the top-
 how often a visible record is linked. No hidden item contributes a name, value, unit, or date. Consent never
 changes policy visibility; a hidden category can report its count only. The clinical discovery cap of 300 applies
 before agenda limiting; beyond-cap series are reflected in own_numbers `more`.
+The agenda batches report categories into a per-call lowercase marker map, preserving sensitive-first then
+newest-id precedence. The internal `_marker_category`, `_marker_visible`, `_derived_visible`, `_phenotype_visible`,
+and `_pgx_entry_visible` helpers accept optional `categories=` to reuse this complete map; omitted maps retain
+their existing queries. Fixed sensitive markers and pack-gene policy checks still apply.

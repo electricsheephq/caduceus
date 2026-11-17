@@ -847,7 +847,8 @@ def observation_series(vault, name_or_code, *, start=None, end=None, allow=None,
             points.append({"date": r["effective_at"], "category": r["category"], "_hidden": True})
             continue
         document = json.loads(r["raw_json"] or "{}")
-        points.append({"date": r["effective_at"], "date_precision": _date_value(r["effective_at"])[1],
+        points.append({**({"observation_id": r["id"]} if include_other_units else {}),
+               "date": r["effective_at"], "date_precision": _date_value(r["effective_at"])[1],
                "code": r["code"], "value": r["value_num"], "value_text": r["value_text"], "unit": r["unit"],
                "reference_range": {"low": r["ref_low"], "high": r["ref_high"]},
                "reference_ranges": _reference_ranges(document),

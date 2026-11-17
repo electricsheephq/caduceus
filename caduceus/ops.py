@@ -261,16 +261,19 @@ def _get_calls(conn, markers):
         raise ToolError("no DNA raw data is imported yet: import a 23andMe or AncestryDNA file first") from exc
 
 
-def _marker_category(vault, marker: str) -> str:
+def _marker_category(vault, marker: str, *, categories=None) -> str:
     """The most sensitive category any variant-report record gives this marker (APOE markers are fixed)."""
     if marker.lower() in _SENSITIVE_MARKERS:
         return _SENSITIVE_MARKERS[marker.lower()].value
-    sensitive = sorted(c.value for c in SENSITIVE)
-    row = vault.execute(
-        "SELECT category FROM annotation_snapshot WHERE marker=? COLLATE NOCASE AND kind IN ('snp','genoset') "
-        f"ORDER BY category IN ({','.join('?' * len(sensitive))}) DESC, id DESC LIMIT 1",
-        (marker, *sensitive),
-    ).fetchone()
+    if categories is not None:
+        row = {"category": categories[marker.lower()]} if marker.lower() in categories else None
+    else:
+        sensitive = sorted(c.value for c in SENSITIVE)
+        row = vault.execute(
+            "SELECT category FROM annotation_snapshot WHERE marker=? COLLATE NOCASE AND kind IN ('snp','genoset') "
+            f"ORDER BY category IN ({','.join('?' * len(sensitive))}) DESC, id DESC LIMIT 1",
+            (marker, *sensitive),
+        ).fetchone()
     if row:
         return row["category"]
     if marker.upper() in {name for name, _ in _need("knowledge.pack", "DERIVED_MARKERS")}:
@@ -291,18 +294,18 @@ def _marker_genes():
     return genes
 
 
-def _marker_visible(vault, policy, marker):
+def _marker_visible(vault, policy, marker, *, categories=None):
     genes = _marker_genes().get(marker.lower(), ())
     if marker.lower() in _phenotype_gene_names():
         genes = (marker.upper(),)
-    return (allowed(policy, _marker_category(vault, marker))
+    return (allowed(policy, _marker_category(vault, marker, categories=categories))
             and all(allowed(policy, categorize(genes=[gene], default=Category.PGX))
                     for gene in genes))
 
 
-def _derived_visible(vault, policy, row):
+def _derived_visible(vault, policy, row, *, categories=None):
     return (allowed(policy, row.get("category", Category.PGX))
-            and all(_marker_visible(vault, policy, marker) for marker in row.get("basis", {})))
+            and all(_marker_visible(vault, policy, marker, categories=categories) for marker in row.get("basis", {})))
 
 
 def _phenotype_markers(vault, marker):
@@ -327,13 +330,13 @@ def _phenotype_gene_names():
     return {gene.lower() for genes in _marker_genes().values() for gene in genes}
 
 
-def _phenotype_visible(vault, policy, row):
+def _phenotype_visible(vault, policy, row, *, categories=None):
     # The stored category is the marker's when it is sensitive, so a second sensitive category named in the
     # note's own words is checked here too; the marker itself must be visible as well.
     text_category = categorize(text=f"{row['trait'] or ''} {row['text'] or ''}")
     return (visible(policy, row["category"], kind="phenotype")
             and (text_category not in SENSITIVE or visible(policy, text_category, kind="phenotype"))
-            and all(_marker_visible(vault, policy, marker)
+            and all(_marker_visible(vault, policy, marker, categories=categories)
                     for marker in _phenotype_markers(vault, row["marker"])))
 
 
@@ -439,9 +442,10 @@ def _pack_calls(vault):
     return pack, _get_calls(vault, sorted(set(_pack_rsids(pack)) | set(_SENSITIVE_MARKERS)))
 
 
-def _pgx_entry_visible(vault, policy, entry):
+def _pgx_entry_visible(vault, policy, entry, *, categories=None):
     return (allowed(policy, entry.get("category", categorize(genes=[entry["gene"]], default=Category.PGX)))
-            and all(_marker_visible(vault, policy, marker["rsid"]) for marker in entry.get("markers", ())))
+            and all(_marker_visible(vault, policy, marker["rsid"], categories=categories)
+                    for marker in entry.get("markers", ())))
 
 
 def _pgx(pack, drug: str, calls, policy, *, vault) -> dict:
@@ -471,20 +475,23 @@ def _lane(fn, *args, **kwargs):
 _GENOME_OPS = ("lookup", "gene", "pgx", "derived", "summary", "filter", "report")
 
 
+def _callset_warning(vault):
+    active = next((c for c in _need("genome.calls", "callsets")(vault) if c["complete"]), None)
+    if active and any(c.get("same_person") is False for c in json.loads(active["comparison_json"])):
+        file = vault.execute("SELECT original_name FROM source_artifact WHERE id=?",
+                             (active["source_id"],)).fetchone()[0]
+        return {"warning": ("Your vault holds DNA files from more than one person. "
+                            f"These results come from the newest file, {file}.")}
+    return {}
+
+
 def genome_tool(ctx, args: dict) -> dict:
     op = args.get("op")
     if op not in _GENOME_OPS:
         raise ToolError("op must be one of " + ", ".join(_GENOME_OPS))
     policy = policy_for(ctx)
     with _Store() as store:
-        warning = {}
-        if op in ("lookup", "gene", "pgx", "derived", "summary"):
-            active = next((c for c in _need("genome.calls", "callsets")(store.vault) if c["complete"]), None)
-            if active and any(c.get("same_person") is False for c in json.loads(active["comparison_json"])):
-                file = store.vault.execute("SELECT original_name FROM source_artifact WHERE id=?",
-                                           (active["source_id"],)).fetchone()[0]
-                warning["warning"] = ("Your vault holds DNA files from more than one person. "
-                                      f"These results come from the newest file, {file}.")
+        warning = _callset_warning(store.vault) if op in ("lookup", "gene", "pgx", "derived", "summary") else {}
         if op == "lookup":
             return {**_lookup(store, policy, _strings(args, "rsids")), **warning}
         if op == "gene":

@@ -376,3 +376,77 @@ def test_fix_round1_sensitive_pack_keeps_own_pgx_gate(populated, fake_ctx):
                    for i in c.get("items", []))
     assert not areas(reply)["gene_drug"]["items"]
     assert reply["withheld"] > 0
+
+
+# PR #45 / U4b-fix-round2: append-only regressions against a237ddc.
+def test_fix_round2_different_person_warning_matches_genome(vault, fake_ctx, tmp_path):
+    for seed in (101, 202):
+        path = make_23andme(tmp_path / f"synthetic-person-{seed}.txt", n=1200, seed=seed,
+                            inject={"rs4149056": "TC"})
+        assert import_dtc(vault, sources.store_source(vault, path, "dtc")[0]).status == "succeeded"
+    active = ops._need("genome.calls", "callsets")(vault)[0]
+    assert any(c["same_person"] is False for c in json.loads(active["comparison_json"]))
+    expected = ops.genome_tool(fake_ctx, {"op": "summary"})["warning"]
+    reply = plan(fake_ctx)
+    assert reply["warning"] == expected
+    assert list(reply).index("warning") < list(reply).index("areas")
+    assert "synthetic-person-202.txt" in reply["warning"]
+
+
+def test_fix_round2_latest_tie_uses_observation_id(vault, fake_ctx, tmp_path):
+    report(vault, tmp_path, [finding("rs900081", "LDLR", 3)])
+    records = []
+    for day, value, unit in [("2025-01-01", 90, "mg/dL"), ("2026-06-01", 80, "mmol/L"),
+                              ("2026-06-01", 120, "mg/dL")]:
+        records.append({"resourceType": "Observation", "status": "final",
+                        "code": {"text": "Synthetic tied LDL", "coding": [{"system": "http://loinc.org", "code": "13457-7"}]},
+                        "effectiveDateTime": day, "valueQuantity": {"value": value, "unit": unit},
+                        "referenceRange": [{"high": {"value": 100, "unit": "mg/dL"}}]})
+    path = tmp_path / "synthetic-tied-labs.json"
+    path.write_text(json.dumps({"resourceType": "Bundle", "entry": [{"resource": r} for r in records]}))
+    assert import_fhir(vault, sources.store_source(vault, path, "fhir")[0]).status == "succeeded"
+    reply = areas(plan(fake_ctx))
+    for item in (reply["own_numbers"]["items"][0], reply["actionable"]["items"][0]["your_data"][0]):
+        assert item["date"] == "2026-06-01"
+        assert item["value"] == 120 and item["unit"] == "mg/dL"
+        assert item["range_flag"] == "above"
+
+
+def test_fix_round2_category_queries_are_batched(vault, fake_ctx, tmp_path, monkeypatch):
+    report(vault, tmp_path, [finding(f"rs{910000+i}", "FAKE", 1) for i in range(128)])
+    queries = []
+    open_vault = ops.open_vault
+    def traced_open():
+        conn = open_vault()
+        conn.set_trace_callback(queries.append)
+        return conn
+    monkeypatch.setattr(ops, "open_vault", traced_open)
+    reply = plan(fake_ctx)
+    assert areas(reply)["actionable"]["more"] == 120
+    scans = [q for q in queries if "annotation_snapshot" in q.lower() and q.lstrip().upper().startswith("SELECT")]
+    assert len(scans) <= 3, scans[:5]
+    assert not any("where marker=" in q.lower() for q in scans)
+
+
+@pytest.mark.parametrize("retirement_signal", ["evidence", "status", "both"])
+def test_fix_round2_retired_cpic_label_limit_and_marker_tier(vault, fake_ctx, tmp_path, monkeypatch, retirement_signal):
+    import copy
+    pack = copy.deepcopy(ops._pack())
+    entry = next(e for e in pack.cpic if e["gene"] == "IFNL3")
+    if retirement_signal == "evidence":
+        entry["guideline"]["status"] = "active"
+    if retirement_signal == "status":
+        entry["evidence"] = "CPIC A"
+    monkeypatch.setattr(ops, "_pack", lambda: pack)
+    path = make_23andme(tmp_path / "synthetic-ifnl3.txt", n=2, inject={"rs12979860": "TT"})
+    assert import_dtc(vault, sources.store_source(vault, path, "dtc")[0]).status == "succeeded"
+    # Alias keeps this finding in actionable while tying its evidence to the pack marker.
+    report(vault, tmp_path, [finding("rs900082", "IFNL3", 0.5)])
+    with write_txn(vault):
+        vault.execute("INSERT INTO marker_alias VALUES ('rs900082','rs12979860','synthetic')")
+    reply = areas(plan(fake_ctx, max_items=25))
+    item = next(i for i in reply["gene_drug"]["items"] if i["gene"] == "IFNL3")
+    assert item["status"] == "flag" and item["evidence"] == "CPIC retired"
+    assert item["limits"] == entry["limits"]
+    annotation = next(i for i in reply["actionable"]["items"] if i["marker"] == "rs900082")
+    assert annotation["evidence"] == "research"

@@ -12,6 +12,8 @@ Cover one area per turn and let the user set the pace. Before each area, ask whe
 ## Before the first area (one quiet turn)
 Call `caduceus_capture op=session_plan` once (default `max_items=8`, up to 25). It returns the six areas in session order, the latest visible clinical points and wearable flags, evidence tiers, chip caveats, linked measurements, remembered consent, recorded medication matches and phenotype notes. `more` counts visible items beyond the limit; `withheld` counts hidden records without describing them. The agenda writes no data rows or settings and does not rebuild health rollups; normal vault schema upgrades still apply. Treat the numbers side by side; the tool does not judge agreement.
 
+If the reply includes a different-person `warning`, show it before presenting genome-based areas. Keep retired CPIC labels and their limits when discussing gene–drug results.
+
 If that call errors, use the manual preparation below as a fallback:
 1. Take stock:
    - `caduceus_capture op=settings` for what is stored;
