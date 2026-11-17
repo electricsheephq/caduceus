@@ -2,6 +2,29 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.0 — 2026-11-17
+
+### Added
+- **Clinical series are discoverable (#21).** `caduceus_trend op=metrics` also returns `clinical_series`: one entry per series stored from records, with name, units, count, date range, sources, FHIR categories and a `query` that `op=labs` accepts. A hospital's own code is queried as `system|code`. Rows hidden by the privacy settings are dropped before grouping and only counted.
+- **Reference ranges as recorded (#24).** Each lab point returns every reference range on its record, with units, text, type, applies-to and age. When a range is in other units than the result, the point says so instead of showing unlike numbers side by side. HbA1c and glucose ranges are converted only when their units match. The brief shows recorded range text with its units.
+- **Consent is remembered (#28).** `caduceus_capture op=consent` records the user's answer per sensitive category, so the guided session asks once. It never changes what is shown: that still comes only from the privacy settings.
+- **Phenotype notes (#28).** `caduceus_capture op=phenotype` records a confirmation or correction against a marker, a derived call or a trait. Lookups and gene views show the notes, and `caduceus_search kinds=["phenotype"]` lists them. A note is never filed more loosely than its marker, and it is shown only when its marker is.
+- **A brief for a specialty (#28).** `op=brief specialty=<name> questions=[...]` writes a brief with that specialty's labs (with reference ranges as recorded) and genes, and ends with the user's own questions.
+- **Clinical reports and documents (#22).** FHIR DiagnosticReport, DocumentReference, Composition and ImagingStudy (metadata only) are stored and searchable by title, conclusion and narrative. `caduceus_search kinds=["report"]` lists them, and fetch shows the linked results and imaging studies. Text attachments sent inline are read locally. PDFs and images are only listed, and their bytes are not kept. Attachment links are never followed.
+- **Report privacy.** A report is filed under the strictest category of its codes, its text, its attachment titles, its linked results and any results it contains. It is withheld whole whenever a result or study it links or contains is hidden.
+- **Import receipts (#21).** FHIR imports report `report`, `ignored_by_type` (each resource type still not read, by name) and `observation_by_category`.
+- **A plan for the first guided session (#28).** `caduceus_capture op=session_plan` returns, in one read-only call, the agenda the `caduceus-session` skill used to assemble by hand: your own latest numbers with reference ranges, actionable findings by evidence and chip reliability, a count per sensitive area (findings only after consent and only when the privacy settings show them), gene–drug results with matching recorded medications, carrier and screening, and traits with their phenotype notes. Hidden items are counted, never described.
+- **Recover records earlier versions missed (#31).** `caduceus_capture op=replay` re-reads your stored clinical files locally, in their original order, in a private scratch copy, and adds only the conditions, uncoded results and reports that are missing: Conditions with only a recorded date, uncoded results an older version merged, and reports, documents and imaging studies from before 0.4.0. It never changes or deletes a stored record, and a record a later file retracted stays gone. It refuses, writing nothing, when a stored file is missing or unreadable, when an import's effects cannot be told apart, or when two imports overlapped. `op=settings` shows `clinical_replay.needed`, and the guide offers it after an update. The reply is counts and ids only.
+
+### Changed
+- **Text naming two sensitive topics is checked against both (#43).** Journal notes, phenotype notes, medications (including doses, and the note and reason text of imported records), report text and brief questions are shown only when none of the sensitive categories their words name is hidden. This covers search, browse and fetch, capture replies, lookups, the brief, the session plan, trend start dates and the research watch, which no longer sends such a medication's name out as a search term. Stored categories are unchanged. Text is scanned only for the categories you hide, so nothing is scanned when none is hidden.
+- **Honest counts (#21).** Settings, `/caduceus` status and the erase preview give observations, lab results, vital signs and other, with counts per standard FHIR category, instead of calling every Observation a lab result.
+- Records in the older FHIR DSTU2 shape (a single category object) are read.
+
+### Fixed
+- **One row, not two, after a category conflict (#32).** A Condition whose later copy gained an onset and named a different sensitive category no longer gains a second row when an onset-less copy arrives, and an identical re-send changes nothing.
+- **A retraction no longer withdraws a different text-only Condition (#33).** Providers reuse bare ids. For a stored Condition with neither a code system nor a code, a retraction must now also carry the same name.
+
 ## 0.3.3 — 2026-11-17
 
 ### Fixed
