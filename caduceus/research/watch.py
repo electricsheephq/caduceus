@@ -37,37 +37,44 @@ def _timestamp(now):
     return now.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _drug_key(name):
-    """The pack's name for a drug, else the first word of its name, so a hidden drug the pack does not know still
-    matches a stored term ("Synthdrugol 500 mg" and "synthdrugol" share a key)."""
-    drug = normalize_drug(name)
-    if drug:
-        return drug
-    words = re.findall(r"[a-z][a-z-]{2,}", str(name or "").lower())
-    return words[0] if words else None
+_KEY_SKIP = frozenset({"and", "the", "with", "for"})
+
+
+def _drug_keys(*names) -> set:
+    """Keys that identify a drug: the pack's name when it knows the name, else every word of three or more letters,
+    so a hidden drug the pack does not know still matches a stored term ("Extended-release synthdrugol 500 mg",
+    its brand, and "synthdrugol" share a key)."""
+    keys = set()
+    for name in names:
+        drug = normalize_drug(name) if name else None
+        if drug:
+            keys.add(drug)
+        elif name:
+            keys.update(w for w in re.findall(r"[a-z][a-z-]{2,}", str(name).lower()) if w not in _KEY_SKIP)
+    return keys
 
 
 def _medications(conn, allow=None):
     """Current medications the knowledge pack knows. *allow* (a category predicate) leaves out the ones the user's
-    privacy settings hide. Return visible current drugs and hidden-only names to exclude from stored watch terms."""
+    privacy settings hide. Return visible current drugs and hidden-only keys to exclude from stored watch terms."""
     rows = conn.execute("SELECT * FROM medication_event ORDER BY occurred_on DESC, id DESC")
     hidden_categories = frozenset(cat for cat in SENSITIVE if allow is not None and not allow(cat))
     latest, starts = {}, {}
     hidden_drugs = set()
     for row in rows:
-        key = _drug_key(row["drug"])
-        if not key:
-            continue
         hidden = ((allow is not None and not allow(row["category"])) or
                   bool(hidden_categories and sensitive_categories(medication_text(conn, row), among=hidden_categories)))
         if hidden:
-            hidden_drugs.add(key)
+            hidden_drugs |= _drug_keys(row["drug"], row["brand"])
+        drug = normalize_drug(row["drug"])
+        if not drug:
+            continue
         # The newest event decides, even when hidden: a hidden stop or restart keeps the drug out of the watch
         # instead of letting an older visible start make it current again.
-        if key not in latest:
-            latest[key] = None if hidden or not normalize_drug(row["drug"]) else row["event"]
-        if not hidden and row["event"] == "start" and key not in starts:
-            starts[key] = row["occurred_on"]
+        if drug not in latest:
+            latest[drug] = None if hidden else row["event"]
+        if not hidden and row["event"] == "start" and drug not in starts:
+            starts[drug] = row["occurred_on"]
     current = sorted(drug for drug, event in latest.items() if event not in (None, "stop"))
     return sorted(current, key=lambda drug: starts.get(drug, ""), reverse=True), hidden_drugs - set(current)
 
@@ -236,7 +243,7 @@ def run_watch(conn, watch, *, http, now, budget=30, calls=None, allow=None) -> d
     medications, hidden_drugs = _medications(conn, allow)
     terms["drugs"] = (medications if watch["name"] == "default" else
                       medications + sorted(drug for drug in set(terms.get("drugs", [])) - set(medications)
-                                           if _drug_key(drug) not in hidden_drugs))
+                                           if not _drug_keys(drug) & hidden_drugs))
     sources = _terms(watch["sources_json"])
     stamp = _timestamp(now)
     until = stamp[:10]

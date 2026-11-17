@@ -479,7 +479,7 @@ markers supplied by the pack or derived definitions that have no report row. APO
   sensitive topic in its drug/brand/note plus indexed body. The same filtered terms build `_why`'s medication
   pairs, so a hidden medication supplies neither requests nor personalized reason text. Stored custom-watch
   drug terms cannot reintroduce a hidden-only medication, including its normalized aliases; a drug the pack does
-  not know is matched by the first word of its name. A drug's newest event decides whether it is current even when
+  not know is matched by its brand and each word of its name. A drug's newest event decides whether it is current even when
   that event is hidden, so a hidden stop or restart keeps it out of the watch. With no sensitive category hidden,
   medication selection does no text scan.
 - **Matching** to the user's genotypes happens locally.

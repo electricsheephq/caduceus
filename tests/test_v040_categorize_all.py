@@ -393,3 +393,26 @@ def test_bot_hidden_later_start_is_counted_with_visible_pivot(fake_ctx, vault, s
     reply = ops.trend_tool(fake_ctx, {"op": "compare", "metric": "weight", "drug": "warfarin"})
     assert reply["pivot"] == DAY and reply["withheld"] == 1
     assert "2001-05-05" not in json.dumps(reply)
+
+
+@pytest.mark.parametrize("stored, term", [("Extended-release synthdrugol 500 mg", "synthdrugol"),
+                                          ("synthdrugol", "Brandol")])
+def test_bot_hidden_unknown_drug_matches_any_word_or_brand(fake_ctx, vault, stored, term):
+    from caduceus.research.watch import _drug_keys, _medications
+
+    with write_txn(vault):
+        vault.execute("INSERT INTO medication_event(drug, brand, event, occurred_on, source, note, category, created_at) "
+                      "VALUES (?, 'Brandol', 'start', ?, 'user', ?, 'medication', ?)", (stored, DAY, WORDS, DAY))
+    allow = lambda category: policy.visible(HIDDEN, category, kind="medication")
+    assert _drug_keys(term) & _medications(vault, allow)[1]
+    assert not _drug_keys("warfarin") & _medications(vault, allow)[1]
+
+
+def test_bot_combination_name_never_changes_current_when_nothing_hidden(fake_ctx, vault):
+    from caduceus.research.watch import _medications, normalize_drug
+
+    assert normalize_drug("simvastatin and clopidogrel") is None
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "simvastatin", "date": DAY, "confirm": True})
+    ops.capture_tool(fake_ctx, {"op": "medication", "drug": "simvastatin and clopidogrel",
+                                "date": "2001-04-04", "confirm": True})
+    assert _medications(vault)[0] == ["simvastatin"]
