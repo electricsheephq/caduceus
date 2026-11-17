@@ -106,7 +106,10 @@ def test_superscript_after_a_gene_in_an_attachment_title_withholds_report(vault,
 
 CORPUS = ["Bone marrow  depression", "ST\u00a0depression on ECG", "BRCA1\u00b9", "breast\tcancer", "Scan copy",
           "marrow\ndepression", "APC resistance", "\uff21\uff30\uff2f\uff25", "attention de\ufb01cit", "can\u00adcer screening",
-          "Respiratory\u2028Depression", "PALB2-related", "carrier\u200b status", "Normal\u3000result"]
+          "Respiratory\u2028Depression", "PALB2-related", "carrier\u200b status", "Normal\u3000result",
+          "BRCA1\u00b9 pathogenic variant", "TP53\u2122 panel", "MSH2\u2460 result", "Panel BRCA1\u200bBRCA2",
+          "non\u200bcarrier", "x\u200bPTSD", "IVF\u2122", "anxiety\u0301 score", "Lynch syndrome\u0301",
+          "bone marrow\tdepression", "bone marrow\x1fdepression", "Gene: BRCA2\u1d43"]
 
 
 @pytest.mark.parametrize("text", CORPUS)
@@ -118,6 +121,8 @@ def test_never_looser_than_matching_the_stored_text(text):
     for category in raw:
         assert not text_visible(Policy(hidden=frozenset({category})), text)
     assert raw <= set(SENSITIVE)
+    if raw:  # and the import-time category is one the stored text names, as in 0.4.1
+        assert categorize(text=text) in raw
 
 
 @pytest.mark.parametrize("text,expected", [
