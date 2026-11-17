@@ -119,7 +119,8 @@ def test_lone_xml_matches_zip_without_clinical_and_respects_size_limit(
     result = apple.import_apple_health(samples, vault, src)
     assert result.status == "succeeded", result.warnings
     assert XML_WARNING in result.warnings
-    clinical = {"observation", "condition", "medication", "ignored"}
+    clinical = {"observation", "condition", "medication", "ignored", "report", "ignored_by_type",
+                "observation_by_category"}
     assert result.counts == {key: value for key, value in expected.items() if key not in clinical}
     for table in ("observation", "condition", "medication_event"):
         assert vault.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0

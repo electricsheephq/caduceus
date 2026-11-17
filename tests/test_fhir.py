@@ -18,7 +18,8 @@ def test_bundle_series_index_and_idempotence(vault, tmp_path):
     src = _source(vault, tmp_path / "bundle.json", clinical_bundle())
     result = import_fhir(vault, src)
     assert result.status == "succeeded"
-    assert result.counts == {"observation": 2, "condition": 1, "medication": 1, "ignored": 0}
+    assert result.counts == {"observation": 2, "condition": 1, "medication": 1, "report": 0, "ignored": 0,
+                             "ignored_by_type": {}, "observation_by_category": {"unspecified": 2}}
     series = observation_series(vault, "HbA1c")
     assert [p["value"] for p in series["points"]] == [8.2, 6.5]
     assert series["unit"] == "%" and series["calc_version"] == "trend/1"

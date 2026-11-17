@@ -224,7 +224,12 @@ def import_apple_health(samples, vault, src, *, cancel=None) -> ImportResult:
                                 raise ValueError("FHIR JSON exceeds inflate limit")
                             clinical = fhir.ingest(vault, json.loads(raw), src.id, cancel=cancel, run_id=run.id)
                             for key, value in clinical.items():
-                                counts[key] = counts.get(key, 0) + value
+                                if isinstance(value, dict):
+                                    totals = counts.setdefault(key, {})
+                                    for subkey, count in value.items():
+                                        totals[subkey] = totals.get(subkey, 0) + count
+                                else:
+                                    counts[key] = counts.get(key, 0) + value
             else:
                 if stored.stat().st_size > MAX_MEMBER:
                     raise ValueError("XML exceeds size limit")
