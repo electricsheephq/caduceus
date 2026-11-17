@@ -387,6 +387,11 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   Observation or ImagingStudy withholds the entire report, and a sensitive linked row's category is the report's
   category at import when its own is not sensitive. Hidden reports return the usual withheld response without content. No hidden
   linked name or value is returned. The public search tool's kinds enum includes `report`.
+  Word checks (0.4.1): search, browse and fetch also run `text_visible` over every key and string in the stored
+  `_caduceus.attachments`, whatever its shape (titles, content types, malformed containers), and withhold the whole
+  report when it names a hidden topic. A linked ImagingStudy row is withheld and counted when its name, conclusion,
+  narrative, status, stored modalities, body sites or series/instance counts name a hidden topic. Checked fields are joined one per line, so one
+  field's last word never hides the next field's topic from a lookbehind exclusion.
 - **FHIR import receipts.** `report` counts newly stored report rows. `ignored` remains the total count of
   unsupported resources; `ignored_by_type` splits it by resourceType, retaining only 1-64 ASCII letters,
   otherwise `other`. `observation_by_category` counts newly stored observation rows once per distinct category
@@ -604,7 +609,10 @@ The six areas always exist, including in an empty vault, in this order:
 3. `sensitive`: one category item for present `alzheimers`, `mental_health`, and `reproductive` findings.
    Fields: `category`, `findings` (visible count), `consent` (remembered answer or null), `ask_first` (only an
    unanswered visible category). Only a recorded `yes` plus current visibility adds nested finding `items`
-   and `more`, also capped at `max_items`. Hidden findings contribute only `withheld`, never a finding description.
+   and `more`, also capped at `max_items`. Hidden findings contribute only the top-level `withheld`, never a finding
+   description. A category the privacy settings hide is listed as `{category, consent, ask_first: false, hidden: true}`
+   whenever the vault holds DNA results (a variant report or a complete DNA import), with no counts, so the item
+   is the same whether or not findings exist in it. Hidden items follow the visible ones in their area (0.4.1).
 4. `gene_drug`: pack entries after a complete DNA import (or entries matching a report-only pack marker), flags first, with `gene`, `drugs`, `status`
    (`flag`, `no_flag`, `not_assessed`), `evidence` (`CPIC guideline`, `CPIC retired`, or `research`), `on_record` (visible matching
    medication events by `same_drug`), and visible `phenotype_notes`; derived genes also carry `chip_reliability`.

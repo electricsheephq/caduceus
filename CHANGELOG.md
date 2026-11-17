@@ -2,6 +2,13 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.1 — 2026-11-17
+
+### Fixed
+- **A clinical report's attachment metadata gets the every-topic check (#43).** A report whose attachment title named two sensitive topics could be fetched, title included, when only the second topic was hidden. Search, browse and fetch now withhold the whole report, counted and never described, when any word stored with its attachments (titles, content types) names a hidden topic. Each title is checked on its own line, so one title's last word cannot hide the next title's topic.
+- **Linked imaging metadata gets the same check.** A report's linked imaging study is withheld and counted when its stored status, body sites, modalities or counts name a hidden topic.
+- **Hidden areas in the session plan carry no counts of their own.** A category the privacy settings hide is listed as hidden whenever the vault holds DNA results, after the visible areas, and looks the same whether or not it has findings. Its findings still add to the overall `withheld` total, as everywhere in Caduceus, so with a single hidden category that total can still show that it holds something.
+
 ## 0.4.0 — 2026-11-17
 
 ### Added

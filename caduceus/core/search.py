@@ -16,6 +16,23 @@ _TOKEN = re.compile(r"[\w][\w.'*-]*", re.UNICODE)
 KINDS = ("annotation", "assertion", "research", "observation", "condition", "medication", "report", "journal", "finding", "pgx", "phenotype")
 
 
+def _strings(value) -> str:
+    """Every key and string in stored JSON, whatever its shape (malformed metadata is checked, not skipped).
+
+    One per line: joined by spaces, one field's last word could hide the next field's topic from a lookbehind.
+    """
+    found, stack = [], [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            found.append(item)
+        elif isinstance(item, dict):
+            stack.extend(reversed([part for key, val in item.items() for part in (key, val)]))
+        elif isinstance(item, list):
+            stack.extend(reversed(item))
+    return "\n".join(found)
+
+
 def _visible(conn, policy, row, resolver):
     # Reports share the records base category, and cannot repeat any currently hidden linked result or study.
     kind = row["kind"]
@@ -31,6 +48,10 @@ def _visible(conn, policy, row, resolver):
     if report is None:
         return False
     metadata = json.loads(report["metadata"] or "{}")
+    # Fetch returns the stored attachment metadata whole, and none of it is in the search body: check all its words.
+    attachments = _strings(metadata.get("attachments"))
+    if attachments.strip() and not text_visible(policy, attachments):
+        return False
     linked = [*resolver.resolve(metadata.get("result"), broad=True),
               *resolver.resolve(metadata.get("imagingStudy"), broad=True, resource_type="ImagingStudy")]
     return (all(visible(policy, row["category"], kind="observation") for row in linked)
@@ -177,8 +198,11 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
         if not visible(policy, row["category"], kind="observation"):
             withheld += 1
             continue
-        if kind == "report" and not text_visible(
-                policy, " ".join(row[key] or "" for key in ("name", "conclusion", "narrative"))):
+        # Imaging rows also return their stored status, modalities, body sites and counts: check every word in those.
+        meta = document.get("_caduceus", {})
+        if kind == "report" and not text_visible(policy, "\n".join([
+                *(row[key] or "" for key in ("name", "conclusion", "narrative")), _strings(document.get("status")),
+                *(_strings(meta.get(key)) for key in ("modalities", "body_sites", "numberOfSeries", "numberOfInstances"))])):
             withheld += 1
             continue
         result = {"ref": f"{kind}:{row['id']}", "title": row["name"], "date": row["effective_at"],
@@ -186,7 +210,6 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
         if resource_type == "Observation":
             result.update({key: row[key] for key in ("name", "value_num", "value_text", "unit", "code", "code_system")})
         else:
-            meta = document.get("_caduceus", {})
             result.update({key: meta[key] for key in ("modalities", "body_sites", "numberOfSeries", "numberOfInstances")
                            if key in meta})
         results.append(result)

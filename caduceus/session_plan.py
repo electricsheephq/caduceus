@@ -127,7 +127,6 @@ def session_plan(ctx, args):
         consent = {r["key"].partition(":")[2]: json.loads(r["value_json"]).get("answer")
                    for r in vault.execute("SELECT key,value_json FROM settings WHERE key LIKE 'consent:%'")}
         groups = {cat: [] for cat in SENSITIVE}
-        hidden_groups = {cat: 0 for cat in SENSITIVE}
 
         def markers_visible(markers):
             return all(ops._marker_visible(vault, policy, m, categories=marker_categories) for marker in markers
@@ -153,8 +152,6 @@ def session_plan(ctx, args):
             if (not allowed(policy, item["category"]) or not allowed(policy, category) or not markers_visible(markers)
                     or (derived is not None and not ops._derived_visible(vault, policy, derived, categories=marker_categories))):
                 withheld += 1
-                if category in SENSITIVE:
-                    hidden_groups[category] += 1
                 return
             # Pack profiles own gene–drug findings; report rows do not repeat them elsewhere.
             if category not in SENSITIVE and (item["marker"].lower() in pack_markers
@@ -216,20 +213,26 @@ def session_plan(ctx, args):
         by_key["actionable"]["items"].sort(key=order)
         by_key["traits"]["items"].sort(key=lambda i: -(i["magnitude"] or 0))
         by_key["gene_drug"]["items"].sort(key=lambda i: {"flag": 0, "no_flag": 1, "not_assessed": 2}[i["status"]])
+        has_dna = bool(report_rows) or complete
         for category in ("alzheimers", "mental_health", "reproductive", "carrier", "cancer_risk"):
-            shown, hidden = groups[category], hidden_groups[category]
-            if not shown and not hidden:
-                continue
-            answer = consent.get(category)
-            item = {"category": category, "consent": answer, "ask_first": answer is None and allowed(policy, category)}
-            if shown:
-                item["findings"] = len(shown)
+            shown, answer = groups[category], consent.get(category)
+            if not allowed(policy, category):
+                # A hidden area is listed whenever the vault holds DNA results, never with a count: whether it has
+                # findings is itself what the user chose not to know. Its findings add only to the overall `withheld`.
+                if not has_dna:
+                    continue
+                item = {"category": category, "consent": answer, "ask_first": False, "hidden": True}
+            elif shown:
+                item = {"category": category, "consent": answer, "ask_first": answer is None, "findings": len(shown)}
                 if answer == "yes":
                     item.update(items=sorted(shown, key=order)[:limit], more=max(0, len(shown) - limit))
-            if hidden:
-                item["withheld"] = hidden
+            else:
+                continue
             key = "carrier_and_screening" if category in ("carrier", "cancer_risk") else "sensitive"
             by_key[key]["items"].append(item)
+        for key in ("sensitive", "carrier_and_screening"):
+            # Hidden areas come after visible ones, so they never push a visible area past max_items.
+            by_key[key]["items"].sort(key=lambda i: i.get("hidden", False))
         for area in areas:
             area["more"] = max(0, len(area["items"]) - limit)
             area["items"] = area["items"][:limit]
