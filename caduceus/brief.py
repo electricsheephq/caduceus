@@ -14,7 +14,7 @@ import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-from .core.policy import Category, allowed
+from .core.policy import Category, allowed, categorize, visible
 
 BRIEF_VERSION = "brief/1"
 TREND_METRICS = (
@@ -220,7 +220,7 @@ def _trend_section(samples, meds, policy, today) -> tuple[str, int]:
     return "<h2>Trends from Apple Health</h2>" + "".join(blocks), 0
 
 
-def _labs_section(vault, policy) -> tuple[str, int]:
+def _labs_section(vault, policy, lab_codes=None) -> tuple[str, int]:
     from .ops import lab_series
 
     if _module("health.fhir") is None:
@@ -229,12 +229,33 @@ def _labs_section(vault, policy) -> tuple[str, int]:
         return "", 1
     trends_mod = _module("health.trends")
     blocks, withheld = [], 0
-    for lab, label in LABS:
+    labs = LABS
+    if lab_codes is not None:
+        # Read only the requested codes, without the discovery list's 300-series cap. U3b's query and
+        # series helpers retain code-system boundaries, conversions, privacy and recorded ranges.
+        fhir = _module("health.fhir")
+        selected = {}
+        for row in vault.execute(
+                "SELECT code_system,code,name,category FROM observation "
+                f"WHERE code IN ({','.join('?' * len(lab_codes))}) ORDER BY effective_at,id", lab_codes):
+            query = fhir.observation_query(row["code_system"], row["code"], row["name"])
+            selected.setdefault(query, row["code"])
+            if visible(policy, row["category"], kind="observation"):
+                selected[query] = row["name"]
+        labs = sorted(selected.items(), key=lambda item: item[1])
+    for lab, label in labs:
         series, _err = _try(lab_series, vault, lab, policy)
         if not series:
             continue
         withheld += series.get("withheld", 0)
-        points = [p for p in series.get("points") or [] if p.get("value") is not None]
+        points = [p for p in series.get("points") or []
+                  if p.get("value") is not None or lab_codes is not None]
+        if lab_codes is not None:
+            for point in series.get("unplotted_points") or []:
+                if (point.get("value_text") and point.get("unit") in (None, "", series.get("unit"))
+                        and point not in points):
+                    points.append(point)
+            points.sort(key=lambda p: p["date"])
         if not points:
             continue
         unit = series.get("unit") if isinstance(series.get("unit"), str) else ""
@@ -242,7 +263,8 @@ def _labs_section(vault, policy) -> tuple[str, int]:
         if trends_mod is not None and unit and len(points) > 1:
             chart = f"<div class='chart'>{trends_mod.trend_svg(points, unit=unit, title=f'{label} over time')}</div>"
         rows = "".join(
-            f"<tr><td>{_e(str(p.get('date'))[:10])}</td><td>{_value(p.get('value'))} {_e(p.get('unit') or '')}</td>"
+            f"<tr><td>{_e(str(p.get('date'))[:10])}</td><td>"
+            f"{_value(p['value']) if p.get('value') is not None else _e(p.get('value_text'))} {_e(p.get('unit') or '')}</td>"
             f"<td>{_e(_point_range(p))}</td><td>{_e(p.get('interpretation') or '')}</td></tr>"
             for p in points[-12:])
         blocks.append(f"<div class='panel'><h3>{_e(label)}</h3>{chart}<table><tr><th>Date</th><th>Result</th>"
@@ -272,7 +294,7 @@ def _range(ref) -> str:
     return f"{_value(ref['low'])} to {_value(ref['high'])}"
 
 
-def _genes_section(vault, meds, policy) -> tuple[str, int]:
+def _genes_section(vault, meds, policy, genes=None) -> tuple[str, int]:
     from .ops import _pack_calls, _pgx, display_drug
 
     if _module("knowledge.pack") is None or _module("genome.calls") is None:
@@ -291,6 +313,10 @@ def _genes_section(vault, meds, policy) -> tuple[str, int]:
         result = _pgx(pack, drug, calls, policy, vault=vault)
         withheld += result.get("withheld", 0)
         entries = result.get("entries") or []
+        if genes is not None:
+            entries = [e for e in entries if e.get("gene") in genes]
+            if not entries:
+                continue
         if not entries:
             blocks.append(f"<div class='panel'><h3>{_e(display_drug(drug))}</h3><p class='note'>"
                           f"{_e(result.get('note') or 'No gene–drug evidence in the knowledge pack.')}</p></div>")
@@ -334,9 +360,18 @@ def _lane(fn):
     return lambda *a, **k: wrap(fn, *a, **k)
 
 
-def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
+def write_brief(vault, samples, out_dir, *, policy, today=None, specialty="general", questions=None) -> Path:
     from .ops import medication_visible
+    from .tools import ToolError
 
+    specialties = json.loads((Path(__file__).parent / "knowledge" / "data" / "specialties.json").read_text(encoding="utf-8"))
+    if not isinstance(specialty, str) or specialty not in specialties:
+        raise ToolError("unknown specialty; use one of: " + ", ".join(specialties))
+    selected = specialties[specialty]
+    questions = [] if questions is None else questions
+    if (not isinstance(questions, list) or len(questions) > 10
+            or any(not isinstance(q, str) or len(q) > 500 for q in questions)):
+        raise ToolError("questions must be a list of at most 10 strings, each at most 500 characters")
     today = today or date.today()
     recorded = _medications(vault)
     # Each medication passes the policy on its own category (a contraceptive is reproductive), once, here: every
@@ -345,7 +380,8 @@ def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
     hidden_meds = len(recorded) - len(meds)
     sections, withheld = [], 0
     for build in (lambda: _meds_section(meds, hidden_meds), lambda: _trend_section(samples, meds, policy, today),
-                  lambda: _labs_section(vault, policy), lambda: _genes_section(vault, meds, policy)):
+                  lambda: _labs_section(vault, policy, selected["labs"]),
+                  lambda: _genes_section(vault, meds, policy, selected["genes"])):
         body, hidden = build()
         withheld += hidden
         if body:
@@ -353,6 +389,11 @@ def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
     if not recorded and len(sections) <= 1:  # only the "no medications" placeholder, or nothing at all
         sections = ["<p>Nothing to show yet. Import an Apple Health export, your records or your DNA raw "
                     "data first, or ask your agent to record a medication.</p>"]
+    shown_questions = [q for q in questions if allowed(policy, categorize(text=q))]
+    withheld += len(questions) - len(shown_questions)
+    if shown_questions:
+        sections.append("<h2>Your questions</h2><ol>" + "".join(f"<li>{_e(q)}</li>" for q in shown_questions) + "</ol>")
+    prepared_for = f"<p>Prepared for: {_e(selected['title'])}</p>" if specialty != "general" else ""
     hidden_note = (f"<p class='panel warn'>{withheld} item{'s' if withheld != 1 else ''} hidden by your privacy "
                    "settings.</p>" if withheld else "")
     page = (
@@ -361,12 +402,13 @@ def write_brief(vault, samples, out_dir, *, policy, today=None) -> Path:
         f"<style>{_STYLE}</style></head><body><main><h1>Your health brief</h1>"
         f"<p class='lede'>Prepared on this machine on {_e(today.isoformat())} from your own records. Information "
         "with limits, not medical advice: talk to your prescriber before changing any medication.</p>"
-        f"{hidden_note}{''.join(sections)}"
+        f"{prepared_for}{hidden_note}{''.join(sections)}"
         f"<footer><p>Caduceus {BRIEF_VERSION}. This page was made on this machine and is stored only here.</p></footer>"
         "</main></body></html>")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"health-brief-{today.isoformat()}.html"
+    suffix = f"-{specialty}" if specialty != "general" else ""
+    path = out_dir / f"health-brief-{today.isoformat()}{suffix}.html"
     fd, part = tempfile.mkstemp(dir=out_dir, prefix=path.name + ".", suffix=".part")  # never shared by two writers
     os.close(fd)
     try:
