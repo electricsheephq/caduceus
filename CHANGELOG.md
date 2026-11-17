@@ -2,6 +2,13 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.2 — 2026-11-17
+
+### Fixed
+- **Topic checks see one plain space between words, whatever the text used.** The phrases that mark a sensitive topic ("breast cancer", "Lynch syndrome") expect one space between their words. A title or record written with a non-breaking space, a tab, a line break or repeated spaces could name a hidden topic and still be shown. Every check now reads text the same way: full-width letters and other compatibility forms folded, invisible characters inside words (soft hyphens, zero-width spaces) removed, and each run of whitespace made one space. This covers every read path that checks words, and the category given to new records at import.
+- **Fields are checked one at a time.** Report attachment metadata and linked imaging words are passed to the check as separate fields, so one field's last word never hides the next field's topic.
+- **A report's own status is checked.** Fetch returns a report's status, so a status that names a hidden topic (only possible in FHIR that breaks the format) now withholds the report.
+
 ## 0.4.1 — 2026-11-17
 
 ### Fixed

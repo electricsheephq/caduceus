@@ -387,11 +387,13 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   Observation or ImagingStudy withholds the entire report, and a sensitive linked row's category is the report's
   category at import when its own is not sensitive. Hidden reports return the usual withheld response without content. No hidden
   linked name or value is returned. The public search tool's kinds enum includes `report`.
-  Word checks (0.4.1): search, browse and fetch also run `text_visible` over every key and string in the stored
-  `_caduceus.attachments`, whatever its shape (titles, content types, malformed containers), and withhold the whole
-  report when it names a hidden topic. A linked ImagingStudy row is withheld and counted when its name, conclusion,
-  narrative, status, stored modalities, body sites or series/instance counts name a hidden topic. Checked fields are joined one per line, so one
-  field's last word never hides the next field's topic from a lookbehind exclusion.
+  Word checks (0.4.1, 0.4.2): search, browse and fetch also run `text_visible` over the report's status and every key
+  and string in the stored `_caduceus.attachments`, whatever its shape (titles, content types, malformed containers),
+  and withhold the whole report when one names a hidden topic. A linked ImagingStudy row is withheld and counted when its name, conclusion,
+  narrative, status, stored modalities, body sites or series/instance counts name a hidden topic. Each field is passed to
+  `text_visible` separately, so one field's last word never hides the next field's topic from a lookbehind exclusion.
+  `text_visible(policy, *texts)` and `categorize(text=...)` read text through `plain_text`: NFKC, invisible in-word
+  characters (soft hyphen, zero-width space and joiners, word joiner, BOM) removed, every whitespace run one space.
 - **FHIR import receipts.** `report` counts newly stored report rows. `ignored` remains the total count of
   unsupported resources; `ignored_by_type` splits it by resourceType, retaining only 1-64 ASCII letters,
   otherwise `other`. `observation_by_category` counts newly stored observation rows once per distinct category

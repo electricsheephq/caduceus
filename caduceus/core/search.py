@@ -16,10 +16,10 @@ _TOKEN = re.compile(r"[\w][\w.'*-]*", re.UNICODE)
 KINDS = ("annotation", "assertion", "research", "observation", "condition", "medication", "report", "journal", "finding", "pgx", "phenotype")
 
 
-def _strings(value) -> str:
+def _strings(value) -> list[str]:
     """Every key and string in stored JSON, whatever its shape (malformed metadata is checked, not skipped).
 
-    One per line: joined by spaces, one field's last word could hide the next field's topic from a lookbehind.
+    Returned separately, so ``text_visible`` checks each on its own: one field's last word never hides the next's topic.
     """
     found, stack = [], [value]
     while stack:
@@ -30,7 +30,7 @@ def _strings(value) -> str:
             stack.extend(reversed([part for key, val in item.items() for part in (key, val)]))
         elif isinstance(item, list):
             stack.extend(reversed(item))
-    return "\n".join(found)
+    return found
 
 
 def _visible(conn, policy, row, resolver):
@@ -43,14 +43,14 @@ def _visible(conn, policy, row, resolver):
         return False
     if kind != "report":
         return True
-    report = conn.execute("SELECT json_extract(raw_json,'$._caduceus') AS metadata FROM clinical_report WHERE id=?",
+    report = conn.execute("SELECT status, json_extract(raw_json,'$._caduceus') AS metadata FROM clinical_report WHERE id=?",
                           (row["ref"],)).fetchone()
     if report is None:
         return False
     metadata = json.loads(report["metadata"] or "{}")
-    # Fetch returns the stored attachment metadata whole, and none of it is in the search body: check all its words.
-    attachments = _strings(metadata.get("attachments"))
-    if attachments.strip() and not text_visible(policy, attachments):
+    # Fetch returns the report's status and its stored attachment metadata whole, and none of those is in the search
+    # body: check all their words.
+    if not text_visible(policy, *_strings(report["status"]), *_strings(metadata.get("attachments"))):
         return False
     linked = [*resolver.resolve(metadata.get("result"), broad=True),
               *resolver.resolve(metadata.get("imagingStudy"), broad=True, resource_type="ImagingStudy")]
@@ -200,9 +200,10 @@ def _linked_rows(conn, references, *, source_ids, full_url, resource_type, polic
             continue
         # Imaging rows also return their stored status, modalities, body sites and counts: check every word in those.
         meta = document.get("_caduceus", {})
-        if kind == "report" and not text_visible(policy, "\n".join([
-                *(row[key] or "" for key in ("name", "conclusion", "narrative")), _strings(document.get("status")),
-                *(_strings(meta.get(key)) for key in ("modalities", "body_sites", "numberOfSeries", "numberOfInstances"))])):
+        if kind == "report" and not text_visible(
+                policy, *(row[key] or "" for key in ("name", "conclusion", "narrative")), *_strings(document.get("status")),
+                *(text for key in ("modalities", "body_sites", "numberOfSeries", "numberOfInstances")
+                  for text in _strings(meta.get(key)))):
             withheld += 1
             continue
         result = {"ref": f"{kind}:{row['id']}", "title": row["name"], "date": row["effective_at"],

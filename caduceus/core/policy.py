@@ -7,6 +7,7 @@ every level. ``private`` and ``local`` arrive with encryption and local-model ro
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Callable, Iterable
@@ -160,21 +161,36 @@ def visible(policy: Policy, category: object, *, kind: str | None = None) -> boo
     return allowed(policy, category) and (base is None or allowed(policy, base))
 
 
+# Invisible characters that sit inside a word: soft hyphen, zero-width space and joiners, word joiner, BOM.
+_INVISIBLE = dict.fromkeys(map(ord, "\u00ad\u200b\u200c\u200d\u2060\ufeff"))
+
+
+def plain_text(text: object) -> str:
+    """Text as the topic patterns expect it: compatibility forms folded (NFKC: full-width letters, ligatures),
+    invisible in-word characters dropped, and every run of whitespace (non-breaking spaces, tabs, line breaks,
+    repeated spaces) made one plain space. The patterns put exactly one space between the words of a phrase."""
+    return " ".join(unicodedata.normalize("NFKC", str(text)).translate(_INVISIBLE).split())
+
+
 def sensitive_categories(text: str, *, among: Iterable[Category] = SENSITIVE) -> frozenset[Category]:
     """Named sensitive categories, evaluating only patterns for the requested categories."""
     selected = SENSITIVE.intersection(among)
     if not selected or not text:
         return frozenset()
+    text = plain_text(text)
     return frozenset(cat for pattern, cat in (*_GENE_TEXT_CATEGORY, *_TEXT_CATEGORY)
                      if cat in selected and pattern.search(text))
 
 
-def text_visible(policy: Policy, text: str) -> bool:
-    """Check only hidden sensitive topics; when none are hidden, do not scan the text."""
+def text_visible(policy: Policy, *texts: str) -> bool:
+    """Check only hidden sensitive topics; when none are hidden, do not scan the text.
+
+    Each argument is checked on its own, so one field's last word never reaches into the next field.
+    """
     hidden = SENSITIVE & policy.hidden
     if policy.level != "open":
         hidden |= SENSITIVE - policy.unlocked
-    return not hidden or not sensitive_categories(text, among=hidden)
+    return not hidden or not any(sensitive_categories(text, among=hidden) for text in texts)
 
 
 def categorize(*, genes: Iterable[str] = (), text: str = "", markers: Iterable[str] = (),
@@ -189,6 +205,7 @@ def categorize(*, genes: Iterable[str] = (), text: str = "", markers: Iterable[s
         if cat is not None:
             return cat
     if text:
+        text = plain_text(text)
         match = _GENE_WORD.search(text)
         if match:
             return _GENE_CATEGORY[match.group(1)]
