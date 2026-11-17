@@ -450,8 +450,9 @@ def _withdraw_row(vault, table, row, identity):
 def _retract(vault, resource, kind, counts, full_url=None):
     """A resource re-sent as entered-in-error, cancelled or refuted withdraws what an earlier import stored for it.
 
-    It is matched by identity (fullUrl, else id), then by its time and any of its codes when it gives them. A stored
-    value that another resource still asserts is kept, without the withdrawn identity."""
+    It is matched by identity (fullUrl, else id), then by its time and any of its codes when it gives them.
+    Uncoded Conditions also match by normalized name. A stored value that another resource still asserts is
+    kept, without the withdrawn identity."""
     identity = _identity(resource, full_url)
     if identity is None:
         return
@@ -470,14 +471,24 @@ def _retract(vault, resource, kind, counts, full_url=None):
         codes = {str(c["code"]).strip().upper() for c in (resource.get("code") or {}).get("coding", [])
                  if isinstance(c, dict) and c.get("code")}
     when = _instant(when)
+    retracted_name = None
+    if kind == "Condition":
+        try:
+            retracted_name = _normalized_name(_concept(resource.get("code"))[2])
+        except (AttributeError, TypeError, IndexError):
+            pass  # a malformed concept matches no uncoded row: a missed match is preferred to a wrong withdrawal
     rows = vault.execute(
-        f"SELECT id, code, {column} AS at, raw_json FROM {table} WHERE source='fhir' AND EXISTS "
+        f"SELECT id, code_system, code, name, {column} AS at, raw_json FROM {table} WHERE source='fhir' AND EXISTS "
         "(SELECT 1 FROM json_each(raw_json,'$._caduceus.resource_ids') WHERE value=?)", (identity,)).fetchall()
     removed = 0
     for row in rows:
         if when is not None and not (kind == "Condition" and row["at"] is None) and _instant(row["at"]) != when:
             continue
         if codes and row["code"] is not None and str(row["code"]).strip().upper() not in codes:
+            continue
+        # Uncoded exactly as _condition's identity filter means it: neither a code system nor a code.
+        if (kind == "Condition" and row["code_system"] is None and row["code"] is None
+                and _normalized_name(row["name"]) != retracted_name):
             continue
         removed += _withdraw_row(vault, table, row, identity)
     if removed:
@@ -507,7 +518,7 @@ def _retract_medications(vault, identity, counts, *, drug=None, start=None):
         counts["medication_retracted"] = counts.get("medication_retracted", 0) + removed
 
 
-def _condition(vault, resource, source_id, when, precision, counts, full_url=None):
+def _condition(vault, resource, source_id, when, precision, counts, full_url=None, *, row_id=None):
     concept = resource.get("code") or {}
     system, code, name = _concept(concept)
     category = _category([concept], Category.RECORDS)
@@ -533,7 +544,7 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
                 document = {k: v for k, v in old.items() if k not in ("clinicalStatus", "verificationStatus")}
                 document.update({k: resource[k] for k in ("id", "clinicalStatus", "verificationStatus") if k in resource})
                 _condition(vault, document, source_id, row["onset"], old.get("_caduceus", {}).get("date_precision"),
-                           counts, full_url)
+                           counts, full_url, row_id=row["id"])
             return
         if when is not None:
             unknown = [row for row in same if row["onset"] is None]
@@ -557,7 +568,9 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
         title += f" [not current: {clinical}]"
     if when is None:
         title += f" [onset unknown; recorded {recorded}]"
-    previous = vault.execute("SELECT id,clinical_status,raw_json,category,recorded FROM condition WHERE dedupe_key=?", (key,)).fetchone()
+    column, value = ("dedupe_key", key) if row_id is None else ("id", row_id)
+    previous = vault.execute(
+        f"SELECT id,clinical_status,raw_json,category,recorded FROM condition WHERE {column}=?", (value,)).fetchone()
     if previous is None:
         raw = _raw(resource, precision, verification_status=verification, current=current,
                    resource_ids=[identity] if identity else [], recorded_precision=recorded_precision, **scope)
@@ -569,18 +582,18 @@ def _condition(vault, resource, source_id, when, precision, counts, full_url=Non
         return
     old = json.loads(previous["raw_json"])
     ids = _resource_ids(old) | ({identity} if identity else set())
+    category, conflict = _stricter(category, previous["category"])
+    document = resource
+    if conflict:  # the stored text stays under its own category; only the status moves
+        document = {key: value for key, value in old.items() if key not in ("clinicalStatus", "verificationStatus")}
+        document.update({key: resource[key] for key in ("clinicalStatus", "verificationStatus") if key in resource})
+        title = _concept(old.get("code"))[2] + title[len(name):]
+        recorded = previous["recorded"]
+        recorded_precision = old.get("_caduceus", {}).get("recorded_precision")
+        if when is None:
+            title = title.rsplit(" [onset unknown; recorded ", 1)[0] + f" [onset unknown; recorded {recorded}]"
     if (previous["clinical_status"] != clinical or _status(old.get("verificationStatus")) != verification
             or previous["recorded"] != recorded or inherited_category):
-        category, conflict = _stricter(category, previous["category"])
-        document = resource
-        if conflict:  # the stored text stays under its own category; only the status moves
-            document = {key: value for key, value in old.items() if key not in ("clinicalStatus", "verificationStatus")}
-            document.update({key: resource[key] for key in ("clinicalStatus", "verificationStatus") if key in resource})
-            title = _concept(old.get("code"))[2] + title[len(name):]
-            recorded = previous["recorded"]
-            recorded_precision = old.get("_caduceus", {}).get("recorded_precision")
-            if when is None:
-                title = title.rsplit(" [onset unknown; recorded ", 1)[0] + f" [onset unknown; recorded {recorded}]"
         raw = _raw(document, precision, verification_status=verification, current=current, resource_ids=sorted(ids),
                    recorded_precision=recorded_precision, **scope)
         vault.execute("UPDATE condition SET clinical_status=?,raw_json=?,source_id=?,category=?,recorded=? WHERE id=?",

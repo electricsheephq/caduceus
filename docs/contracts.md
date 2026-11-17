@@ -272,12 +272,15 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   matching known-onset row adds nothing, but applies its incoming clinical and verification statuses through
   the existing update path, preserving the stored onset, recorded date and their precisions. The search document
   receives the updated status too; the incoming identity is retained without restoring withdrawn assertions.
+  This update targets the known row by id, preserving its existing dedupe key even when a category conflict
+  retained a different name. Conflicts are resolved before change detection, so an identical dated re-send
+  counts no update and writes nothing when the retained values and statuses are unchanged.
   Conditions with neither valid date are skipped; no
   missing year/month/day or onset is invented.
 - **Identity.** A resource is named by its Bundle entry's `fullUrl` when there is one, absolute URL or `urn:uuid` alike (ids repeat across providers and bundles), otherwise by its id. Every stored row lists the identities that assert it (`_caduceus.resource_ids`; for medications, `resource_ids` in the note).
 - **Statuses.**
   - Observations with status `entered-in-error` or `cancelled`, Conditions verified `entered-in-error` or `refuted`, and medications `entered-in-error` or `cancelled`, are skipped.
-  - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. A row that another resource still asserts is kept, without the withdrawn identity.
+  - If an earlier import stored the same resource, it is withdrawn. Rows are matched by identity, then by time (timestamps compared as UTC instants) and by any of the resource's codes, when the retraction gives them. Conditions with neither a code system nor a code also require the same lowercased, whitespace-collapsed, stripped name (a nameless concept is `Unknown`), as storing does; a malformed retraction concept matches no such row. A row that another resource still asserts is kept, without the withdrawn identity.
   - A `corrected` or `amended` Observation supersedes stored rows with the same identity, code and time, including identical copies other resources sent. Only the correcting resource asserts the new value. Each copy's resource is listed in `_caduceus.superseded` with the content key of the copy it sent, so a re-send of that same copy is ignored as stale, a different value from it is stored as its own, and a later retraction of the correction removes it. For uncoded observations, stale matching accepts both the current key and the pre-0.3.1 key without the normalized name, preserving superseded references across migration; coded matching is unchanged.
 - **Panels.** Each component row stores only its own component, without the panel's own value, interpretation, reference range or notes, so neither a sibling's nor the panel's content sits under another row's category. No row of a panel keeps the narrative (`text`), which describes every part.
 - **Medications.**
@@ -297,7 +300,7 @@ def sync_hae(call, samples, vault, *, server, backfill_days, today, cancel=None,
   sync: an integer from 1 through 3,650, excluding booleans; other values fall back to 90. The schedule text thus
   describes the backfill the next sync would actually use. Erase targets and settings are unchanged.
 - **Known limits (follow-ups):**
-  - Without a `fullUrl`, two providers' resources with the same id can still be confused when a retraction gives no time (medication retractions also check the drug and start).
+  - Without a `fullUrl`, two providers' resources with the same id can still be confused when the available narrowing fields do not distinguish them. Uncoded Conditions always check the normalized name; coded Conditions check codes when supplied. Medication retractions check drug/start when supplied; Observation retractions remain identity/time-based.
   - A resource imported with a `fullUrl` and retracted without one (or the reverse) is not matched: identities are compared as given.
   - An exporter that writes a new `urn:uuid` for the same resource in every export makes corrections and retractions miss across exports. A missed match is preferred to deleting another resource's row.
   - The drug lists fail closed. Drugs with ordinary uses (diazepam for vertigo, clonazepam for seizures, methadone for pain, sildenafil for pulmonary hypertension) are filed under the sensitive category, so they show only once that category is unlocked.
