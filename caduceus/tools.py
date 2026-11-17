@@ -28,14 +28,14 @@ TOOLS = (
         "name": "caduceus_search",
         "description": (
             "Search the user's private Caduceus health vault on this machine: DNA annotations, research items, lab "
-            "results, conditions, medications and journal notes. Returns cited snippets; fetch one record in full "
+            "results, conditions, medications, journal and phenotype notes. Returns cited snippets; fetch one record in full "
             'with ref. List recorded kinds with kinds=["medication"] and no query. ' + NEVER_READ
         ),
         "parameters": _obj({
             "query": {"type": "string", "description": "Words to find, e.g. 'simvastatin' or 'GLP1R weight'; omit to list kinds."},
             "kinds": {"type": "array", "items": {"type": "string", "enum": [
                 "annotation", "assertion", "research", "observation", "condition", "medication", "journal",
-                "finding", "pgx", "report"]}, "description": "Only these record kinds; omit query to list them newest first."},
+                "finding", "pgx", "report", "phenotype"]}, "description": "Only these record kinds; omit query to list them newest first."},
             "ref": {"type": "string", "description": "Fetch one record in full by the ref a search returned."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 25},
         }),
@@ -100,12 +100,17 @@ TOOLS = (
             "op=sync reads new data from the Health Auto Export app's MCP server once the operator has allowed it "
             "in Hermes config, and returns counts only. op=status shows import progress. op=medication records a medication start, dose change or stop: show "
             "the user the details and set confirm=true only after they agree. op=journal stores a note. "
+            "op=consent records only an answer the user gave in this conversation; never infer one. "
+            "It never changes visibility; omit answer to read remembered answers. op=phenotype records the user's "
+            "confirmation or correction about a marker or trait, in their own words. "
             "op=watch_run runs the research watch now. op=settings shows the privacy settings. op=brief writes a "
-            "local HTML health brief with charts. op=sources lists imported files. " + NEVER_READ
+            "local HTML health brief with charts, an optional specialty and the user's questions. "
+            "op=sources lists imported files. " + NEVER_READ
         ),
         "parameters": _obj({
             "op": {"type": "string", "enum": [
-                "import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources"]},
+                "import", "sync", "status", "medication", "journal", "watch_run", "settings", "brief", "sources",
+                "consent", "phenotype"]},
             "path": {"type": "string", "description": "Absolute path of the file to import."},
             "run_id": {"type": "integer"},
             "drug": STR,
@@ -116,6 +121,13 @@ TOOLS = (
             "text": STR,
             "topics": STRS,
             "confirm": {"type": "boolean"},
+            "category": {"type": "string", "enum": ["alzheimers", "cancer_risk", "carrier", "mental_health", "reproductive"]},
+            "answer": {"type": "string", "enum": ["yes", "no", "ask_later", "clear"]},
+            "marker": {"type": "string", "description": "rs/i/gs id, known pack gene or derived-call name."},
+            "trait": {"type": "string", "maxLength": 200},
+            "stance": {"type": "string", "enum": ["confirms", "refutes", "unsure"]},
+            "specialty": {"type": "string", "description": "Brief specialty; default general. Unknown values list valid specialties."},
+            "questions": {"type": "array", "maxItems": 10, "items": {"type": "string", "maxLength": 500}},
         }, required=["op"]),
     },
 )
