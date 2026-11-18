@@ -59,8 +59,8 @@ Pull requests to `main` must pass the six `Unit (<os>, Python <version>)` jobs a
 After the release is published and its receipt sent:
 
 1. Close every issue the release fully served, with a comment naming the version (never an umbrella/parent issue whose own acceptance is not met).
-2. Tick the boxes it completed on ROADMAP.md / VISION.md, roadmap or tracking issues, and closed issues whose checklists shipped; close a milestone once all its issues are closed.
-3. Update every README / ROADMAP line that names the latest release or what ships next.
+2. Tick the boxes it completed on roadmap or tracking issues and on closed issues whose checklists shipped (and on ROADMAP.md / VISION.md, if the repository adds them); close a milestone once all its issues are closed.
+3. Update every README line (and ROADMAP line, if one exists) that names the latest release or what ships next.
 4. Send the Plugin Manager one closeout line: issues closed, boxes ticked, docs updated (or "none").
 
 ## Security
