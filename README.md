@@ -259,7 +259,7 @@ python -m pytest
 
 Tests use synthetic data generated at test time and never touch the network. Module contracts are in
 [docs/contracts.md](docs/contracts.md), agent guidance in [AGENTS.md](AGENTS.md), and how to contribute in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md). Where Caduceus is going: [VISION.md](VISION.md) and [ROADMAP.md](ROADMAP.md).
 
 ## Troubleshooting
 
