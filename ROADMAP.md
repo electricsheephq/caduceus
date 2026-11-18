@@ -2,6 +2,8 @@
 
 Updated 2026-11-18, after 0.4.2.
 
+**Status: maintenance.** Privacy and security fixes (Now) continue. The Next items are paused and have no release date.
+
 The work is grouped into Now, Next and Later. Only Now and Next count toward progress. Later items have no release date, and a version number is set only when a release is cut. The [CHANGELOG](CHANGELOG.md) lists what shipped. The [VISION](VISION.md) gives the goal and the non-goals.
 
 ## Now: privacy follow-ups (0.4.x)
@@ -13,7 +15,7 @@ The work is grouped into Now, Next and Later. Only Now and Next count toward pro
   - read hyphenated topic words.
 - [ ] **No duplicate condition (#39):** a dated copy with the original text, kept after a category conflict, should not add a second row.
 
-## Next: reports from PDFs and photos (0.5.0)
+## Next (paused): reports from PDFs and photos
 
 - [ ] **PDF and photo reports (#19):** read medical reports from PDFs, including image-only pages, on the user's machine. It uses macOS PDFKit and Vision OCR, with Python extras as a fallback. The user reviews what was read before anything is saved.
 - [ ] **Procedures and allergies (#29):** read FHIR Procedure and AllergyIntolerance, and add a way to record them in chat.
