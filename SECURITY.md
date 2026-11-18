@@ -42,7 +42,7 @@ The same disclosure appears in the README and the manifest.
   - `reports/`: rebuilt variant reports and health briefs;
   - `demo-files/`: the synthetic demo persona's files, if you ran `/caduceus demo`.
 - `/caduceus erase` lists what would be deleted. `/caduceus erase confirm` deletes those files and folders, and nothing else in the directory. It refuses while an import, the demo, a research watch, a summary rebuild or another Caduceus request is running in the same Hermes process. Requests that arrive during an erase wait until it finishes. Only the user can run it: no tool can erase. Plugin settings stay.
-- Nothing is encrypted at rest in v0.1. Encrypted levels arrive in v0.4. Protect the profile directory as you would the original files.
+- Nothing is encrypted at rest. Encrypted levels are not built yet, and no release is scheduled for them. Protect the profile directory as you would the original files.
 
 **Reading files**
 - The plugin reads a file only when `caduceus_capture op=import` names its absolute path.

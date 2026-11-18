@@ -1,4 +1,4 @@
-# Module contracts (frozen for v0.1)
+# Module contracts
 
 Each module has one owner. Signatures here change only through review. `conn` is a `sqlite3.Connection` from
 `core.db.open_vault()`. `samples` is one from `core.db.open_samples()`. Every function that writes does so inside
@@ -562,11 +562,11 @@ markers supplied by the pack or derived definitions that have no report row. APO
 
 ## Orchestrator glue (`caduceus/tools.py`, `caduceus/registration.py`, `caduceus/brief.py`)
 
-**Session memory and specialty briefs (0.4.0 U4a):**
+**Session memory and specialty briefs (0.4.0, #28):**
 - `caduceus_capture op=consent category=<sensitive category> answer=yes|no|ask_later|clear` records only an answer the user gave in the conversation, never an inferred answer. The five `SENSITIVE` categories are accepted. `settings['consent:<category>']` holds JSON `{answer, at}`; clear deletes it. Without answer, return every recorded answer under `consent`. Every response explains that **consent never changes visibility**; only the user's privacy settings do.
 - `op=phenotype marker=<rs/i/gs id, known pack gene or derived-call name> trait=<up to 200 characters> stance=confirms|refutes|unsure text=<the user's words, up to 2,000 characters>` needs marker or trait. `phenotype_note(id, subject_id DEFAULT 1, marker, trait, stance, text, category, created_at)` is added on open, including existing vaults. Markers are lowercased. Check the marker and its lookup-resolved alias at write time: a sensitive category from either takes precedence and is never replaced by the trait/text category. Otherwise sensitive trait/text wins, then PGX for markers with pack or derived genes, then the marker category (TRAIT for a trait-only note). The row and search document (`kind=phenotype`) share that category; the search document's title is `<Stance>: <trait or marker>` (for example `Refutes: lactose intolerance`), so search and fetch keep the stance. Hidden capture replies return only `saved` and a fixed note, without stored details. An identical normalized marker, trait, stance and exact text on the same UTC day reuses the existing row and search document and replies that it was already saved; a later day or changed content records a new note.
 - Lookup and gene results attach visible `phenotype_notes: [{id, stance, trait, text, date}]` to matching markers, newest first (id breaks timestamp ties); hidden notes add to `withheld`. Search query/browse/fetch and lookup/gene check the stored category, every sensitive category named in the note's own trait and text (a marker's sensitive category is stored, so the words are re-checked on every read), AND current `_marker_visible` for the note marker and its resolved alias. A lookup of a marker also attaches notes recorded against any alias of it. Without a complete callset, known alias targets are still checked; ambiguous aliases require every candidate to be visible. Hidden notes contribute only to `withheld`, never text, marker or date, even when the marker category changed after capture. Trait-only notes use their stored category and every sensitive category in their words. Gene-name or derived-name notes attach to the gene reply under top-level `phenotype_notes`, using the same checks. Browse stays newest first.
-- `brief.write_brief(vault, samples, out_dir, *, policy, today=None, specialty="general", questions=None) -> Path`: specialty definitions and display titles live in `knowledge/data/specialties.json`. General and primary care retain the default sections; other specialties use the stored clinical codes and U3b series readers/ranges and filter gene–drug entries by specialty genes. Specialty lab tables also include visible text-valued `unplotted_points`, once each; points with a different known unit remain excluded. Medications, supplements and Apple Health trends retain their policy. Non-general briefs show `Prepared for: <title>` and use `health-brief-<date>-<specialty>.html`; general keeps its original filename. Unknown specialties raise `ToolError` listing valid names. Up to ten questions of at most 500 characters each appear HTML-escaped at the end; hidden-category questions are omitted and counted. All output remains local.
+- `brief.write_brief(vault, samples, out_dir, *, policy, today=None, specialty="general", questions=None) -> Path`: specialty definitions and display titles live in `knowledge/data/specialties.json`. General and primary care retain the default sections; other specialties use the stored clinical codes and the lab-series readers and reference ranges (#21, #24) and filter gene–drug entries by specialty genes. Specialty lab tables also include visible text-valued `unplotted_points`, once each; points with a different known unit remain excluded. Medications, supplements and Apple Health trends retain their policy. Non-general briefs show `Prepared for: <title>` and use `health-brief-<date>-<specialty>.html`; general keeps its original filename. Unknown specialties raise `ToolError` listing valid names. Up to ten questions of at most 500 characters each appear HTML-escaped at the end; hidden-category questions are omitted and counted. All output remains local.
 
 The tools call the functions above and run imports through `core.jobs.submit`. They filter every result through the policy.
 Both erase preview and confirmation explain that schedules armed with `/blueprint` keep running: the next research
@@ -584,7 +584,7 @@ pivot uses the latest visible start; matching starts the policy hides add to `wi
 - `op=settings counts` includes `observations` (all rows), `lab_results` (FHIR `laboratory`), `vital_signs` (FHIR `vital-signs`), `observations_by_category`, and `other_observations` (neither laboratory nor vital signs). Each row counts once overall and once per distinct FHIR category. Categories come from stored `category[].coding[].code`, preferring the standard observation-category system per concept. Only `social-history`, `vital-signs`, `imaging`, `laboratory`, `procedure`, `survey`, `exam`, `therapy` and `activity` are returned literally; every other code becomes `other`, and absent readable codes count as `unspecified`. This applies both to settings counts and clinical-series category lists, so aggregate counts never expose a hidden row's local category code. These are totals, independent of visibility. Status and erase preview say "N observations (L lab results, V vital signs, O other)"; overlapping categories do not double-subtract from other.
 
 
-## First guided session agenda (U4b)
+## First guided session agenda (0.4.0, #28)
 
 `caduceus_capture op=session_plan max_items=8` reads only; `max_items` is a whole number from 1 to 25.
 It returns `{warning?, areas, limits, withheld?}`. Limits are `[CHIP_LIMITS, LIMITS, "Information with limits, not medical advice."]`.
@@ -635,13 +635,13 @@ chip`, `ambiguous on a chip`, or `not assessed`. Otherwise an i-id says `an inte
 a bad-repute magnitude at least 4 says `a high-impact result on a consumer chip: rare variants are often miscalled,
 so a clinical test should confirm it`; other markers say `chips usually call common variants reliably`.
 
-`knowledge/data/phenotype_links.json` holds the curated gene → LOINC/metric links specified by U4b.
+`knowledge/data/phenotype_links.json` holds the curated gene → LOINC/metric links (0.4.0, #28).
 `your_data` contains present visible linked clinical entries with the same latest-point fields as own_numbers,
 and linked wellness metrics. Only LOINC/systemless codes match LOINC links. Measurements are placed side by
 side, with no agreement judgment. The normal store resolves the active Hermes profile. Notes attach to the finding's markers, aliases, and gene names, newest first,
 as `{id, stance, trait, text, date}`.
 
-**Privacy (including U4b Amendment 1):** every note passes `_phenotype_visible`, including its marker and resolved
+**Privacy:** every note passes `_phenotype_visible`, including its marker and resolved
 alias via `_marker_visible`, regardless of its stored category. Every displayed marker of an actionable, trait,
 or gene–drug finding must pass `_marker_visible`; derived calls also pass `_derived_visible`. Each finding's
 OWN stored category must be allowed in addition to its placement category, even after consent; moving a PGX

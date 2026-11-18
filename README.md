@@ -200,7 +200,7 @@ approve the draft.
 To delete everything Caduceus stored, run `/caduceus erase`: it shows what would go, and `/caduceus erase confirm` deletes it. Your settings stay, and so do schedules you created with `/blueprint`: the
 preview names each one and what its next run will do.
 
-Your data lives in your Hermes profile's `plugin-data/caduceus/`. In v0.1 it is not encrypted at rest; encrypted and local-model levels are planned for v0.4. See [SECURITY.md](SECURITY.md) for the boundaries.
+Your data lives in your Hermes profile's `plugin-data/caduceus/`. It is not encrypted at rest. Encrypted and local-model privacy levels are not built yet, and no release is scheduled for them. See [SECURITY.md](SECURITY.md) for the boundaries.
 
 ## Settings
 
