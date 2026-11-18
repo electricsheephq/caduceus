@@ -34,6 +34,8 @@ python -m pip install pytest
 python -m pytest
 ```
 
+Pull requests to `main` must pass the six `Unit (<os>, Python <version>)` jobs and `Real Hermes loader (<pin>)`. The repository ruleset matches these checks by exact name, so a change to the Python matrix or to the loader pin renames a required check. Update the ruleset before that pull request merges, or every pull request waits on the old name.
+
 ## Rules
 
 - **Standard library only.** No new dependencies, no `pyproject.toml`, no build step.
@@ -51,6 +53,15 @@ python -m pytest
 - **Health statements are information with limits, never recommendations.** Don't overstate small genetic effects.
 - **Tests:** they never use the network or a real `HERMES_HOME`. Real-file checks are marked `private` and run only locally.
 - **Agents:** in a change, don't bump versions, tag, or edit the CHANGELOG release headings. The maintainer's release step does that.
+
+## Release closeout (required after every release, rc promoted to stable, or GA tag)
+
+After the release is published and its receipt sent:
+
+1. Close every issue the release fully served, with a comment naming the version (never an umbrella/parent issue whose own acceptance is not met).
+2. Tick the boxes it completed on ROADMAP.md / VISION.md, roadmap or tracking issues, and closed issues whose checklists shipped; close a milestone once all its issues are closed.
+3. Update every README / ROADMAP line that names the latest release or what ships next.
+4. Send the Plugin Manager one closeout line: issues closed, boxes ticked, docs updated (or "none").
 
 ## Security
 
