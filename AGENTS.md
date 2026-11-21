@@ -54,6 +54,14 @@ Pull requests to `main` must pass the six `Unit (<os>, Python <version>)` jobs a
 - **Tests:** they never use the network or a real `HERMES_HOME`. Real-file checks are marked `private` and run only locally.
 - **Agents:** in a change, don't bump versions, tag, or edit the CHANGELOG release headings. The maintainer's release step does that.
 
+## Release and escalation
+Read [the ElectricSheep release and escalation standard](https://github.com/electricsheephq/eng-standards/blob/main/policies/release-and-escalation.md) and record its approved revision; unresolved/unapproved policy does not expand existing grants.
+Ship the smallest proven fix as soon as gates pass; preserve non-author review, final-candidate green CI, regression/smoke proof and Plugin Manager guarded installation.
+Name storage/migration, routing/permission, shared-hook, compatibility and recovery risks; select decisive tests, and escalate holds on the policy's deadlines rather than waiting for GA.
+Require representative authorized canary use, state-safe recovery, an accepted durable watcher and accurate known-issue/update guidance; publication is not user recovery.
+Maintainers decide within grants; Eva decides unresolved risk/user-impact/priority trade-offs; silence authorizes only an already-delegated safe default, never a new action or waiver.
+Andrew owns new access/credential grants, money, public-as-Andrew and destructive actions; record priority overrides in the existing plan without erasing safety gates.
+
 ## Release closeout (required after every release, rc promoted to stable, or GA tag)
 
 After the release is published and its receipt sent:
