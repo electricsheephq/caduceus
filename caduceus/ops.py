@@ -1246,6 +1246,40 @@ def _watch_run(ctx, args: dict) -> dict:
 
 # ---------------------------------------------------------------- caduceus_capture: settings and the rest
 
+def _stray_default_vault() -> dict | None:
+    """Counts only, read-only: what the default profile's Caduceus folder holds when it is not the active one.
+    Before 0.4.3, background jobs under a non-default profile opened that folder (#63). It is never deleted here."""
+    from .core.paths import default_data_dir
+
+    other = default_data_dir()
+    try:
+        if other.resolve() == data_dir().resolve() or not (other / "vault.db").is_file():
+            return None
+    except OSError:
+        return None
+    found: dict = {"path": str(other)}
+    for name, queries in (("vault.db", {"files": "SELECT count(*) FROM source_artifact",
+                                        "import_runs": "SELECT count(*) FROM import_run",
+                                        "research_items": "SELECT count(*) FROM research_item"}),
+                          ("samples.db", {"samples": "SELECT count(*) FROM sample"})):
+        path = other / name
+        if not path.is_file():
+            continue
+        try:
+            with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as conn:
+                for key, sql in queries.items():
+                    try:
+                        found[key] = conn.execute(sql).fetchone()[0]
+                    except sqlite3.Error:
+                        found[key] = None
+        except sqlite3.Error:
+            found[name] = "unreadable"
+    found["note"] = ("Caduceus 0.4.2 and earlier could write background-job data (imports, Health Auto Export syncs, "
+                     "research-watch results) into this default-profile folder when Hermes ran another profile "
+                     "(issue 63). Caduceus leaves it untouched and does not read it.")
+    return found
+
+
 def _settings(ctx) -> dict:
     policy = policy_for(ctx)
     with _Store() as store:
@@ -1262,7 +1296,8 @@ def _settings(ctx) -> dict:
             "notes": _count(v, "SELECT count(*) FROM journal"),
             "research_items": _count(v, "SELECT count(*) FROM research_item"),
         }
-    return {**policy.describe(), "research_watch": _cfg(ctx, "research_watch", True),
+    extra = {"default_profile_folder": stray} if (stray := _stray_default_vault()) else {}
+    return {**policy.describe(), **extra, "research_watch": _cfg(ctx, "research_watch", True),
             "research_topics": _cfg(ctx, "research_topics", []), "vault_hint": _cfg(ctx, "vault_hint", True),
             "data_dir": str(data_dir()), "counts": counts, "clinical_replay": clinical_replay,
             "note": ("The vault stays on this machine; tools return only slices of it. Only the user can change "
