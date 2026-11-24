@@ -21,12 +21,6 @@ def data_dir() -> Path:
     return plugin_data_dir(PLUGIN)
 
 
-def default_data_dir() -> Path:
-    """The default profile's folder (``$HERMES_HOME`` or ``~/.hermes``), ignoring the active profile.
-    Before 0.4.3 a background job under a non-default profile could write here (#63)."""
-    return Path(os.environ.get("HERMES_HOME") or "~/.hermes").expanduser() / "plugin-data" / PLUGIN
-
-
 def vault_path() -> Path:
     return data_dir() / "vault.db"
 

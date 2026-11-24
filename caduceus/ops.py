@@ -1246,27 +1246,6 @@ def _watch_run(ctx, args: dict) -> dict:
 
 # ---------------------------------------------------------------- caduceus_capture: settings and the rest
 
-def _stray_default_vault() -> dict | None:
-    """What the default profile's Caduceus folder holds when it is not the active one: its path and file sizes.
-    Before 0.4.3, background jobs under a non-default profile opened that folder (#63). Nothing here opens a
-    database or changes a file."""
-    from .core.paths import default_data_dir
-
-    other = default_data_dir()
-    try:
-        active = data_dir().resolve()
-        stray = other / "vault.db"
-        if other.resolve() == active or not stray.is_file() or stray.resolve() == (active / "vault.db").resolve():
-            return None
-        sizes = {name: (other / name).stat().st_size for name in ("vault.db", "samples.db") if (other / name).is_file()}
-    except (OSError, RuntimeError):  # RuntimeError: a symlink loop on Python 3.11-3.12
-        return None
-    return {"path": str(other), "file_sizes": sizes,
-            "note": ("Caduceus 0.4.2 and earlier could write background-job data (imports, Health Auto Export syncs, "
-                     "research-watch results) into this default-profile folder when Hermes ran another profile "
-                     "(issue 63). Caduceus leaves it untouched and does not read it.")}
-
-
 def _settings(ctx) -> dict:
     policy = policy_for(ctx)
     with _Store() as store:
@@ -1283,8 +1262,7 @@ def _settings(ctx) -> dict:
             "notes": _count(v, "SELECT count(*) FROM journal"),
             "research_items": _count(v, "SELECT count(*) FROM research_item"),
         }
-    extra = {"default_profile_folder": stray} if (stray := _stray_default_vault()) else {}
-    return {**policy.describe(), **extra, "research_watch": _cfg(ctx, "research_watch", True),
+    return {**policy.describe(), "research_watch": _cfg(ctx, "research_watch", True),
             "research_topics": _cfg(ctx, "research_topics", []), "vault_hint": _cfg(ctx, "vault_hint", True),
             "data_dir": str(data_dir()), "counts": counts, "clinical_replay": clinical_replay,
             "note": ("The vault stays on this machine; tools return only slices of it. Only the user can change "

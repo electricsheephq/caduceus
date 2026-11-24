@@ -92,6 +92,8 @@ def data_dir(tmp_path, monkeypatch):
     root = tmp_path / "plugin-data"
     root.mkdir()
     monkeypatch.setenv("CADUCEUS_DATA_DIR", str(root))
+    # Seal every test off from a real Hermes home on the developer's machine.
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes-home"))
     return root
 
 
