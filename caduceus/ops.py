@@ -1247,37 +1247,24 @@ def _watch_run(ctx, args: dict) -> dict:
 # ---------------------------------------------------------------- caduceus_capture: settings and the rest
 
 def _stray_default_vault() -> dict | None:
-    """Counts only, read-only: what the default profile's Caduceus folder holds when it is not the active one.
-    Before 0.4.3, background jobs under a non-default profile opened that folder (#63). It is never deleted here."""
+    """What the default profile's Caduceus folder holds when it is not the active one: its path and file sizes.
+    Before 0.4.3, background jobs under a non-default profile opened that folder (#63). Nothing here opens a
+    database or changes a file."""
     from .core.paths import default_data_dir
 
     other = default_data_dir()
     try:
-        if other.resolve() == data_dir().resolve() or not (other / "vault.db").is_file():
+        active = data_dir().resolve()
+        stray = other / "vault.db"
+        if other.resolve() == active or not stray.is_file() or stray.resolve() == (active / "vault.db").resolve():
             return None
-    except OSError:
+        sizes = {name: (other / name).stat().st_size for name in ("vault.db", "samples.db") if (other / name).is_file()}
+    except (OSError, RuntimeError):  # RuntimeError: a symlink loop on Python 3.11-3.12
         return None
-    found: dict = {"path": str(other)}
-    for name, queries in (("vault.db", {"files": "SELECT count(*) FROM source_artifact",
-                                        "import_runs": "SELECT count(*) FROM import_run",
-                                        "research_items": "SELECT count(*) FROM research_item"}),
-                          ("samples.db", {"samples": "SELECT count(*) FROM sample"})):
-        path = other / name
-        if not path.is_file():
-            continue
-        try:
-            with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as conn:
-                for key, sql in queries.items():
-                    try:
-                        found[key] = conn.execute(sql).fetchone()[0]
-                    except sqlite3.Error:
-                        found[key] = None
-        except sqlite3.Error:
-            found[name] = "unreadable"
-    found["note"] = ("Caduceus 0.4.2 and earlier could write background-job data (imports, Health Auto Export syncs, "
+    return {"path": str(other), "file_sizes": sizes,
+            "note": ("Caduceus 0.4.2 and earlier could write background-job data (imports, Health Auto Export syncs, "
                      "research-watch results) into this default-profile folder when Hermes ran another profile "
-                     "(issue 63). Caduceus leaves it untouched and does not read it.")
-    return found
+                     "(issue 63). Caduceus leaves it untouched and does not read it.")}
 
 
 def _settings(ctx) -> dict:

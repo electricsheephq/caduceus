@@ -65,9 +65,29 @@ def test_settings_reports_a_default_profile_folder_by_counts(monkeypatch, tmp_pa
         conn.execute("INSERT INTO source_artifact(subject_id, kind, sha256, original_name, stored_path, size_bytes, added_at) "
                      "VALUES (1, 'fhir', 'ab', 'x.json', 'sources/ab', 1, '2026-01-01T00:00:00Z')")
     conn.close()
+    before = {p.name: p.stat().st_mtime_ns for p in stray.parent.iterdir()}
     found = ops._settings(Ctx())["default_profile_folder"]
-    assert found["path"] == str(stray.parent) and found["files"] == 1 and found["import_runs"] == 0
-    assert stray.is_file()  # never deleted
+    assert found["path"] == str(stray.parent) and found["file_sizes"]["vault.db"] > 0
+    assert {p.name: p.stat().st_mtime_ns for p in stray.parent.iterdir()} == before  # nothing opened or changed
+
+
+def test_settings_skips_a_default_vault_that_links_to_the_active_one(monkeypatch, tmp_path):
+    from caduceus import ops
+    from caduceus.core.db import open_vault
+
+    default_home, active = tmp_path / "default-home", tmp_path / "profile-data"
+    monkeypatch.setenv("HERMES_HOME", str(default_home))
+    monkeypatch.setenv("CADUCEUS_DATA_DIR", str(active))
+    open_vault(active / "vault.db").close()
+    folder = default_home / "plugin-data" / "caduceus"
+    folder.mkdir(parents=True)
+    (folder / "vault.db").symlink_to(active / "vault.db")
+
+    class Ctx:
+        def get_config(self, key, default=None):
+            return default
+
+    assert "default_profile_folder" not in ops._settings(Ctx())
 
 
 def test_settings_skips_the_default_folder_when_it_is_the_active_one(monkeypatch, tmp_path):
