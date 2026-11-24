@@ -2,6 +2,17 @@
 
 All notable changes to Caduceus are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.3 — 2026-11-24
+
+### Fixed
+- **Background jobs use the active Hermes profile (#63).** Imports, the Health Auto Export sync, clinical replay, the research watch and the demo run in a background thread. Hermes keeps the active profile in a context variable, which a new thread does not inherit. So under a non-default profile (for example in Hermes Desktop) these jobs opened the default profile's vault.
+  - The symptom: a file import failed with `FOREIGN KEY constraint failed`, and the profile vault kept a source with no import run.
+  - Each job now runs in a copy of the caller's context.
+  - A Hermes setup that sets the profile for the whole process was not affected.
+- **After upgrading:**
+  - Re-run any import that failed. Sources are stored by content hash, so the orphan source is reused.
+  - If you used a non-default profile, look in `~/.hermes/plugin-data/caduceus/`. With 0.4.2 or earlier, a Health Auto Export sync or a research watch there may have saved its results into that default-profile folder. Caduceus never reads or deletes it.
+
 ## 0.4.2 — 2026-11-17
 
 ### Fixed

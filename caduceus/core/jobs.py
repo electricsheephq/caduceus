@@ -2,9 +2,14 @@
 the tool waits a little, then returns and the agent reads progress from ``import_run``.
 
 One job per key at a time (the key is the source sha256). Each job opens its own connections.
+
+A job runs in a copy of the caller's context. Hermes keeps the active profile in a context variable, and a
+plain thread starts with an empty context, so without the copy a job under a non-default profile would
+open the default profile's vault (#63).
 """
 from __future__ import annotations
 
+import contextvars
 import threading
 from contextlib import contextmanager
 from typing import Callable, Iterator
@@ -77,7 +82,8 @@ def submit(key: str, fn: Callable[[], object], *, wait_s: float = 45.0) -> dict:
                         _ACTIVE.pop(key, None)
                 finished.set()
 
-        thread = threading.Thread(target=target, name=f"caduceus-job-{key[:12]}", daemon=True)
+        context = contextvars.copy_context()  # keep the caller's Hermes profile (#63)
+        thread = threading.Thread(target=context.run, args=(target,), name=f"caduceus-job-{key[:12]}", daemon=True)
         _ACTIVE[key] = thread
         thread.start()
     if finished.wait(max(0.0, wait_s)):
